@@ -1,11 +1,13 @@
 # see LICENSE for copyright and license details
 PREFIX = /usr/local
 CC = cc
-CFLAGS ?= -O2 -Wall -Wextra -DDELVE_USE_READLINE
-LDFLAGS ?= -lreadline
-OBJ = delve.o
-BIN = delve
-CONF = delve.conf
+CFLAGS ?= -O0 -g -Wall -Wextra
+CFLAGS += $(shell pkg-config --cflags libcurl libssl libcrypto)
+LDFLAGS ?=
+LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
+OBJ = bestline/bestline.o gplaces.o
+BIN = gplaces
+CONF = gplaces.conf
 
 default: $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)

@@ -1,6 +1,6 @@
 -- just a simple script to create the help content for `commands`
 local commands = {
-	"quit", "open", "show", "save", "back", "help", "history", "bookmarks",
+	"quit", "open", "go", "show", "save", "back", "help", "history", "bookmarks",
 	"set", "see", "alias", "type",
 }
 table.sort(commands)

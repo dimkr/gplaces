@@ -1,27 +1,26 @@
-# delve - a simple terminal gopher client
-Because Gopher should not die!
+# gplaces - a simple terminal gemini client
 
-[![Build Status](https://travis-ci.org/kieselsteini/delve.svg?branch=master)](https://travis-ci.org/kieselsteini/delve)
+Named after [Going Places](https://en.wikipedia.org/wiki/Going_Places_(Herb_Alpert_and_the_Tijuana_Brass_album)), the 1965 album by Herb Alpert and The Tijuana Brass.
 
 ## Overview
-- configurable gopher selector handlers
+- configurable MIME type handlers
 - "powerful" shell
 - bookmarks
 - variables
 - command aliases
 - VT100 compatible with ANSI escape sequences
-- no external dependencies
-	- GNU readline is fully optional
+- no exotic external dependencies, no NIH
+	- ~GNU readline is fully optional~ bestline
+	- openssl
+	- libcurl
 - internal pager for text & menus
-- less than *1k lines* of *C* code
+- about *1k lines* of *C* code
 
 ## How to compile?
 - clone this git repo
-- just type `make` on any Unix compatible system (remove GNU readline if you don't have it)
+- just type `make` on any Unix compatible system
 	- currently tested on
-		- macOS
 		- Linux
-		- OpenBSD 6.5
 - type `make install` to install it on the system (defaults to /usr/local)
 
 ## How to contribute?
@@ -34,7 +33,7 @@ Because Gopher should not die!
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|185|33|919
+C|1|237|34|1090
 
 ## Help
 Just type `help` when the client is running.

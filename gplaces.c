@@ -1,7 +1,8 @@
 /*
 ================================================================================
 
-	delve - a simple terminal gopher client
+	gplaces - a simple terminal gemini client
+    Copyright (C) 2022  Dima Krasner
     Copyright (C) 2019  Sebastian Steinhauer
 
     This program is free software: you can redistribute it and/or modify
@@ -33,18 +34,26 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <fcntl.h>
 
-#ifdef DELVE_USE_READLINE
-	#include <readline/readline.h>
-	#include <readline/history.h>
-#endif /* DELVE_USE_READLINE */
+#include <openssl/ssl.h>
+#include <openssl/bio.h>
+#include <openssl/sha.h>
+#include <openssl/err.h>
+
+#include <curl/curl.h>
+
+#include "bestline/bestline.h"
 
 
 /*============================================================================*/
 typedef struct Selector {
 	struct Selector *next;
 	int index;
-	char type, *name, *host, *port, *path;
+	char type, *name, *scheme, *host, *port, *path, *url, *mime;
+	CURLU *cu;
 } Selector;
 
 typedef struct Variable {
@@ -62,6 +71,14 @@ typedef struct Help {
 	const char *text;
 } Help;
 
+typedef struct Response {
+	char filename[1024];
+	char *mime;
+	FILE *fp;
+	char *buffer;
+	size_t length;
+} Response;
+
 
 /*============================================================================*/
 Variable *variables = NULL;
@@ -70,6 +87,11 @@ Variable *typehandlers = NULL;
 Selector *bookmarks = NULL;
 Selector *history = NULL;
 Selector *menu = NULL;
+
+
+/*============================================================================*/
+const char *find_mime_handler(const char *mime);
+void execute_handler(const char *handler, const char *filename, Selector *to);
 
 
 /*============================================================================*/
@@ -104,7 +126,7 @@ void panic(const char *fmt, ...) {
 
 /*============================================================================*/
 void str_free(char *str) {
-	if (str != NULL && *str != '\0') free(str);
+	free(str);
 }
 
 char *str_copy(const char *str) {
@@ -123,6 +145,15 @@ char *str_split(char **str, const char *delim) {
 	char *begin;
 	if (*str == NULL || **str == '\0') return NULL;
 	for (begin = *str; *str && !strchr(delim, **str); ++*str) ;
+	if (**str != '\0') { **str = '\0'; ++*str; }
+	return begin;
+}
+
+char *str_next(char **str, const char *delims) {
+	char *begin;
+	if (*str == NULL || **str == '\0') return NULL;
+	begin = *str + strspn(*str, delims);
+	*str = begin + strcspn(begin, delims);
 	if (**str != '\0') { **str = '\0'; ++*str; }
 	return begin;
 }
@@ -199,10 +230,8 @@ int get_var_integer(const char *name, int def) {
 
 /*============================================================================*/
 Selector *new_selector() {
-	Selector *new = malloc(sizeof(Selector));
+	Selector *new = calloc(1, sizeof(Selector));
 	if (new == NULL) panic("cannot allocate new selector");
-	new->next = NULL;
-	new->index = 0;
 	return new;
 }
 
@@ -210,12 +239,28 @@ void free_selector(Selector *sel) {
 	while (sel) {
 		Selector *next = sel->next;
 		str_free(sel->name);
-		str_free(sel->host);
-		str_free(sel->port);
-		str_free(sel->path);
+		curl_free(sel->scheme);
+		curl_free(sel->host);
+		curl_free(sel->port);
+		curl_free(sel->path);
+		curl_free(sel->url);
+		if (sel->cu) curl_url_cleanup(sel->cu);
 		free(sel);
 		sel = next;
 	}
+}
+
+
+int set_selector_url(Selector *sel, const char *url) {
+	if ((curl_url_set(sel->cu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK)) return 0;
+
+	switch (curl_url_get(sel->cu, CURLUPART_PORT, &sel->port, 0)) {
+	case CURLUE_OK: break;
+	case CURLUE_NO_PORT: sel->port = str_copy("1965"); break;
+	default: free_selector(sel); return 0;
+	}
+
+	return 1;
 }
 
 
@@ -225,9 +270,8 @@ Selector *copy_selector(Selector *sel) {
 	new->index = 1;
 	new->type = sel->type;
 	new->name = str_copy(sel->name);
-	new->host = str_copy(sel->host);
-	new->port = str_copy(sel->port);
-	new->path = str_copy(sel->path);
+	new->url = str_copy(sel->url);
+	if (sel->cu && ((new->cu = curl_url_dup(sel->cu)) == NULL) | !set_selector_url(new, new->url)) panic("cannot copy selector URL");
 	return new;
 }
 
@@ -263,66 +307,71 @@ Selector *find_selector(Selector *list, const char *line) {
 }
 
 
-char *print_selector(Selector *sel, int with_prefix) {
+Selector *parse_selector(Selector *from, char *str) {
 	static char buffer[1024];
-	if (sel == NULL) return "";
-	snprintf(buffer, sizeof(buffer), "%s%s:%s/%c%s",
-		with_prefix ? "gopher://" : "",
-		sel->host, sel->port, sel->type, sel->path
-	);
-	return buffer;
-}
-
-
-Selector *parse_selector(char *str) {
-	char *p;
+	char *url = str;
 	Selector *sel;
 
 	if (str == NULL || *str == '\0') return NULL;
 
-	sel = new_selector();
-	sel->type = '1';
-
-	if ((p = strstr(str, "gopher://")) == str) str += 9; /* skip "gopher://" */
-	if ((p = strpbrk(str, ":/")) != NULL) {
-		if (*p == ':') {
-			sel->host = str_copy(str_split(&str, ":"));
-			sel->port = str_copy(str_split(&str, "/"));
-		} else {
-			sel->host = str_copy(str_split(&str, "/"));
-			sel->port = str_copy("70");
-		}
-		if (*str) sel->type = *str++;
-		sel->path = str_copy(str);
-	} else {
-		sel->host = str_copy(str);
-		sel->port = str_copy("70");
-		sel->path = str_copy("");
+	if (!from && strncmp(url, "gemini://", 9)) {
+		snprintf(buffer, sizeof(buffer), "gemini://%s", url);
+		url = buffer;
 	}
 
-	sel->name = str_copy(print_selector(sel, 1));
+	sel = new_selector();
+	sel->type = '1';
+	sel->name = str_copy(str);
+	sel->cu = (from && from->cu) ? curl_url_dup(from->cu) : curl_url();
+	if (!sel->cu || !set_selector_url(sel, url)) {
+		free_selector(sel);
+		return NULL;
+	}
 
 	return sel;
 }
 
 
-Selector *parse_selector_list(char *str) {
-	char *line;
+Selector *parse_selector_list(Selector *from, char *str) {
+	char *line, *url;
 	Selector *list = NULL, *sel;
+	int pre = 0;
 
-	while ((line = str_split(&str, "\r\n")) != NULL) {
-		if (*line == '\0' || *line == '.') break;
+	while ((line = str_split(&str, "\n")) != NULL) {
+		if (strncmp(line, "```", 3) == 0) {
+			pre = !pre;
+			continue;
+		}
 
-		sel = new_selector();
+		if (pre) {
+			sel = new_selector();
+			sel->type = '`';
+			sel->name = str_copy(line);
+		} else if (line[0] == '=' && line[1] == '>') {
+			line += 2;
+			url = str_next(&line, " \t\r\n");
+			sel = parse_selector(from, url);
+			if (!sel) continue; // TODO
+			if (*line) {
+				free(sel->name);
+				sel->name = str_copy(*line ? line : url);
+			}
+		} else if (*line == '#') {
+			sel = new_selector();
+			sel->type = 't';
+			sel->name = str_copy(line);
+		} else if (strncmp(line, "```", 3) == 0)
+			pre = !pre;
+		else {
+			sel = new_selector();
+			sel->type = 'i';
+			sel->name = str_copy(line);
+		}
+
 		list = append_selector(list, sel);
 
-		sel->type = *line++;
-		sel->name = str_copy(str_split(&line, "\t"));
-		sel->path = str_copy(str_split(&line, "\t"));
-		sel->host = str_copy(str_split(&line, "\t"));
-		sel->port = str_copy(str_split(&line, "\t"));
-
-		str = str_skip(str, "\r\n");
+		str = str_skip(str, "\r");
+		str = str_skip(str, "\n");
 	}
 
 	return list;
@@ -389,7 +438,7 @@ void print_text(const char *text) {
 
 	height = get_terminal_height();
 	pages = get_var_boolean("PAGE_TEXT");
-	length = get_var_integer("LINE_LENGTH", 128);
+	length = get_var_integer("LINE_LENGTH", 120);
 
 	copy = str = str_copy(text);
 	for (i = 0; (line = str_split(&str, "\n")) != NULL; ++i) {
@@ -403,11 +452,16 @@ void print_text(const char *text) {
 
 
 /*============================================================================*/
-char *download(Selector *sel, const char *query, size_t *length) {
+
+
+static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const char *, const char *, size_t, void *), void *arg) {
 	struct addrinfo hints, *result, *it;
-	char request[1024], *data;
-	size_t total;
-	int fd, received;
+	char request[1024], prompt[256], *data = NULL, *crlf, *meta, *line;
+	struct timeval tv = {.tv_sec = 15};
+	size_t total, cap = 2 + 1 + 1024 + 2 + 1;
+	int fd = -1, received, ret = 40;
+	BIO *bio = NULL;
+	SSL *ssl = NULL;
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
@@ -432,148 +486,324 @@ char *download(Selector *sel, const char *query, size_t *length) {
 		goto fail;
 	}
 
-	if (query) snprintf(request, sizeof(request), "%s\t%s\r\n", sel->path, query);
-	else snprintf(request, sizeof(request), "%s\r\n", sel->path);
-	send(fd, request, strlen(request), 0);
+	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+	setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
-	for (total = 0L, data = NULL;;) {
-		if ((data = realloc(data, total + (1024 * 64))) == NULL) panic("cannot allocate download data");
-		if ((received = recv(fd, &data[total], 1024 * 64, 0)) <= 0) break;
+	if (((ssl = SSL_new(ctx)) == NULL) || ((bio = BIO_new_socket(fd, BIO_NOCLOSE)) == NULL)) {
+		error("cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
+		goto fail;
+	}
+ 
+	SSL_set_tlsext_host_name(ssl, sel->host);
+	SSL_set_bio(ssl, bio, bio);
+	SSL_set_connect_state(ssl);
+
+	if (SSL_do_handshake(ssl) != 1) {
+		error("cannot establish secure connection to `%s`:`%s`: %s", sel->host, sel->port, ERR_reason_error_string(ERR_get_error()));
+		goto fail;
+	}
+
+	snprintf(request, sizeof(request), "%s\r\n", sel->url);
+	if (SSL_write(ssl, request, strlen(request)) == 0) {
+		error("cannot send request to `%s`:`%s`", sel->host, sel->port);
+		goto fail;
+	}
+
+	if ((data = malloc(cap)) == NULL) panic("cannot allocate download data");
+
+	for (total = 0; total < cap - 1 && (total < 5 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
+		if ((received = SSL_read(ssl, &data[total], 1)) <= 0) {
+			if (SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break;
+			error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+			goto fail;
+		}
+	}
+	if (data[1] < '0' || data[0] > '9' || data[1] < '0' || data[1] > '9' || data[2] != ' ' || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
+	data[total] = '\0';
+
+	cap = 1024 * 64;
+	if ((data = realloc(data, cap)) == NULL) panic("cannot allocate download data");
+
+	crlf = &data[total - 2];
+	*crlf = '\0';
+	meta = &data[3];
+	if (meta >= crlf) meta = "";
+
+	for (;;) {
+		if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) <= 0) {
+			if (SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break;
+			error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+			goto fail;
+		}
+		if (!cb(sel, meta, crlf + 1, received, arg)) goto fail;
 		total += received;
 		if (total > (1024 * 256)) printf("downloading %.2f kb...\r", (double)total / 1024.0);
 	}
 	if (total > (1024 * 256)) puts("");
 
-	close(fd);
-	data = realloc(data, total + 1);
-	data[total] = '\0';
+	SSL_free(ssl); ssl = NULL; bio = NULL;
 
-	if (length) *length = total;
-	return data;
+	switch (data[0]) {
+	case '2':
+		if (!*meta) goto fail;
+		break;
 
-fail:
-	if (length) *length = 0L;
-	return NULL;
-}
+	case '1':
+		if (!*meta) goto fail;
+		snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", meta);
+		if ((line = bestline(prompt)) == NULL) goto fail;
+		bestlineHistoryAdd(line);
+		if ((curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK)) { free(line); goto fail; }
+		free(line);
+		break;
 
+	case '3':
+		if (!*meta) goto fail;
+		if ((curl_url_set(sel->cu, CURLUPART_URL, meta, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK)) goto fail;
+		break;
 
-char *download_to_temp(Selector *sel) {
-	static char filename[1024];
-	size_t length;
-	char *data, *tmpdir, template[1024];
-	int fd;
-
-	if ((data = download(sel, NULL, &length)) == NULL) return NULL;
-	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
-	snprintf(template, sizeof(template), "%sdelve.XXXXXXXX", tmpdir);
-	snprintf(filename, sizeof(filename), "%s", template);
-	if ((fd = mkstemp(filename)) == -1) {
-		error("cannot create temporary file: %s", strerror(errno));
-		goto fail;
+	default:
+		error("failed to download `%s`: %s", sel->url, *meta ? meta : data);
 	}
-	if (write(fd, data, length) != (int)length) {
-		error("cannot write data to temporary file: %s", strerror(errno));
-		goto fail;
-	}
-	close(fd);
-	free(data);
-	return filename;
+
+	ret = (data[0] - '0') * 10 + (data[1] - '0');
 
 fail:
 	if (data) free(data);
-	if (fd) {
-		close(fd);
-		remove(filename);
+	if (ssl) SSL_free(ssl);
+	else if (bio) BIO_free(bio);
+	if (fd != -1) close(fd);
+	return ret;
+}
+
+
+static int tofu(int preverify_ok, X509_STORE_CTX *ctx) {
+	static char hosts[1024], buffer[1024], namebuf[1024];
+	X509 *cert;
+	X509_NAME *name;
+	const char *home;
+	EVP_PKEY *pub;
+	char *p, *hex, *line;
+	size_t len, hlen;
+	FILE *fp;
+	BIGNUM *bn;
+	int trust = 0, namelen;
+
+	(void)preverify_ok;
+
+	if ((cert = X509_STORE_CTX_get_current_cert(ctx)) == NULL) return 0;
+	if ((name = X509_get_subject_name(cert)) == NULL) return 0;
+	if ((namelen = X509_NAME_get_text_by_NID(name, NID_commonName, namebuf, sizeof(namebuf))) <= 0) return 0;
+
+	if ((fp = open_memstream(&p, &len)) == NULL) return 0;
+	if ((pub = X509_get_pubkey(cert)) == NULL) return 0;
+	i2d_PUBKEY_fp(fp, pub);
+	fclose(fp);
+	bn = BN_bin2bn((const unsigned char *)p, len, NULL);
+	free(p);
+	if (!bn) return 0;
+
+	hex = BN_bn2hex(bn);
+	BN_free(bn);
+	if (!hex) return 0;
+	hlen = strlen(hex);
+
+	if ((home = getenv("HOME")) == NULL) return 0;
+	snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
+	if ((fp = fopen(hosts, "r")) != NULL) {
+		while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
+			if (strncmp(line, namebuf, namelen)) continue;
+			if (line[namelen] != ' ') continue;
+			trust = (strncmp(&line[namelen + 1], hex, hlen) == 0) && (line[namelen + 1 + hlen] == '\n');
+			goto out;
+		}
+
+		fclose(fp);
 	}
-	return NULL;
+
+	trust = trust && (((fp = fopen(hosts, "a")) != NULL) && (fprintf(fp, "%s %s\n", namebuf, hex) > 0));
+
+out:
+	if (fp) fclose(fp);
+	OPENSSL_free(hex);
+	return trust;
+}
+
+
+int download(Selector *sel, int (*cb)(Selector *, const char *, const char *, size_t, void *), void *arg) {
+	SSL_CTX *ctx = NULL;
+	int status, redirs = 0;
+
+	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 40;
+
+	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
+	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, tofu);
+	SSL_CTX_set_verify_depth(ctx, 1);
+
+	do {
+		status = do_download(sel, ctx, cb, arg);
+	} while ((status >= 10 && status <= 19) || (status >= 30 && status <= 39 && ++redirs < 5));
+
+	SSL_CTX_free(ctx);
+
+	if (redirs == 5) error("too many redirects from `%s`", sel->url);
+	return (status >= 20 && status <= 29) ? 1 : 0;
+}
+
+
+static int append_to_file(Selector *sel, const char *meta, const char *buffer, size_t len, void *arg) {
+	size_t total = 0, out;
+	Response *r = (Response *)arg;
+
+	(void)sel;
+
+	if ((r->mime == NULL) && ((r->mime = strdup(meta)) == NULL)) return 0;
+
+	do {
+		if ((out = fwrite(&buffer[total], 1, len - total, r->fp)) == 0) return 0;
+		total += out;
+	} while (total < len);
+
+	return 1;
 }
 
 
 void download_to_file(Selector *sel) {
-	char *filename, *def, *data, *download_dir, suggestion[1024];
-	size_t length;
-	FILE *fp;
+	Response r = {0};
+	char *filename, *def, *download_dir, suggestion[1024];
+	int ret;
 
 	def = strrchr(sel->path, '/');
 	if (*def == '/') ++def;
+	if (!*def) def = sel->name;
 	if ((download_dir = set_var(&variables, "DOWNLOAD_DIRECTORY", NULL)) == NULL) download_dir = ".";
 	snprintf(suggestion, sizeof(suggestion), "%s/%s", download_dir, def);
 
-	if ((data = download(sel, NULL, &length)) == NULL) return;
 	if ((filename = read_line("enter filename (press ENTER for `%s`): ", suggestion)) == NULL) return;
 	if (!strlen(filename)) filename = suggestion;
-	if ((fp = fopen(filename, "wb")) == NULL) {
-		free(data);
+	if ((r.fp = fopen(filename, "wb")) == NULL) {
 		error("cannot create file `%s`: %s", filename, strerror(errno));
 		return;
 	}
-	fwrite(data, 1, length, fp);
-	fclose(fp);
-	free(data);
+	ret = download(sel, append_to_file, &r);
+	fclose(r.fp);
+	free(r.mime);
+	if (r.fp && !ret) unlink(filename);
 }
 
 
-Selector *download_to_menu(Selector *sel, const char *query) {
-	char *data;
-	Selector *list;
+static int append_by_type(Selector *sel, const char *meta, const char *buffer, size_t len, void *arg) {
+	static char template[1024];
+	const char *tmpdir;
+	size_t total, out;
+	FILE *fp;
+	int fd;
+	Response *r = (Response *)arg;
 
-	if ((data = download(sel, query, NULL)) == NULL) return NULL;
-	list = parse_selector_list(data);
-	free(data);
+	(void)sel;
+
+	if (r->mime == NULL) {
+		if ((r->mime = strdup(meta)) == NULL) return 0;
+		if (strncmp(r->mime, "text/gemini", 11)) {
+			if (fflush(r->fp) == EOF) return 0;
+
+			if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
+			snprintf(template, sizeof(template), "%sgplaces.XXXXXXXX", tmpdir);
+			snprintf(r->filename, sizeof(r->filename), "%s", template);
+			if (((fd = mkstemp(r->filename)) == -1) || ((fp = fdopen(fd, "w")) == NULL)) {
+				error("cannot create temporary file: %s", strerror(errno));
+				return 0;
+			}
+			for (total = 0; total < r->length; total += out)
+				if ((out = fwrite(&r->buffer[total], 1, r->length - total, r->fp)) == 0) return 0;
+			fclose(r->fp);
+			r->fp = fp;
+		}
+	}
+
+	for (total = 0; total < len; total += out)
+		if ((out = fwrite(&buffer[total], 1, len - total, r->fp)) == 0) return 0;
+
+	return 1;
+}
+
+
+Selector *download_to_menu(Selector *sel) {
+	Response r = {0};
+	Selector *list = NULL;
+	const char *handler;
+	
+	if ((r.fp = open_memstream(&r.buffer, &r.length)) == NULL) return NULL;
+	if (!download(sel, append_by_type, &r)) goto out;
+	if (fflush(r.fp) == EOF) goto out;
+	if (!strncmp(r.mime, "text/gemini", 11)) list = parse_selector_list(sel, r.buffer);
+	else if ((handler = find_mime_handler(r.mime)) != NULL) execute_handler(handler, r.filename, sel);
+
+out:
+	if (*r.filename) unlink(r.filename);
+	free(r.mime);
+	if (r.fp) fclose(r.fp);
+	free(r.buffer);
 	return list;
 }
 
 
 /*============================================================================*/
-const char *find_selector_handler(char type) {
-	char name[2] = { type, 0 };
-	return set_var(&typehandlers, name, NULL);
-}
 
 
 void print_menu(Selector *list, const char *filter) {
-	int i, height, pages, length;
+	int i, height, pages, length, out, rem;
+	const char *p;
 
 	height = get_terminal_height();
 	pages = get_var_boolean("PAGE_TEXT");
 	length = get_var_integer("LINE_LENGTH", 128);
 
 	for (i = 0; list; list = list->next) {
-		if (filter && !str_contains(list->name, filter) && !str_contains(list->path, filter)) continue;
-		switch (list->type) {
-			case 'i': printf("     | %.*s\n", length, list->name); break;
-			case '3': printf("     | \33[31m%.*s\33[0m\n", length, list->name); break;
-			default:
-				if (strchr("145679", list->type) || find_selector_handler(list->type)) {
-					printf("%4d | \33[4;36m%.*s\33[0m\n", list->index, length, list->name);
-				} else {
-					printf("%4d | \33[0;36m%.*s\33[0m\n", list->index, length, list->name);
-				}
-				break;
+		if (filter && !str_contains(list->name, filter) && (!list->path || !str_contains(list->path, filter))) continue;
+		for (rem = (int)strlen(list->name), p = list->name; rem > 0; rem -= out, p += out) {
+			switch (list->type) {
+				case 'i': out = printf("%.*s", rem < length ? rem : length, p); break;
+				case '1':
+					if (p == list->name) out = printf("\33[1m%4d\33[0m | \33[4;36m%.*s\33[0m", list->index, rem < length ? rem : length, p);
+					else out = printf("     | \33[4;36m%.*s\33[0m", rem < length ? rem : length, p);
+					break;
+				case 't': out = printf("%.*s", rem < length ? rem : length, p); break;
+				case '`': out = (int)fwrite(p, 1, rem, stdout); break;
+			}
+			putchar('\n'); 
+			if (pages && ++i >= height) { if (show_pager_stop()) break; i = 0; }
 		}
-		if (pages && ++i >= height) { if (show_pager_stop()) break; i = 0; }
 	}
 }
 
 
-void execute_handler(const char *handler, Selector *to) {
-	char command[1024], *filename = NULL;
+const char *find_mime_handler(const char *mime) {
+	const char *handler = set_var(&typehandlers, mime, NULL);
+	if (!handler)
+		printf("no handler for `%s`\n", mime);
+	return handler;
+}
+
+
+void execute_handler(const char *handler, const char *filename, Selector *to) {
+	char command[1024];
 	size_t l;
+	pid_t pid, ret;
+	int fd, status;
 
 	for (l = 0; *handler && l < sizeof(command) - 1; ) {
 		if (handler[0] == '%' && handler[1] != '\0') {
 			const char *append = "";
 			switch (handler[1]) {
 				case '%': append = "%"; break;
+				case 's': append = to->scheme; break;
 				case 'h': append = to->host; break;
 				case 'p': append = to->port; break;
-				case 's': append = to->path; break;
+				case 'P': append = to->path; break;
 				case 'n': append = to->name; break;
-				case 'f':
-					if (filename == NULL) filename = download_to_temp(to);
-					if (filename == NULL) return;
-					append = filename;
-					break;
+				case 'u': append = to->url; break;
+				case 'f': append = filename; break;
 			}
 			handler += 2;
 			while (*append && l < sizeof(command) - 1) command[l++] = *append++;
@@ -581,45 +811,48 @@ void execute_handler(const char *handler, Selector *to) {
 	}
 	command[l] = '\0';
 
-	if (system(command) == -1) error("could not execute `%s`", command);
-	if (filename) remove(filename);
+	pid = fork();
+	if (pid == 0) {
+		fd = open("/dev/null", O_RDWR);
+		if (fd >= 0) {
+			dup2(fd, STDIN_FILENO);
+			dup2(fd, STDOUT_FILENO);
+			dup2(fd, STDERR_FILENO);
+			close(fd);
+			execl("/bin/sh", "sh", "-c", command, (char *)NULL);
+		}
+		exit(EXIT_FAILURE);
+	} else if (pid > 0) {
+		for (;;) {
+			ret = waitpid(pid, &status, 0);
+			if (ret < 0 && errno == EAGAIN) continue;
+			if ((ret == pid) && WIFEXITED(status))
+				printf("`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
+			else if ((ret == pid) && !WIFEXITED(status))
+				printf("`%s` has exited abnormally\n", command);
+			break;
+		}
+	} else error("could not execute `%s`", command);
 }
 
 
 void navigate(Selector *to) {
-	const char *query = NULL, *handler;
+	const char *handler;
 
-	if (to == NULL) return;
-	switch (to->type) {
-		case '7': /* gopher full-text search */
-			query = read_line("enter gopher search string: ");
-			/* fallthrough */
-		case '1': { /* gopher submenu */
-			Selector *new = download_to_menu(to, query);
-			if (new == NULL) break;
-			if (history != to) history = prepend_selector(history, copy_selector(to));
-			free_selector(menu);
-			print_menu(new, NULL);
-			menu = new;
-			break;
-		}
-		case '4': case '5': case '6': case '9': /* binary files */
-			download_to_file(to);
-			break;
-		case 'i': case '3': /* ignore these selectors */
-			break;
-		default: /* try to invoke handler */
-			if ((handler = find_selector_handler(to->type)) != NULL) {
-				execute_handler(handler, to);
-			} else if (to->type == '0') { /* type 0 can be paged internally */
-				char *text = download(to, NULL, NULL);
-				print_text(text);
-				if (text != NULL) free(text);
-			} else {
-				error("no handler for type `%c`", to->type);
-			}
-			break;
+	if (to->type != '1') return;
+
+	if (to->url && strncmp(to->url, "gemini://", 9)) {
+		if ((handler = find_mime_handler(to->scheme)) == NULL) return;
+		execute_handler(handler, to->url, to);
+		return;
 	}
+
+	Selector *new = download_to_menu(to);
+	if (new == NULL) return;
+	if (history != to) history = prepend_selector(history, copy_selector(to));
+	free_selector(menu);
+	print_menu(new, NULL);
+	menu = new;
 }
 
 
@@ -638,7 +871,7 @@ void edit_variable(Variable **vars, char *line) {
 
 
 /*============================================================================*/
-static const Help gopher_help[] = {
+static const Help gemini_help[] = {
 	{
 		"alias",
 		"Syntax:\n" \
@@ -655,6 +888,7 @@ static const Help gopher_help[] = {
 	{
 		"authors",
 		"Credit goes to the following people:\n\n" \
+		"\tDima Krasner <dima@dimakrasner.com>\n" \
 		"\tSebastian Steinhauer <s.steinhauer@yahoo.de>\n" \
 	},
 	{
@@ -685,9 +919,9 @@ static const Help gopher_help[] = {
 	{
 		"commands",
 		"available commands\n" \
-		"alias         back          bookmarks     help          history\n" \
-		"open          quit          save          see           set\n" \
-		"show          type\n" \
+		"alias         back          bookmarks     go            help\n" \
+		"history       open          quit          save          see\n" \
+		"set           show          type\n"
 	},
 	{
 		"help",
@@ -703,14 +937,15 @@ static const Help gopher_help[] = {
 		"\tHISTORY [<filter>]/[<item-id>]\n" \
 		"\n" \
 		"Description:\n" \
-		"\tShow the gopher history. If a <filter> is specified, it will\n" \
+		"\tShow the gemini history. If a <filter> is specified, it will\n" \
 		"\tshow all selectors containing the <filter> in name or path.\n" \
 		"\tIf <item-id> is specified, navigate to the given <item-id>\n" \
 		"\tfrom history.\n" \
 	},
 	{
 		"license",
-		"delve - a simple terminal gopher client\n" \
+		"gplaces - a simple terminal gemini client\n" \
+		"Copyright (C) 2022  Dima Krasner\n" \
 		"Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"\n" \
 		"This program is free software: you can redistribute it and/or modify\n" \
@@ -732,7 +967,15 @@ static const Help gopher_help[] = {
 		"\tOPEN <url>\n" \
 		"\n" \
 		"Description:\n" \
-		"\tOpens the given <url> as a gopher menu.\n" \
+		"\tOpens the given <url>.\n" \
+	},
+	{
+		"go",
+		"Syntax:\n" \
+		"\tGO <url>\n" \
+		"\n" \
+		"Description:\n" \
+		"\tAlias for open.\n" \
 	},
 	{
 		"quit",
@@ -740,7 +983,7 @@ static const Help gopher_help[] = {
 		"\tQUIT\n" \
 		"\n" \
 		"Description:\n" \
-		"\tQuit the gopher client.\n"
+		"\tQuit the gemini client.\n"
 	},
 	{
 		"save",
@@ -757,7 +1000,7 @@ static const Help gopher_help[] = {
 		"\tSEE <item-id>\n" \
 		"\n" \
 		"Description:\n" \
-		"\tShow the full gopher URL for the menu selector id.\n" \
+		"\tShow the full gemini URL for the menu selector id.\n" \
 	},
 	{
 		"set",
@@ -776,7 +1019,7 @@ static const Help gopher_help[] = {
 		"\tSHOW [<filter>]\n" \
 		"\n" \
 		"Description:\n" \
-		"\tShow the current gopher menu. If a <filter> is specified, it will\n" \
+		"\tShow the current gemini menu. If a <filter> is specified, it will\n" \
 		"\tshow all selectors containing the <filter> in name or path.\n"
 	},
 	{
@@ -790,21 +1033,23 @@ static const Help gopher_help[] = {
 		"\tIf <name> and <value> are defined a new type handler will be installed.\n" \
 		"\n" \
 		"Examples:\n" \
-		"\ttype 0 \"less %f\" # create a type handler for gopher texts\n" \
+		"\ttype 0 \"less %f\" # create a type handler for gemini texts\n" \
 		"\n" \
 		"Format string:\n" \
 		"\tThe <value> for type handlers can have the following formating options:\n" \
 		"\t%% - simply a `%`\n" \
+		"\t%s - scheme\n" \
 		"\t%h - hostname\n" \
 		"\t%p - port\n" \
-		"\t%s - selector\n" \
+		"\t%P - path\n" \
 		"\t%n - name\n"
-		"\t%f - filename (downloaded to a temporary file prior to execution)\n" \
+		"\t%u - URL\n" \
+		"\t%f - filename\n" \
 	},
 	{
 		"variables",
-		"Following variables are used by delve:\n" \
-		"\tHOME_HOLE - the gopher URL which will be opened on startup\n" \
+		"Following variables are used by gplaces:\n" \
+		"\tHOME_CAPSULE - the gemini URL which will be opened on startup\n" \
 		"\tDOWNLOAD_DIRECTORY - the directory which will be default for downloads\n" \
 		"\tPAGE_TEXT - when `on` or `true` menus & text will be paged\n" \
 		"\tLINE_LENGTH - defines how long a menu/text line will be displayed\n" \
@@ -821,7 +1066,7 @@ static void cmd_quit(char *line) {
 
 
 static void cmd_open(char *line) {
-	Selector *to = parse_selector(next_token(&line));
+	Selector *to = parse_selector(NULL, next_token(&line));
 	navigate(to);
 	free_selector(to);
 }
@@ -858,7 +1103,7 @@ static void cmd_help(char *line) {
 	char *topic = next_token(&line);
 
 	if (topic) {
-		for (help = gopher_help; help->name; ++help) {
+		for (help = gemini_help; help->name; ++help) {
 			if (!strcasecmp(help->name, topic)) {
 				if (help->text) print_text(help->text);
 				else printf("sorry topic `%s` has no text yet :(\n", topic);
@@ -868,7 +1113,7 @@ static void cmd_help(char *line) {
 	}
 
 	puts("available topics, type `help <topic>` to get more information");
-	for (i = 1, help = gopher_help; help->name; ++help, ++i) {
+	for (i = 1, help = gemini_help; help->name; ++help, ++i) {
 		printf("%-13s ", help->name);
 		if (i % 5 == 0) puts("");
 	}
@@ -890,7 +1135,7 @@ static void cmd_bookmarks(char *line) {
 		char *name = next_token(&line);
 		char *url = next_token(&line);
 		if (url) {
-			Selector *sel = parse_selector(url);
+			Selector *sel = parse_selector(NULL, url);
 			if (sel) {
 				str_free(sel->name);
 				sel->name = str_copy(name);
@@ -908,7 +1153,7 @@ static void cmd_set(char *line) {
 
 static void cmd_see(char *line) {
 	Selector *to = find_selector(menu, line);
-	if (to && !strchr("3i", to->type)) puts(print_selector(to, 1));
+	if (to && !strchr("3i", to->type)) puts(to->url);
 }
 
 
@@ -922,9 +1167,10 @@ static void cmd_type(char *line) {
 }
 
 
-static const Command gopher_commands[] = {
+static const Command gemini_commands[] = {
 	{ "quit", cmd_quit },
 	{ "open", cmd_open },
+	{ "go", cmd_open },
 	{ "show", cmd_show },
 	{ "save", cmd_save },
 	{ "back", cmd_back },
@@ -955,7 +1201,7 @@ void eval(const char *input, const char *filename) {
 
 	for (line_no = 1; (line = str_split(&str, "\r\n")) != NULL; ++line_no) {
 		if ((token = next_token(&line)) != NULL) {
-			for (cmd = gopher_commands; cmd->name; ++cmd) {
+			for (cmd = gemini_commands; cmd->name; ++cmd) {
 				if (!strcasecmp(cmd->name, token)) {
 					cmd->func(line);
 					break;
@@ -977,75 +1223,39 @@ void eval(const char *input, const char *filename) {
 }
 
 
-#ifdef DELVE_USE_READLINE
-char *shell_name_generator(const char *text, int state) {
+void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	static int len;
-	static const Command *cmd;
-	static const Variable *alias;
-	const char *name;
+	const Command *cmd;
+	const Variable *alias;
 
-	if (!state) {
-		len = strlen(text);
-		cmd = gopher_commands;
-		alias = aliases;
-	}
+	len = strlen(text);
 
-	for (; cmd->name; ++cmd) {
-		if (!strncasecmp(cmd->name, text, len)) {
-			name = cmd->name;
-			if (cmd->name) ++cmd;
-			return strdup(name);
-		}
-	}
+	for (cmd = gemini_commands; cmd->name; ++cmd)
+		if (!strncasecmp(cmd->name, text, len)) bestlineAddCompletion(lc, cmd->name);
 
-	for (; alias; alias = alias->next) {
-		if (!strncasecmp(alias->name, text, len)) {
-			name = alias->name;
-			alias = alias->next;
-			return strdup(name);
-		}
-	}
-
-	return NULL;
-}
-
-char **shell_name_completion(const char *text, int start, int end) {
-	(void)start; (void)end;
-	rl_attempted_completion_over = 1;
-	return rl_completion_matches(text, shell_name_generator);
+	for (alias = aliases; alias; alias = alias->next)
+		if (!strncasecmp(alias->name, text, len)) bestlineAddCompletion(lc, alias->name);
 }
 
 void shell() {
 	char *line, *base, prompt[256];
-	Selector *to;
+	Selector *to = NULL;
 
-	using_history();
-	rl_attempted_completion_function = shell_name_completion;
+	bestlineSetCompletionCallback(shell_name_completion);
 
-	eval("open $HOME_HOLE", NULL);
+	eval("open $HOME_CAPSULE", NULL);
 
 	for (;;) {
-		snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", print_selector(history, 0));
-		if ((line = base = readline(prompt)) == NULL) break;
-		add_history(line);
+		snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", history ? history->url : "");
+		if ((line = base = bestline(prompt)) == NULL) break;
+		bestlineHistoryAdd(line);
 		if ((to = find_selector(menu, line)) != NULL) navigate(to);
 		else eval(line, NULL);
 		free(base);
 	}
-}
-#else
-void shell() {
-	char *line;
-	Selector *to;
 
-	eval("open $HOME_HOLE", NULL);
-
-	while ((line = read_line("(\33[35m%s\33[0m)> ", print_selector(history, 0))) != NULL) {
-		if ((to = find_selector(menu, line)) != NULL) navigate(to);
-		else eval(line, NULL);
-	}
+	bestlineHistoryFree();
 }
-#endif /* DELVE_USE_READLINE */
 
 
 /*============================================================================*/
@@ -1076,13 +1286,13 @@ fail:
 void load_config_files() {
 	char buffer[1024], *home;
 
-	load_config_file("/etc/delve.conf");
-	load_config_file("/usr/local/etc/delve.conf");
+	load_config_file("/etc/gplaces.conf");
+	load_config_file("/usr/local/etc/gplaces.conf");
 	if ((home = getenv("HOME")) != NULL) {
-		snprintf(buffer, sizeof(buffer), "%s/.delve.conf", home);
+		snprintf(buffer, sizeof(buffer), "%s/.gplaces.conf", home);
 		load_config_file(buffer);
 	}
-	load_config_file("delve.conf");
+	load_config_file("gplaces.conf");
 }
 
 
@@ -1095,7 +1305,7 @@ void parse_arguments(int argc, char **argv) {
 				break;
 			default:
 				fprintf(stderr,
-					"usage: delve [-c config-file] [url]\n"
+					"usage: gplaces [-c config-file] [url]\n"
 				);
 				exit(EXIT_SUCCESS);
 				break;
@@ -1103,7 +1313,7 @@ void parse_arguments(int argc, char **argv) {
 	}
 
 	argc -= optind; argv += optind;
-	if (argc > 0) set_var(&variables, "HOME_HOLE", "%s", argv[0]);
+	if (argc > 0) set_var(&variables, "HOME_CAPSULE", "%s", argv[0]);
 }
 
 
@@ -1118,14 +1328,25 @@ void quit_client() {
 }
 
 
+static void sigint(int sig) {
+	(void)sig;
+	fputs("^C", stderr);
+}
+
+
 int main(int argc, char **argv) {
 	atexit(quit_client);
+	signal(SIGINT, sigint);
+
+	SSL_library_init();
+	SSL_load_error_strings();
 
 	load_config_files();
 	parse_arguments(argc, argv);
 
 	puts(
-		"delve - 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
+		"gplaces - 0.16.0  Copyright (C) 2022  Dima Krasner\n" \
+		"based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"This program comes with ABSOLUTELY NO WARRANTY; for details type `help license'.\n" \
 		"This is free software, and you are welcome to redistribute it\n" \
 		"under certain conditions; type `help license' for details.\n" \

@@ -1,3 +1,2 @@
-# ignore build artifacts
-*.o
-delve
+/gplaces
+/*.o
