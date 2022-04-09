@@ -269,7 +269,6 @@ Selector *copy_selector(Selector *sel) {
 	new->index = 1;
 	new->type = sel->type;
 	new->name = str_copy(sel->name);
-	new->url = str_copy(sel->url);
 	if (sel->cu && ((new->cu = curl_url_dup(sel->cu)) == NULL) | !set_selector_url(new, new->url)) panic("cannot copy selector URL");
 	return new;
 }
