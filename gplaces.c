@@ -511,11 +511,10 @@ static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const 
 	if ((data = malloc(cap)) == NULL) panic("cannot allocate download data");
 
 	for (total = 0; total < cap - 1 && (total < 5 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
-		if ((received = SSL_read(ssl, &data[total], 1)) <= 0) {
-			if (SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break;
-			error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
-			goto fail;
-		}
+		if ((received = SSL_read(ssl, &data[total], 1)) > 0) continue;
+		if ((received == 0) || (SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN)) break;
+		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+		goto fail;
 	}
 	if (data[1] < '0' || data[0] > '9' || data[1] < '0' || data[1] > '9' || data[2] != ' ' || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
 	data[total] = '\0';
@@ -529,14 +528,15 @@ static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const 
 	if (meta >= crlf) meta = "";
 
 	for (;;) {
-		if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) <= 0) {
-			if (SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break;
-			error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
-			goto fail;
+		if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
+			if (!cb(sel, meta, crlf + 1, received, arg)) goto fail;
+			total += received;
+			if (total > (1024 * 256)) printf("downloading %.2f kb...\r", (double)total / 1024.0);
+			continue;
 		}
-		if (!cb(sel, meta, crlf + 1, received, arg)) goto fail;
-		total += received;
-		if (total > (1024 * 256)) printf("downloading %.2f kb...\r", (double)total / 1024.0);
+		if ((received == 0) || (SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN)) break; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+		goto fail;
 	}
 	if (total > (1024 * 256)) puts("");
 
