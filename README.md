@@ -14,6 +14,7 @@ Named after [Going Places](https://en.wikipedia.org/wiki/Going_Places_(Herb_Alpe
 	- openssl
 	- libcurl
 - internal pager for text & menus
+- SSH-style TOFU with ~/.gplaces_hosts
 - about *1k lines* of *C* code
 
 ## How to compile?
