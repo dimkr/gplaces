@@ -564,13 +564,13 @@ static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const 
 
 	if ((data = malloc(cap)) == NULL) panic("cannot allocate download data");
 
-	for (total = 0; total < cap - 1 && (total < 5 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
+	for (total = 0; total < cap - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
 		if ((received = SSL_read(ssl, &data[total], 1)) > 0) continue;
 		if ((received == 0) || (SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN)) break;
 		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
 		goto fail;
 	}
-	if (data[1] < '0' || data[0] > '9' || data[1] < '0' || data[1] > '9' || data[2] != ' ' || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
+	if (data[1] < '0' || data[0] > '9' || data[1] < '0' || data[1] > '9' || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
 	data[total] = '\0';
 
 	cap = 1024 * 64;
@@ -579,7 +579,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const 
 	crlf = &data[total - 2];
 	*crlf = '\0';
 	meta = &data[3];
-	if (meta >= crlf) meta = "";
+	if ((data[2] != ' ') || (meta >= crlf)) meta = "";
 
 	for (;;) {
 		if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
@@ -631,7 +631,13 @@ fail:
 }
 
 
+static void sigint(int sig) {
+	(void)sig;
+}
+
+
 int download(Selector *sel, int (*cb)(Selector *, const char *, const char *, size_t, void *), void *arg) {
+	struct sigaction sa = {.sa_handler = sigint}, old;
 	SSL_CTX *ctx = NULL;
 	int status, redirs = 0;
 
@@ -641,9 +647,14 @@ int download(Selector *sel, int (*cb)(Selector *, const char *, const char *, si
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 	SSL_CTX_set_verify_depth(ctx, 1);
 
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGINT, &sa, &old);
+
 	do {
 		status = do_download(sel, ctx, cb, arg);
 	} while ((status >= 10 && status <= 19) || (status >= 30 && status <= 39 && ++redirs < 5));
+
+	sigaction(SIGINT, &old, NULL);
 
 	SSL_CTX_free(ctx);
 
@@ -1329,15 +1340,8 @@ void quit_client() {
 }
 
 
-static void sigint(int sig) {
-	(void)sig;
-	fputs("^C", stderr);
-}
-
-
 int main(int argc, char **argv) {
 	atexit(quit_client);
-	signal(SIGINT, sigint);
 
 	SSL_library_init();
 	SSL_load_error_strings();
