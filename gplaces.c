@@ -131,7 +131,6 @@ void str_free(char *str) {
 
 char *str_copy(const char *str) {
 	char *new;
-	if (str == NULL || *str == '\0') return "";
 	if ((new = strdup(str)) == NULL) panic("cannot allocate new string");
 	return new;
 }
@@ -587,7 +586,7 @@ static int tofu(int preverify_ok, X509_STORE_CTX *ctx) {
 	size_t len, hlen;
 	FILE *fp;
 	BIGNUM *bn;
-	int trust = 0, namelen;
+	int trust = 1, namelen;
 
 	(void)preverify_ok;
 
@@ -618,10 +617,10 @@ static int tofu(int preverify_ok, X509_STORE_CTX *ctx) {
 			goto out;
 		}
 
-		fclose(fp);
+		fclose(fp); fp = NULL;
 	}
 
-	trust = trust && (((fp = fopen(hosts, "a")) != NULL) && (fprintf(fp, "%s %s\n", namebuf, hex) > 0));
+	if (trust) trust = (((fp = fopen(hosts, "a")) != NULL) && (fprintf(fp, "%s %s\n", namebuf, hex) > 0));
 
 out:
 	if (fp) fclose(fp);
