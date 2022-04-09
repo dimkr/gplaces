@@ -453,6 +453,55 @@ void print_text(const char *text) {
 /*============================================================================*/
 
 
+static int tofu(X509 *cert) {
+	static char hosts[1024], buffer[2048], namebuf[1024];
+	X509_NAME *name;
+	const char *home;
+	EVP_PKEY *pub;
+	char *p, *hex, *line;
+	size_t len, hlen;
+	FILE *fp;
+	BIGNUM *bn;
+	int trust = 1, namelen;
+
+	if ((name = X509_get_subject_name(cert)) == NULL) return 0;
+	if ((namelen = X509_NAME_get_text_by_NID(name, NID_commonName, namebuf, sizeof(namebuf))) <= 0) return 0;
+
+	if ((fp = open_memstream(&p, &len)) == NULL) return 0;
+	if ((pub = X509_get_pubkey(cert)) == NULL) return 0;
+	i2d_PUBKEY_fp(fp, pub);
+	fclose(fp);
+	bn = BN_bin2bn((const unsigned char *)p, len, NULL);
+	free(p);
+	if (!bn) return 0;
+
+	hex = BN_bn2hex(bn);
+	BN_free(bn);
+	if (!hex) return 0;
+	hlen = strlen(hex);
+
+	if ((home = getenv("HOME")) == NULL) return 0;
+	snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
+	if ((fp = fopen(hosts, "r")) != NULL) {
+		while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
+			if (strncmp(line, namebuf, namelen)) continue;
+			if (line[namelen] != ' ') continue;
+			trust = (strncmp(&line[namelen + 1], hex, hlen) == 0) && (line[namelen + 1 + hlen] == '\n');
+			goto out;
+		}
+
+		fclose(fp); fp = NULL;
+	}
+
+	if (trust) trust = (((fp = fopen(hosts, "a")) != NULL) && (fprintf(fp, "%s %s\n", namebuf, hex) > 0));
+
+out:
+	if (fp) fclose(fp);
+	OPENSSL_free(hex);
+	return trust;
+}
+
+
 static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const char *, const char *, size_t, void *), void *arg) {
 	struct addrinfo hints, *result, *it;
 	char request[1024], prompt[256], *data = NULL, *crlf, *meta, *line;
@@ -461,6 +510,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const 
 	int fd = -1, received, ret = 40;
 	BIO *bio = NULL;
 	SSL *ssl = NULL;
+	X509 *cert = NULL;
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
@@ -497,8 +547,13 @@ static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const 
 	SSL_set_bio(ssl, bio, bio);
 	SSL_set_connect_state(ssl);
 
-	if (SSL_do_handshake(ssl) != 1) {
+	if ((SSL_do_handshake(ssl) != 1) || ((cert = SSL_get_peer_certificate(ssl)) == NULL)) {
 		error("cannot establish secure connection to `%s`:`%s`: %s", sel->host, sel->port, ERR_reason_error_string(ERR_get_error()));
+		goto fail;
+	}
+
+	if (!tofu(cert)) {
+		error("cannot establish secure connection to `%s`:`%s`: certificate has changed", sel->host, sel->port);
 		goto fail;
 	}
 
@@ -569,63 +624,11 @@ static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const 
 
 fail:
 	if (data) free(data);
+	if (cert) X509_free(cert);
 	if (ssl) SSL_free(ssl);
 	else if (bio) BIO_free(bio);
 	if (fd != -1) close(fd);
 	return ret;
-}
-
-
-static int tofu(int preverify_ok, X509_STORE_CTX *ctx) {
-	static char hosts[1024], buffer[1024], namebuf[1024];
-	X509 *cert;
-	X509_NAME *name;
-	const char *home;
-	EVP_PKEY *pub;
-	char *p, *hex, *line;
-	size_t len, hlen;
-	FILE *fp;
-	BIGNUM *bn;
-	int trust = 1, namelen;
-
-	(void)preverify_ok;
-
-	if ((cert = X509_STORE_CTX_get_current_cert(ctx)) == NULL) return 0;
-	if ((name = X509_get_subject_name(cert)) == NULL) return 0;
-	if ((namelen = X509_NAME_get_text_by_NID(name, NID_commonName, namebuf, sizeof(namebuf))) <= 0) return 0;
-
-	if ((fp = open_memstream(&p, &len)) == NULL) return 0;
-	if ((pub = X509_get_pubkey(cert)) == NULL) return 0;
-	i2d_PUBKEY_fp(fp, pub);
-	fclose(fp);
-	bn = BN_bin2bn((const unsigned char *)p, len, NULL);
-	free(p);
-	if (!bn) return 0;
-
-	hex = BN_bn2hex(bn);
-	BN_free(bn);
-	if (!hex) return 0;
-	hlen = strlen(hex);
-
-	if ((home = getenv("HOME")) == NULL) return 0;
-	snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
-	if ((fp = fopen(hosts, "r")) != NULL) {
-		while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
-			if (strncmp(line, namebuf, namelen)) continue;
-			if (line[namelen] != ' ') continue;
-			trust = (strncmp(&line[namelen + 1], hex, hlen) == 0) && (line[namelen + 1 + hlen] == '\n');
-			goto out;
-		}
-
-		fclose(fp); fp = NULL;
-	}
-
-	if (trust) trust = (((fp = fopen(hosts, "a")) != NULL) && (fprintf(fp, "%s %s\n", namebuf, hex) > 0));
-
-out:
-	if (fp) fclose(fp);
-	OPENSSL_free(hex);
-	return trust;
 }
 
 
@@ -636,7 +639,7 @@ int download(Selector *sel, int (*cb)(Selector *, const char *, const char *, si
 	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 40;
 
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
-	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, tofu);
+	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 	SSL_CTX_set_verify_depth(ctx, 1);
 
 	do {
