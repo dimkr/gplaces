@@ -82,33 +82,21 @@ Selector *menu = NULL;
 
 
 /*============================================================================*/
-const char *find_mime_handler(const char *mime);
-void execute_handler(const char *handler, const char *filename, Selector *to);
-
-
-/*============================================================================*/
-void vlogf(FILE *fp, const char *color, const char *fmt, va_list va) {
+static void vlogf(FILE *fp, const char *color, const char *fmt, va_list va) {
 	if (!isatty(fileno(fp))) { vfprintf(fp, fmt, va); return; }
 	printf("\33[%sm", color);
 	vfprintf(fp, fmt, va);
 	puts("\33[0m");
 }
 
-void info(const char *fmt, ...) {
-	va_list va;
-	va_start(va, fmt);
-	vlogf(stdout, "34", fmt, va);
-	va_end(va);
-}
-
-void error(const char *fmt, ...) {
+static void error(const char *fmt, ...) {
 	va_list va;
 	va_start(va, fmt);
 	vlogf(stderr, "31", fmt, va);
 	va_end(va);
 }
 
-void panic(const char *fmt, ...) {
+static void panic(const char *fmt, ...) {
 	va_list va;
 	va_start(va, fmt);
 	vlogf(stderr, "31", fmt, va);
@@ -118,22 +106,22 @@ void panic(const char *fmt, ...) {
 
 
 /*============================================================================*/
-void str_free(char *str) {
+static void str_free(char *str) {
 	free(str);
 }
 
-char *str_copy(const char *str) {
+static char *str_copy(const char *str) {
 	char *new;
 	if ((new = strdup(str)) == NULL) panic("cannot allocate new string");
 	return new;
 }
 
-char *str_skip(char *str, const char *delim) {
+static char *str_skip(char *str, const char *delim) {
 	while (*str && strchr(delim, *str)) ++str;
 	return str;
 }
 
-char *str_split(char **str, const char *delim) {
+static char *str_split(char **str, const char *delim) {
 	char *begin;
 	if (*str == NULL || **str == '\0') return NULL;
 	for (begin = *str; *str && !strchr(delim, **str); ++*str) ;
@@ -141,7 +129,7 @@ char *str_split(char **str, const char *delim) {
 	return begin;
 }
 
-char *str_next(char **str, const char *delims) {
+static char *str_next(char **str, const char *delims) {
 	char *begin;
 	if (*str == NULL || **str == '\0') return NULL;
 	begin = *str + strspn(*str, delims);
@@ -150,7 +138,7 @@ char *str_next(char **str, const char *delims) {
 	return begin;
 }
 
-int str_contains(const char *haystack, const char *needle) {
+static int str_contains(const char *haystack, const char *needle) {
 	const char *a, *b;
 	for (; *haystack; ++haystack) {
 		for (a = haystack, b = needle; *a && *b; ++a, ++b) {
@@ -163,7 +151,7 @@ int str_contains(const char *haystack, const char *needle) {
 
 
 /*============================================================================*/
-void free_variable(Variable *var) {
+static void free_variable(Variable *var) {
 	while (var) {
 		Variable *next = var->next;
 		str_free(var->name);
@@ -174,7 +162,7 @@ void free_variable(Variable *var) {
 }
 
 
-char *set_var(Variable **list, const char *name, const char *fmt, ...) {
+static char *set_var(Variable **list, const char *name, const char *fmt, ...) {
 	Variable *var;
 
 	if (name == NULL) return NULL;
@@ -184,7 +172,7 @@ char *set_var(Variable **list, const char *name, const char *fmt, ...) {
 
 	if (fmt) {
 		va_list va;
-		char buffer[1024];
+		static char buffer[1024];
 
 		va_start(va, fmt);
 		vsnprintf(buffer, sizeof(buffer), fmt, va);
@@ -206,13 +194,7 @@ char *set_var(Variable **list, const char *name, const char *fmt, ...) {
 }
 
 
-int get_var_boolean(const char *name) {
-	char *data = set_var(&variables, name, NULL);
-	return data ? (!strcasecmp(data, "on") || !strcasecmp(data, "true")) : 0;
-}
-
-
-int get_var_integer(const char *name, int def) {
+static int get_var_integer(const char *name, int def) {
 	int value;
 	char *data = set_var(&variables, name, NULL);
 	if (data == NULL || sscanf(data, "%d", &value) != 1) return def;
@@ -221,14 +203,15 @@ int get_var_integer(const char *name, int def) {
 
 
 /*============================================================================*/
-Selector *new_selector(const char type) {
+static Selector *new_selector(const char type) {
 	Selector *new = calloc(1, sizeof(Selector));
 	if (new == NULL) panic("cannot allocate new selector");
 	new->type = type;
 	return new;
 }
 
-void free_selector(Selector *sel) {
+
+static void free_selector(Selector *sel) {
 	while (sel) {
 		Selector *next = sel->next;
 		str_free(sel->name);
@@ -244,7 +227,7 @@ void free_selector(Selector *sel) {
 }
 
 
-int set_selector_url(Selector *sel, const char *url) {
+static int set_selector_url(Selector *sel, const char *url) {
 	if ((curl_url_set(sel->cu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK)) return 0;
 
 	switch (curl_url_get(sel->cu, CURLUPART_PORT, &sel->port, 0)) {
@@ -257,7 +240,7 @@ int set_selector_url(Selector *sel, const char *url) {
 }
 
 
-Selector *copy_selector(Selector *sel) {
+static Selector *copy_selector(Selector *sel) {
 	Selector *new = new_selector(sel->type);
 	new->name = str_copy(sel->name);
 	new->index = 1;
@@ -266,14 +249,14 @@ Selector *copy_selector(Selector *sel) {
 }
 
 
-Selector *prepend_selector(Selector *list, Selector *sel) {
+static Selector *prepend_selector(Selector *list, Selector *sel) {
 	sel->next = list;
 	sel->index = list ? list->index + 1 : 1;
 	return sel;
 }
 
 
-Selector *find_selector(Selector *list, const char *line) {
+static Selector *find_selector(Selector *list, const char *line) {
 	int index;
 	if ((index = atoi(line)) <= 0) return NULL;
 	for (; list; list = list->next) if (list->index == index) return list;
@@ -281,7 +264,7 @@ Selector *find_selector(Selector *list, const char *line) {
 }
 
 
-Selector *parse_selector(Selector *from, char *str) {
+static Selector *parse_selector(Selector *from, char *str) {
 	static char buffer[1024];
 	char *url = str;
 	Selector *sel;
@@ -305,7 +288,7 @@ Selector *parse_selector(Selector *from, char *str) {
 }
 
 
-Selector *parse_selector_list(Selector *from, FILE *fp) {
+static Selector *parse_gemtext(Selector *from, FILE *fp) {
 	static char buffer[1024];
 	char *line, *url;
 	Selector *list = NULL, *last = NULL, *sel;
@@ -362,7 +345,7 @@ Selector *parse_selector_list(Selector *from, FILE *fp) {
 
 
 /*============================================================================*/
-char *next_token(char **str) {
+static char *next_token(char **str) {
 	if (*str == NULL) return NULL;
 	*str = str_skip(*str, " \v\t");
 	switch (**str) {
@@ -379,7 +362,7 @@ char *next_token(char **str) {
 }
 
 
-char *read_line(const char *fmt, ...) {
+static char *read_line(const char *fmt, ...) {
 	static char buffer[256];
 	char *line;
 	if (fmt != NULL) {
@@ -397,14 +380,14 @@ char *read_line(const char *fmt, ...) {
 }
 
 
-int get_terminal_height() {
+static int get_terminal_height() {
 	struct winsize wz;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &wz);
 	return wz.ws_row - 2; /* substract 2 lines (1 for tmux etc., 1 for the prompt) */
 }
 
 
-int get_terminal_width() {
+static int get_terminal_width() {
 	struct winsize wz;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &wz);
 	return wz.ws_col > 80 ? wz.ws_col : 80;
@@ -412,8 +395,68 @@ int get_terminal_width() {
 
 
 /*============================================================================*/
+static const char *find_mime_handler(const char *mime) {
+	const char *handler = set_var(&typehandlers, mime, NULL);
+	if (!handler)
+		fprintf(stderr, "no handler for `%s`\n", mime);
+	return handler;
+}
 
 
+static void reap(const char *command, pid_t pid) {
+	pid_t ret;
+	int status;
+
+	for (;;) {
+		ret = waitpid(pid, &status, 0);
+		if ((ret < 0) && (errno == EAGAIN)) continue;
+		if ((ret == pid) && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
+		else if ((ret == pid) && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
+		break;
+	}
+}
+
+
+static void execute_handler(const char *handler, const char *filename, Selector *to) {
+	static char command[1024];
+	size_t l;
+	pid_t pid;
+	int fd;
+
+	for (l = 0; *handler && l < sizeof(command) - 1; ) {
+		if (handler[0] == '%' && handler[1] != '\0') {
+			const char *append = "";
+			switch (handler[1]) {
+				case '%': append = "%"; break;
+				case 's': append = to->scheme; break;
+				case 'h': append = to->host; break;
+				case 'p': append = to->port; break;
+				case 'P': append = to->path; break;
+				case 'n': append = to->name; break;
+				case 'u': append = to->url; break;
+				case 'f': append = filename; break;
+			}
+			handler += 2;
+			while (*append && l < sizeof(command) - 1) command[l++] = *append++;
+		} else command[l++] = *handler++;
+	}
+	command[l] = '\0';
+
+	if ((pid = fork()) == 0) {
+		if ((fd = open("/dev/null", O_RDWR)) != -1) {
+			dup2(fd, STDIN_FILENO);
+			dup2(fd, STDOUT_FILENO);
+			dup2(fd, STDERR_FILENO);
+			close(fd);
+			execl("/bin/sh", "sh", "-c", command, (char *)NULL);
+		}
+		exit(EXIT_FAILURE);
+	} else if (pid > 0) reap(command, pid);
+	else error("could not execute `%s`", command);
+}
+
+
+/*============================================================================*/
 static int tofu(X509 *cert) {
 	static char hosts[1024], buffer[2048], namebuf[1024];
 	X509_NAME *name;
@@ -477,7 +520,8 @@ static int write_all(FILE *fp, const char *buffer, size_t length) {
 
 static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 	struct addrinfo hints, *result, *it;
-	char request[1024], prompt[256], *data = NULL, *crlf, *meta, *line;
+	static char request[1024], prompt[256];
+	char *data = NULL, *crlf, *meta, *line;
 	struct timeval tv = {0};
 	size_t total, cap = 2 + 1 + 1024 + 2 + 1;
 	int timeout, fd = -1, received, ret = 40;
@@ -616,7 +660,7 @@ static void sigint(int sig) {
 }
 
 
-int download(Selector *sel, FILE *fp, char **mime) {
+static int download(Selector *sel, FILE *fp, char **mime) {
 	struct sigaction sa = {.sa_handler = sigint}, old;
 	SSL_CTX *ctx = NULL;
 	int status, redirs = 0, ret = 0;
@@ -645,9 +689,10 @@ int download(Selector *sel, FILE *fp, char **mime) {
 }
 
 
-void download_to_file(Selector *sel) {
+static void download_to_file(Selector *sel) {
+	static char suggestion[1024];
 	FILE *fp;
-	char *mime = NULL, *filename, *def, *download_dir, suggestion[1024];
+	char *mime = NULL, *filename, *def, *download_dir;
 	int ret;
 
 	def = strrchr(sel->path, '/');
@@ -669,7 +714,7 @@ void download_to_file(Selector *sel) {
 }
 
 
-Selector *download_to_menu(Selector *sel) {
+static Selector *download_to_menu(Selector *sel) {
 	static char filename[1024], template[1024];
 	FILE *fp;
 	const char *tmpdir, *handler;
@@ -687,7 +732,7 @@ Selector *download_to_menu(Selector *sel) {
 	if (!download(sel, fp, &mime) || fflush(fp) == EOF) goto out;
 	if (!strncmp(mime, "text/gemini", 11)) {
 		if (fseek(fp, 0, SEEK_SET) == -1) goto out;
-		list = parse_selector_list(sel, fp);
+		list = parse_gemtext(sel, fp);
 	} else if ((handler = find_mime_handler(mime)) != NULL) execute_handler(handler, filename, sel);
 
 out:
@@ -699,8 +744,6 @@ out:
 
 
 /*============================================================================*/
-
-
 static int ndigits(int n) {
 	int digits = 0;
 	for ( ; n > 0; n /= 10, ++digits);
@@ -721,7 +764,7 @@ static void print_raw(FILE *fp, Selector *list, const char *filter) {
 }
 
 
-void print_menu(FILE *fp, Selector *list, const char *filter) {
+static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
 	int length, out, rem;
 	const char *p;
 
@@ -762,71 +805,6 @@ void print_menu(FILE *fp, Selector *list, const char *filter) {
 }
 
 
-const char *find_mime_handler(const char *mime) {
-	const char *handler = set_var(&typehandlers, mime, NULL);
-	if (!handler)
-		fprintf(stderr, "no handler for `%s`\n", mime);
-	return handler;
-}
-
-
-static void reap(const char *command, pid_t pid) {
-	pid_t ret;
-	int status;
-
-	for (;;) {
-		ret = waitpid(pid, &status, 0);
-		if ((ret < 0) && (errno == EAGAIN)) continue;
-		if ((ret == pid) && WIFEXITED(status))
-			printf("`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
-		else if ((ret == pid) && !WIFEXITED(status))
-			printf("`%s` has exited abnormally\n", command);
-		break;
-	}
-}
-
-
-void execute_handler(const char *handler, const char *filename, Selector *to) {
-	char command[1024];
-	size_t l;
-	pid_t pid;
-	int fd;
-
-	for (l = 0; *handler && l < sizeof(command) - 1; ) {
-		if (handler[0] == '%' && handler[1] != '\0') {
-			const char *append = "";
-			switch (handler[1]) {
-				case '%': append = "%"; break;
-				case 's': append = to->scheme; break;
-				case 'h': append = to->host; break;
-				case 'p': append = to->port; break;
-				case 'P': append = to->path; break;
-				case 'n': append = to->name; break;
-				case 'u': append = to->url; break;
-				case 'f': append = filename; break;
-			}
-			handler += 2;
-			while (*append && l < sizeof(command) - 1) command[l++] = *append++;
-		} else command[l++] = *handler++;
-	}
-	command[l] = '\0';
-
-	pid = fork();
-	if (pid == 0) {
-		fd = open("/dev/null", O_RDWR);
-		if (fd >= 0) {
-			dup2(fd, STDIN_FILENO);
-			dup2(fd, STDOUT_FILENO);
-			dup2(fd, STDERR_FILENO);
-			close(fd);
-			execl("/bin/sh", "sh", "-c", command, (char *)NULL);
-		}
-		exit(EXIT_FAILURE);
-	} else if (pid > 0) reap(command, pid);
-	else error("could not execute `%s`", command);
-}
-
-
 static void page(Selector *sel) {
 	int fds[2];
 	FILE *fp;
@@ -847,7 +825,7 @@ static void page(Selector *sel) {
 	close(fds[0]);
 
 	if ((fp = fdopen(fds[1], "w")) != NULL) {
-		print_menu(fp, sel, NULL);
+		print_gemtext(fp, sel, NULL);
 		fclose(fp);
 	}
 
@@ -855,7 +833,7 @@ static void page(Selector *sel) {
 }
 
 
-void navigate(Selector *to) {
+static void navigate(Selector *to) {
 	const char *handler;
 	Selector *new, *sel;
 	int lines, height;
@@ -879,11 +857,11 @@ void navigate(Selector *to) {
 		height = get_terminal_height();
 		if (lines > height) page(new);
 	}
-	print_menu(stdout, new, NULL);
+	print_gemtext(stdout, new, NULL);
 }
 
 
-void edit_variable(Variable **vars, char *line) {
+static void edit_variable(Variable **vars, char *line) {
 	char *name = next_token(&line);
 	char *data = next_token(&line);
 
@@ -1006,7 +984,7 @@ static void cmd_open(char *line) {
 
 
 static void cmd_show(char *line) {
-	print_menu(stdout, menu, next_token(&line));
+	print_gemtext(stdout, menu, next_token(&line));
 }
 
 
@@ -1057,7 +1035,7 @@ static void cmd_help(char *line) {
 static void cmd_history(char *line) {
 	Selector *to = find_selector(history, line);
 	if (to != NULL) navigate(to);
-	else print_menu(stdout, history, next_token(&line));
+	else print_gemtext(stdout, history, next_token(&line));
 }
 
 
@@ -1074,7 +1052,7 @@ static void cmd_bookmarks(char *line) {
 				sel->name = str_copy(name);
 				bookmarks = prepend_selector(bookmarks, sel);
 			}
-		} else print_menu(stdout, bookmarks, name);
+		} else print_gemtext(stdout, bookmarks, name);
 	}
 }
 
@@ -1156,7 +1134,7 @@ void eval(const char *input, const char *filename) {
 }
 
 
-void shell_name_completion(const char *text, bestlineCompletions *lc) {
+static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	static int len;
 	const Command *cmd;
 	const Variable *alias;
@@ -1170,7 +1148,7 @@ void shell_name_completion(const char *text, bestlineCompletions *lc) {
 		if (!strncasecmp(alias->name, text, len)) bestlineAddCompletion(lc, alias->name);
 }
 
-void shell() {
+static void shell() {
 	static char path[1024], prompt[256];
 	const char *home;
 	char *line, *base;
@@ -1200,7 +1178,7 @@ void shell() {
 
 
 /*============================================================================*/
-void load_config_file(const char *filename) {
+static void load_config_file(const char *filename) {
 	long length;
 	FILE *fp = NULL;
 	char *data = NULL;
@@ -1224,8 +1202,9 @@ fail:
 }
 
 
-void load_config_files() {
-	char buffer[1024], *home;
+static void load_config_files() {
+	static char buffer[1024];
+	char *home;
 
 	load_config_file(CONFDIR"/gplaces.conf");
 	if ((home = getenv("HOME")) != NULL) {
@@ -1236,7 +1215,7 @@ void load_config_files() {
 }
 
 
-void parse_arguments(int argc, char **argv) {
+static void parse_arguments(int argc, char **argv) {
 	int ch;
 	while ((ch = getopt(argc, argv, "c:")) != -1) {
 		switch (ch) {
@@ -1257,7 +1236,7 @@ void parse_arguments(int argc, char **argv) {
 }
 
 
-void quit_client() {
+static void quit_client() {
 	free_variable(variables);
 	free_variable(aliases);
 	free_variable(typehandlers);
