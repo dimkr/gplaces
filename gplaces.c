@@ -1031,7 +1031,7 @@ static void cmd_set(char *line) {
 
 static void cmd_see(char *line) {
 	Selector *to = find_selector(menu, line);
-	if (to && !strchr("3i", to->type)) puts(to->url);
+	if (to) puts(to->url);
 }
 
 
@@ -1112,6 +1112,7 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	for (alias = aliases; alias; alias = alias->next)
 		if (!strncasecmp(alias->name, text, len)) bestlineAddCompletion(lc, alias->name);
 }
+
 
 static void shell() {
 	static char path[1024], command[1024];
