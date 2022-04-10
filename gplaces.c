@@ -805,7 +805,7 @@ static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
 }
 
 
-static void page(Selector *sel) {
+static void page_gemtext(Selector *sel) {
 	int fds[2];
 	FILE *fp;
 	pid_t pid;
@@ -833,10 +833,21 @@ static void page(Selector *sel) {
 }
 
 
+static void show_gemtext(Selector *sel, const char *filter) {
+	int lines, height;
+	Selector *it;
+	if (isatty(STDOUT_FILENO)) {
+		for (lines = 0, it = sel; it; it = it->next, ++lines);
+		height = get_terminal_height();
+		if (lines > height) page_gemtext(sel);
+	}
+	print_gemtext(stdout, sel, filter);
+}
+
+
 static void navigate(Selector *to) {
 	const char *handler;
-	Selector *new, *sel;
-	int lines, height;
+	Selector *new;
 
 	if (to->type != 'l') return;
 
@@ -851,13 +862,7 @@ static void navigate(Selector *to) {
 	if (history != to) history = prepend_selector(history, copy_selector(to));
 	free_selector(menu);
 	menu = new;
-
-	if (isatty(STDOUT_FILENO)) {
-		for (lines = 0, sel = new; sel; sel = sel->next, ++lines);
-		height = get_terminal_height();
-		if (lines > height) page(new);
-	}
-	print_gemtext(stdout, new, NULL);
+	show_gemtext(new, NULL);
 }
 
 
@@ -984,7 +989,7 @@ static void cmd_open(char *line) {
 
 
 static void cmd_show(char *line) {
-	print_gemtext(stdout, menu, next_token(&line));
+	show_gemtext(menu, next_token(&line));
 }
 
 
@@ -998,9 +1003,7 @@ static void cmd_back(char *line) {
 	Selector *to = history ? history->next : NULL;
 	(void)line;
 	if (to != NULL) {
-		history->next = NULL;
-		free_selector(history);
-		history = to;
+		history = prepend_selector(history, copy_selector(to));
 		navigate(to);
 	} else {
 		error("history empty");
@@ -1035,7 +1038,7 @@ static void cmd_help(char *line) {
 static void cmd_history(char *line) {
 	Selector *to = find_selector(history, line);
 	if (to != NULL) navigate(to);
-	else print_gemtext(stdout, history, next_token(&line));
+	else show_gemtext(history, next_token(&line));
 }
 
 
@@ -1052,7 +1055,7 @@ static void cmd_bookmarks(char *line) {
 				sel->name = str_copy(name);
 				bookmarks = prepend_selector(bookmarks, sel);
 			}
-		} else print_gemtext(stdout, bookmarks, name);
+		} else show_gemtext(bookmarks, name);
 	}
 }
 
@@ -1097,7 +1100,7 @@ static const Command gemini_commands[] = {
 
 
 /*============================================================================*/
-void eval(const char *input, const char *filename) {
+static void eval(const char *input, const char *filename) {
 	static int nested =  0;
 	const Command *cmd;
 	char *str, *copy, *line, *token, *alias;
@@ -1149,7 +1152,7 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 }
 
 static void shell() {
-	static char path[1024], prompt[256];
+	static char path[1024], command[1024], prompt[256];
 	const char *home;
 	char *line, *base;
 	Selector *to = NULL;
@@ -1166,9 +1169,16 @@ static void shell() {
 	for (;;) {
 		snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", history ? history->url : "");
 		if ((line = base = bestline(prompt)) == NULL) break;
-		bestlineHistoryAdd(line);
-		if ((to = find_selector(menu, line)) != NULL) navigate(to);
-		else eval(line, NULL);
+		if ((to = find_selector(menu, line)) != NULL) {
+			if (to->url) {
+				snprintf(command, sizeof(command), "open %s", to->url);
+				bestlineHistoryAdd(command);
+			} else bestlineHistoryAdd(line);
+			navigate(to);
+		} else {
+			eval(line, NULL);
+			bestlineHistoryAdd(line);
+		}
 		free(base);
 	}
 
