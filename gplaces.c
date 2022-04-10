@@ -983,6 +983,7 @@ static void cmd_quit(char *line) {
 
 static void cmd_open(char *line) {
 	Selector *to = parse_selector(NULL, next_token(&line));
+	if (!to) return;
 	navigate(to);
 	free_selector(to);
 }

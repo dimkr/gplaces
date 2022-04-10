@@ -37,7 +37,7 @@ The gplaces logo is an artist's impression of a Gemini VII capsule with the red 
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|238|34|998
+C|1|238|34|999
 
 ## Help
 Just type `help` when the client is running.
