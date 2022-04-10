@@ -1,4 +1,4 @@
-# gplaces - a simple terminal gemini client
+# gplaces - a simple terminal Gemini client
 
 Named after [Going Places](https://en.wikipedia.org/wiki/Going_Places_(Herb_Alpert_and_the_Tijuana_Brass_album)), the 1965 album by Herb Alpert and The Tijuana Brass.
 
@@ -33,7 +33,7 @@ Named after [Going Places](https://en.wikipedia.org/wiki/Going_Places_(Herb_Alpe
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|229|34|1102
+C|1|238|34|998
 
 ## Help
 Just type `help` when the client is running.

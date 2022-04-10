@@ -1,7 +1,7 @@
 /*
 ================================================================================
 
-	gplaces - a simple terminal gemini client
+	gplaces - a simple terminal Gemini client
     Copyright (C) 2022  Dima Krasner
     Copyright (C) 2019  Sebastian Steinhauer
 
@@ -273,22 +273,6 @@ Selector *copy_selector(Selector *sel) {
 }
 
 
-Selector *append_selector(Selector *list, Selector *sel) {
-	if (list == NULL) {
-		sel->next = NULL;
-		sel->index = 1;
-		return sel;
-	} else {
-		Selector *it;
-		for (it = list; it->next; it = it->next) ;
-		it->next = sel;
-		sel->next = NULL;
-		sel->index = it->index + 1;
-		return list;
-	}
-}
-
-
 Selector *prepend_selector(Selector *list, Selector *sel) {
 	sel->next = list;
 	sel->index = list ? list->index + 1 : 1;
@@ -330,8 +314,8 @@ Selector *parse_selector(Selector *from, char *str) {
 
 Selector *parse_selector_list(Selector *from, char *str) {
 	char *line, *url;
-	Selector *list = NULL, *sel;
-	int pre = 0, i;
+	Selector *list = NULL, *last = NULL, *sel;
+	int pre = 0, i, index = 1;
 
 	for (i = 0; (i < 512) && ((line = str_split(&str, "\n")) != NULL); ++i) {
 		if (strncmp(line, "```", 3) == 0) {
@@ -350,6 +334,7 @@ Selector *parse_selector_list(Selector *from, char *str) {
 				free(sel->name);
 				sel->name = str_copy(*line ? line : url);
 			}
+			sel->index = index++;
 		} else if (*line == '#') {
 			sel = new_selector('#');
 			sel->name = str_copy(line);
@@ -368,7 +353,9 @@ Selector *parse_selector_list(Selector *from, char *str) {
 			sel->name = str_copy(line);
 		}
 
-		list = append_selector(list, sel);
+		if (last) last->next = sel;
+		else if (list == NULL) { list = sel; last = sel; }
+		last = sel;
 
 		str = str_skip(str, "\r");
 		str = str_skip(str, "\n");
@@ -898,77 +885,38 @@ void edit_variable(Variable **vars, char *line) {
 static const Help gemini_help[] = {
 	{
 		"alias",
-		"Syntax:\n" \
-		"\tALIAS [<name>] [<value>]\n" \
-		"\n" \
-		"Description:\n" \
-		"\tIf no <name> is given it will show all aliases.\n" \
-		"\tWhen <name> is given it will show this specific alias.\n" \
-		"\tWhen both <name> and <value> are defined as new alias is created.\n" \
-		"\n" \
-		"Examples:\n" \
-		"\talias b back # create a shorthand for back" \
+		"ALIAS [<name>] [<value>]" \
 	},
 	{
 		"authors",
-		"Credit goes to the following people:\n\n" \
 		"\tDima Krasner <dima@dimakrasner.com>\n" \
 		"\tSebastian Steinhauer <s.steinhauer@yahoo.de>" \
 	},
 	{
 		"back",
-		"Syntax:\n" \
-		"\tBACK\n" \
-		"\n" \
-		"Description:\n" \
-		"\tGo back in history." \
+		"BACK" \
 	},
 	{
 		"bookmarks",
-		"Syntax:\n" \
-		"\tBOOKMARKS [<filter>]/[<item-id>]\n" \
-		"\n" \
-		"Description:\n" \
-		"\tShow all defined bookmarks. If a <filter> is specified, it will\n" \
-		"\tshow all selectors containing the <filter> in name or path.\n" \
-		"\tIf <item-id> is specified, navigate to the given <item-id>\n" \
-		"\tfrom bookmarks.\n" \
-		"\n\n" \
-		"Syntax:\n" \
-		"\tBOOKMARKS <name> <url>\n" \
-		"\n" \
-		"Description:\n" \
-		"\tDefine a new bookmark with the given <name> and <url>." \
+		"BOOKMARKS [<filter>]/[<item-id>]" \
 	},
 	{
 		"commands",
-		"available commands\n" \
 		"alias         back          bookmarks     go            help\n" \
 		"history       open          quit          save          see\n" \
 		"set           show          type"
 	},
 	{
 		"help",
-		"Syntax:\n" \
-		"\tHELP [<topic>]\n" \
-		"\n" \
-		"Description:\n" \
-		"\tShow all help topics or the help text for a specific <topic>." \
+		"HELP [<topic>]" \
 	},
 	{
 		"history",
-		"Syntax:\n" \
-		"\tHISTORY [<filter>]/[<item-id>]\n" \
-		"\n" \
-		"Description:\n" \
-		"\tShow the gemini history. If a <filter> is specified, it will\n" \
-		"\tshow all selectors containing the <filter> in name or path.\n" \
-		"\tIf <item-id> is specified, navigate to the given <item-id>\n" \
-		"\tfrom history." \
+		"HISTORY [<filter>]/[<item-id>]" \
 	},
 	{
 		"license",
-		"gplaces - a simple terminal gemini client\n" \
+		"gplaces - a simple terminal Gemini client\n" \
 		"Copyright (C) 2022  Dima Krasner\n" \
 		"Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"\n" \
@@ -987,94 +935,40 @@ static const Help gemini_help[] = {
 	},
 	{
 		"open",
-		"Syntax:\n" \
-		"\tOPEN <url>\n" \
-		"\n" \
-		"Description:\n" \
-		"\tOpens the given <url>." \
+		"OPEN <url>" \
 	},
 	{
 		"go",
-		"Syntax:\n" \
-		"\tGO <url>\n" \
-		"\n" \
-		"Description:\n" \
-		"\tAlias for open." \
+		"GO <url>" \
 	},
 	{
 		"quit",
-		"Syntax:\n" \
-		"\tQUIT\n" \
-		"\n" \
-		"Description:\n" \
-		"\tQuit the gemini client."
+		"QUIT" \
 	},
 	{
 		"save",
-		"Syntax:\n" \
-		"\tSAVE <item-id>\n" \
-		"\n" \
-		"Description:\n" \
-		"\tSaves the given <item-id> from the menu to the disk.\n" \
-		"\tYou will be asked for a filename." \
+		"SAVE <item-id>" \
 	},
 	{
 		"see",
-		"Syntax:\n" \
-		"\tSEE <item-id>\n" \
-		"\n" \
-		"Description:\n" \
-		"\tShow the full gemini URL for the menu selector id." \
+		"SEE <item-id>" \
 	},
 	{
 		"set",
-		"Syntax:\n" \
-		"\tSET [<name>] [<value>]\n" \
-		"\n" \
-		"Description:\n" \
-		"\tIf no <name> is given it will show all variables.\n" \
-		"\tWhen <name> is given it will show this specific variable.\n" \
-		"\tIf <data> is specified the variable will have this value.\n" \
-		"\tWhen the variable does not exist the variable will be created." \
+		"SET [<name>] [<value>]" \
 	},
 	{
 		"show",
-		"Syntax:\n" \
-		"\tSHOW [<filter>]\n" \
-		"\n" \
-		"Description:\n" \
-		"\tShow the current gemini menu. If a <filter> is specified, it will\n" \
-		"\tshow all selectors containing the <filter> in name or path."
+		"SHOW [<filter>]" \
 	},
 	{
 		"type",
-		"Syntax:\n" \
-		"\tTYPE [<name>] [<value>]\n" \
-		"\n" \
-		"Description:\n" \
-		"\tIf no <name> is given it will show all type handlers.\n" \
-		"\tWhen <name> is given it will show this specific type handler.\n" \
-		"\tIf <name> and <value> are defined a new type handler will be installed.\n" \
-		"\n" \
-		"Examples:\n" \
-		"\ttype 0 \"less %f\" # create a type handler for gemini texts\n" \
-		"\n" \
-		"Format string:\n" \
-		"\tThe <value> for type handlers can have the following formating options:\n" \
-		"\t%% - simply a `%`\n" \
-		"\t%s - scheme\n" \
-		"\t%h - hostname\n" \
-		"\t%p - port\n" \
-		"\t%P - path\n" \
-		"\t%n - name\n"
-		"\t%u - URL\n" \
-		"\t%f - filename" \
+		"TYPE [<name>] [<value>]" \
 	},
 	{
 		"variables",
-		"Following variables are used by gplaces:\n" \
-		"\tHOME_CAPSULE - the gemini URL which will be opened on startup\n" \
-		"\tDOWNLOAD_DIRECTORY - the directory which will be default for downloads\n" \
+		"\tHOME_CAPSULE - the Gemini URL which will be opened on startup\n" \
+		"\tDOWNLOAD_DIRECTORY - the directory which will be default for downloads" \
 	},
 	{ NULL, NULL }
 };
@@ -1161,7 +1055,7 @@ static void cmd_bookmarks(char *line) {
 			if (sel) {
 				str_free(sel->name);
 				sel->name = str_copy(name);
-				bookmarks = append_selector(bookmarks, sel);
+				bookmarks = prepend_selector(bookmarks, sel);
 			}
 		} else print_menu(bookmarks, name);
 	}

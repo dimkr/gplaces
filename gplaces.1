@@ -1,0 +1,210 @@
+.TH gplaces 1
+.SH NAME
+gplaces - a Gemini client
+.SH SYNOPSIS
+.B gplaces
+[-c config-file] [url]
+.SH DESCRIPTION
+A simple terminal based Gemini client.
+.SH COMMAND SYNTAX
+.TP
+.B ALIAS
+.RS
+Syntax:
+.RS
+ALIAS [<name>] [<value>]
+.RE
+Description:
+.RS
+If no <name> is given it will show all aliases. When <name> is given it will show this specific alias. When both <name> and <value> are defined as new alias is created.
+.RE
+Examples:
+.RS
+alias b back # create a shorthand for back
+.RE
+.RE
+.TP
+.B BACK
+.RS
+Syntax:
+.RS
+BACK
+.RE
+Description:
+.RS
+Go back in history.
+.RE
+.RE
+.TP
+.B BOOKMARKS
+.RS
+Syntax:
+.RS
+BOOKMARKS [<filter>]/[<item-id>]
+.RE
+Description:
+.RS
+Show all defined bookmarks. If a <filter> is specified, it will show all selectors containing the <filter> in name or path. If <item-id> is specified, navigate to the given <item-id> from bookmarks.
+.RE
+Syntax:
+.RS
+BOOKMARKS <name> <url>
+.RE
+Description:
+.RS
+Define a new bookmark with the given <name> and <url>.
+.RE
+.RE
+.TP
+.B GO
+.RS
+Syntax:
+.RS
+GO <url>
+.RE
+Description:
+.RS
+Alias for open.
+.RE
+.RE
+.TP
+.B HELP
+.RS
+Syntax:
+.RS
+HELP [<topic>]
+.RE
+Description:
+.RS
+Show all help topics or the help text for a specific <topic>.
+.RE
+.RE
+.TP
+.B HISTORY
+.RS
+Syntax:
+.RS
+HISTORY [<filter>]/[<item-id>]
+.RE
+Description:
+.RS
+Show the Gemini history. If a <filter> is specified, it will show all selectors containing the <filter> in name or path. If <item-id> is specified, navigate to the given <item-id> from history.
+.RE
+.RE
+.TP
+.B OPEN
+.RS
+Syntax:
+.RS
+OPEN <url>
+.RE
+Description:
+.RS
+Opens the given <url>.
+.RE
+.RE
+.TP
+.B QUIT
+.RS
+Syntax:
+.RS
+QUIT
+.RE
+Description:
+.RS
+Quit the Gemini client.
+.RE
+.RE
+.TP
+.B SAVE
+.RS
+Syntax:
+.RS
+SAVE <item-id>
+.RE
+Description:
+.RS
+Saves the given <item-id> from the menu to the disk. You will be asked for a filename.
+.RE
+.RE
+.TP
+.B SEE
+.RS
+Syntax:
+.RS
+SEE <item-id>
+.RE
+Description:
+.RS
+Show the full Gemini URL for the menu selector id.
+.RE
+.RE
+.TP
+.B SET
+.RS
+Syntax:
+.RS
+SET [<name>] [<value>]
+.RE
+Description:
+.RS
+If no <name> is given it will show all variables. When <name> is given it will show this specific variable. If <data> is specified the variable will have this value. When the variable does not exist the variable will be created.
+.RE
+.RE
+.TP
+.B SHOW
+.RS
+Syntax:
+.RS
+SHOW [<filter>]
+.RE
+Description:
+.RS
+Show the current Gemini menu. If a <filter> is specified, it will show all selectors containing the <filter> in name or path.
+.RE
+.RE
+.TP
+.B TYPE
+.RS
+Syntax:
+.RS
+TYPE [<name>] [<value>]
+.RE
+Description:
+.RS
+If no <name> is given it will show all type handlers. When <name> is given it will show this specific type handler. If <name> and <value> are defined a new type handler will be installed.
+.RE
+Examples:
+.RS
+type text/plain "less %f" # create a type handler for text files
+.RE
+Format string:
+.RS
+The <value> for type handlers can have the following formating options:
+.IP
+%% - simply a `%`
+.IP
+%s - scheme
+.IP
+%h - hostname
+.IP
+%p - port
+.IP
+%P - path
+.IP
+%n - name
+.IP
+%u - URL
+.IP
+%f - filename
+.RE
+.RE
+.SH OPTIONS
+.TP
+.B -c
+Specifies the configuration file to use.
+.SH AUTHOR
+.P
+Dima Krasner (dima@dimakrasner.com)
+.P
+Sebastian Steinhauer <s.steinhauer@yahoo.de>
