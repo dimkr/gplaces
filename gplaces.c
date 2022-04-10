@@ -418,22 +418,6 @@ int get_terminal_width() {
 }
 
 
-void print_text(const char *text) {
-	char *copy, *str, *line, *p;
-	int length;
-
-	length = get_terminal_width();
-
-	copy = str = str_copy(text);
-	for ( ; (line = str_split(&str, "\n")) != NULL; ) {
-		for (p = line; *p; ++p) if (*p == '\r') *p = '\0'; /* remove any CR */
-		printf("%.*s\n", length, line);
-		str = str_skip(str, "\r"); /* just skip CR so we can show empty lines */
-	}
-	str_free(copy);
-}
-
-
 /*============================================================================*/
 
 
@@ -955,8 +939,8 @@ static const Help gemini_help[] = {
 	},
 	{
 		"authors",
-		"\tDima Krasner <dima@dimakrasner.com>\n" \
-		"\tSebastian Steinhauer <s.steinhauer@yahoo.de>" \
+		"Dima Krasner <dima@dimakrasner.com>\n" \
+		"Sebastian Steinhauer <s.steinhauer@yahoo.de>" \
 	},
 	{
 		"back",
@@ -1033,8 +1017,8 @@ static const Help gemini_help[] = {
 	},
 	{
 		"variables",
-		"\tHOME_CAPSULE - the Gemini URL which will be opened on startup\n" \
-		"\tDOWNLOAD_DIRECTORY - the directory which will be default for downloads" \
+		"HOME_CAPSULE - the Gemini URL which will be opened on startup\n" \
+		"DOWNLOAD_DIRECTORY - the directory which will be default for downloads" \
 	},
 	{ NULL, NULL }
 };
@@ -1088,7 +1072,7 @@ static void cmd_help(char *line) {
 	if (topic) {
 		for (help = gemini_help; help->name; ++help) {
 			if (!strcasecmp(help->name, topic)) {
-				if (help->text) print_text(help->text);
+				if (help->text) puts(help->text);
 				else printf("sorry topic `%s` has no text yet :(\n", topic);
 				return;
 			}
