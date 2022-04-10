@@ -403,6 +403,13 @@ char *read_line(const char *fmt, ...) {
 }
 
 
+int get_terminal_height() {
+	struct winsize wz;
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &wz);
+	return wz.ws_row - 2; /* substract 2 lines (1 for tmux etc., 1 for the prompt) */
+}
+
+
 int get_terminal_width() {
 	struct winsize wz;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &wz);
@@ -751,7 +758,7 @@ static int ndigits(int n) {
 }
 
 
-void print_menu(Selector *list, const char *filter) {
+void print_menu(FILE *fp, Selector *list, const char *filter) {
 	int length, out, rem;
 	const char *p;
 
@@ -766,23 +773,23 @@ void print_menu(Selector *list, const char *filter) {
 				case 'l':
 					if (p == list->name) {
 						if (out == length) out -= 3 + ndigits(list->index);
-						printf("\33[4;36m(\33[1m%d) %.*s\33[0m\n", list->index, out, p);
+						fprintf(fp, "\33[4;36m(\33[1m%d) %.*s\33[0m\n", list->index, out, p);
 					} else printf("\33[4;36m%.*s\33[0m\n", out, p);
 					break;
 				case '#':
-				case 'i': printf("%.*s\n", out, p); break;
+				case 'i': fprintf(fp, "%.*s\n", out, p); break;
 				case '`':
 					out = rem;
-					printf("%s\n", p);
+					fprintf(fp, "%s\n", p);
 					break;
 				case '>':
 					if (out == length) out -= 2;
-					printf("%c %.*s\n", list->type, out, p);
+					fprintf(fp, "%c %.*s\n", list->type, out, p);
 					break;
 				default:
 					if (out == length) out -= 2;
-					if (p == list->name) printf("%c %.*s\n", list->type, out, p);
-					else printf("  %.*s\n", out, p);
+					if (p == list->name) fprintf(fp, "%c %.*s\n", list->type, out, p);
+					else fprintf(fp, "  %.*s\n", out, p);
 			}
 		}
 	}
@@ -797,11 +804,27 @@ const char *find_mime_handler(const char *mime) {
 }
 
 
+static void reap(const char *command, pid_t pid) {
+	pid_t ret;
+	int status;
+
+	for (;;) {
+		ret = waitpid(pid, &status, 0);
+		if ((ret < 0) && (errno == EAGAIN)) continue;
+		if ((ret == pid) && WIFEXITED(status))
+			printf("`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
+		else if ((ret == pid) && !WIFEXITED(status))
+			printf("`%s` has exited abnormally\n", command);
+		break;
+	}
+}
+
+
 void execute_handler(const char *handler, const char *filename, Selector *to) {
 	char command[1024];
 	size_t l;
-	pid_t pid, ret;
-	int fd, status;
+	pid_t pid;
+	int fd;
 
 	for (l = 0; *handler && l < sizeof(command) - 1; ) {
 		if (handler[0] == '%' && handler[1] != '\0') {
@@ -833,22 +856,43 @@ void execute_handler(const char *handler, const char *filename, Selector *to) {
 			execl("/bin/sh", "sh", "-c", command, (char *)NULL);
 		}
 		exit(EXIT_FAILURE);
-	} else if (pid > 0) {
-		for (;;) {
-			ret = waitpid(pid, &status, 0);
-			if (ret < 0 && errno == EAGAIN) continue;
-			if ((ret == pid) && WIFEXITED(status))
-				printf("`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
-			else if ((ret == pid) && !WIFEXITED(status))
-				printf("`%s` has exited abnormally\n", command);
-			break;
-		}
-	} else error("could not execute `%s`", command);
+	} else if (pid > 0) reap(command, pid);
+	else error("could not execute `%s`", command);
+}
+
+
+static void page(Selector *sel) {
+	int fds[2];
+	FILE *fp;
+	pid_t pid;
+	const char *pager;
+
+	if (((pager = set_var(&variables, "PAGER", NULL)) == NULL) && ((pager = getenv("PAGER")) == NULL)) pager = "less -r";
+
+	if (pipe(fds) < 0) return;
+	if ((pid = fork()) == 0) {
+		close(fds[1]);
+		dup2(fds[0], STDIN_FILENO);
+		close(fds[0]);
+		execlp("sh", "sh", "-c", pager, (char *)NULL);
+		exit(EXIT_FAILURE);
+	} else if (pid < 0) return;
+
+	close(fds[0]);
+
+	if ((fp = fdopen(fds[1], "w")) != NULL) {
+		print_menu(fp, sel, NULL);
+		fclose(fp);
+	}
+
+	reap(pager, pid);
 }
 
 
 void navigate(Selector *to) {
 	const char *handler;
+	Selector *new, *sel;
+	int lines, height;
 
 	if (to->type != 'l') return;
 
@@ -858,12 +902,16 @@ void navigate(Selector *to) {
 		return;
 	}
 
-	Selector *new = download_to_menu(to);
+	new = download_to_menu(to);
 	if (new == NULL) return;
 	if (history != to) history = prepend_selector(history, copy_selector(to));
 	free_selector(menu);
-	print_menu(new, NULL);
 	menu = new;
+
+	for (lines = 0, sel = new; sel; sel = sel->next, ++lines);
+	height = get_terminal_height();
+	if (lines > height) page(new);
+	print_menu(stdout, new, NULL);
 }
 
 
@@ -990,7 +1038,7 @@ static void cmd_open(char *line) {
 
 
 static void cmd_show(char *line) {
-	print_menu(menu, next_token(&line));
+	print_menu(stdout, menu, next_token(&line));
 }
 
 
@@ -1041,7 +1089,7 @@ static void cmd_help(char *line) {
 static void cmd_history(char *line) {
 	Selector *to = find_selector(history, line);
 	if (to != NULL) navigate(to);
-	else print_menu(history, next_token(&line));
+	else print_menu(stdout, history, next_token(&line));
 }
 
 
@@ -1058,7 +1106,7 @@ static void cmd_bookmarks(char *line) {
 				sel->name = str_copy(name);
 				bookmarks = prepend_selector(bookmarks, sel);
 			}
-		} else print_menu(bookmarks, name);
+		} else print_menu(stdout, bookmarks, name);
 	}
 }
 
