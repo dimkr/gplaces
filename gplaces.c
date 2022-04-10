@@ -1227,8 +1227,7 @@ fail:
 void load_config_files() {
 	char buffer[1024], *home;
 
-	load_config_file("/etc/gplaces.conf");
-	load_config_file("/usr/local/etc/gplaces.conf");
+	load_config_file(CONFDIR"/gplaces.conf");
 	if ((home = getenv("HOME")) != NULL) {
 		snprintf(buffer, sizeof(buffer), "%s/.gplaces.conf", home);
 		load_config_file(buffer);

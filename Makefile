@@ -1,10 +1,11 @@
 # see LICENSE for copyright and license details
 PREFIX = /usr/local
+CONFDIR = /etc
 MANDIR = $(PREFIX)/share/man
 ICONDIR = $(PREFIX)/share/icons
 APPDIR = $(PREFIX)/share/applications
 CC = cc
-CFLAGS ?= -O2 -Wall -Wextra
+CFLAGS ?= -O2 -Wall -Wextra -DCONFDIR=\"$(CONFDIR)\"
 CFLAGS += $(shell pkg-config --cflags libcurl libssl libcrypto)
 LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
@@ -25,8 +26,8 @@ clean:
 install: default
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin/
 	@install $(BIN) $(DESTDIR)$(PREFIX)/bin/${BIN}
-	@mkdir -p $(DESTDIR)$(PREFIX)/etc
-	@install $(CONF) $(DESTDIR)$(PREFIX)/etc/${CONF}
+	@mkdir -p $(DESTDIR)$(PREFIX)$(CONFDIR)
+	@install $(CONF) $(DESTDIR)$(CONFDIR)/${CONF}
 	@mkdir -p $(DESTDIR)$(MANDIR)/man1
 	@install $(MAN) $(DESTDIR)$(MANDIR)/man1/${MAN}
 	@mkdir -p $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps
