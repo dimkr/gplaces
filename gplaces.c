@@ -77,8 +77,8 @@ static Variable *variables = NULL;
 static Variable *aliases = NULL;
 static Variable *typehandlers = NULL;
 static Selector *bookmarks = NULL;
-static Selector *history = NULL;
 static Selector *menu = NULL;
+static char prompt[256] = "(\33[35m\33[0m)> ";
 
 
 /*============================================================================*/
@@ -237,15 +237,6 @@ static int set_selector_url(Selector *sel, const char *url) {
 	}
 
 	return 1;
-}
-
-
-static Selector *copy_selector(Selector *sel) {
-	Selector *new = new_selector(sel->type);
-	new->name = str_copy(sel->name);
-	new->index = 1;
-	if (sel->cu && ((new->cu = curl_url_dup(sel->cu)) == NULL) | !set_selector_url(new, new->url)) panic("cannot copy selector URL");
-	return new;
 }
 
 
@@ -520,7 +511,7 @@ static int write_all(FILE *fp, const char *buffer, size_t length) {
 
 static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 	struct addrinfo hints, *result, *it;
-	static char request[1024], prompt[256];
+	static char request[1024];
 	char *data = NULL, *crlf, *meta, *line;
 	struct timeval tv = {0};
 	size_t total, cap = 2 + 1 + 1024 + 2 + 1;
@@ -859,7 +850,7 @@ static void navigate(Selector *to) {
 
 	new = download_to_menu(to);
 	if (new == NULL) return;
-	if (history != to) history = prepend_selector(history, copy_selector(to));
+	snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", to->url);
 	free_selector(menu);
 	menu = new;
 	show_gemtext(new, NULL);
@@ -901,17 +892,13 @@ static const Help gemini_help[] = {
 	},
 	{
 		"commands",
-		"alias         back          bookmarks     go            help\n" \
-		"history       open          quit          save          see\n" \
-		"set           show          type"
+		"alias         bookmarks     go            help          open\n" \
+		"quit          save          see           set           show\n" \
+		"type"
 	},
 	{
 		"help",
 		"HELP [<topic>]" \
-	},
-	{
-		"history",
-		"HISTORY [<filter>]/[<item-id>]" \
 	},
 	{
 		"license",
@@ -999,18 +986,6 @@ static void cmd_save(char *line) {
 }
 
 
-static void cmd_back(char *line) {
-	Selector *to = history ? history->next : NULL;
-	(void)line;
-	if (to != NULL) {
-		history = prepend_selector(history, copy_selector(to));
-		navigate(to);
-	} else {
-		error("history empty");
-	}
-}
-
-
 static void cmd_help(char *line) {
 	int i;
 	const Help *help;
@@ -1032,13 +1007,6 @@ static void cmd_help(char *line) {
 		if (i % 5 == 0) puts("");
 	}
 	puts("");
-}
-
-
-static void cmd_history(char *line) {
-	Selector *to = find_selector(history, line);
-	if (to != NULL) navigate(to);
-	else show_gemtext(history, next_token(&line));
 }
 
 
@@ -1087,9 +1055,7 @@ static const Command gemini_commands[] = {
 	{ "go", cmd_open },
 	{ "show", cmd_show },
 	{ "save", cmd_save },
-	{ "back", cmd_back },
 	{ "help", cmd_help },
-	{ "history", cmd_history },
 	{ "bookmarks", cmd_bookmarks },
 	{ "set", cmd_set },
 	{ "see", cmd_see },
@@ -1152,7 +1118,7 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 }
 
 static void shell() {
-	static char path[1024], command[1024], prompt[256];
+	static char path[1024], command[1024];
 	const char *home;
 	char *line, *base;
 	Selector *to = NULL;
@@ -1167,7 +1133,6 @@ static void shell() {
 	eval("open $HOME_CAPSULE", NULL);
 
 	for (;;) {
-		snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", history ? history->url : "");
 		if ((line = base = bestline(prompt)) == NULL) break;
 		if ((to = find_selector(menu, line)) != NULL) {
 			if (to->url) {
@@ -1251,7 +1216,6 @@ static void quit_client() {
 	free_variable(aliases);
 	free_variable(typehandlers);
 	free_selector(bookmarks);
-	free_selector(history);
 	free_selector(menu);
 	if (isatty(STDOUT_FILENO)) puts("\33[0m");
 }
