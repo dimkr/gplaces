@@ -71,14 +71,6 @@ typedef struct Help {
 	const char *text;
 } Help;
 
-typedef struct Response {
-	char filename[1024];
-	char *mime;
-	FILE *fp;
-	char *buffer;
-	size_t length;
-} Response;
-
 
 /*============================================================================*/
 Variable *variables = NULL;
@@ -313,16 +305,22 @@ Selector *parse_selector(Selector *from, char *str) {
 }
 
 
-Selector *parse_selector_list(Selector *from, char *str) {
+Selector *parse_selector_list(Selector *from, FILE *fp) {
+	static char buffer[1024];
 	char *line, *url;
 	Selector *list = NULL, *last = NULL, *sel;
+	size_t len;
 	int pre = 0, i, index = 1;
 
-	for (i = 0; (i < 512) && ((line = str_split(&str, "\n")) != NULL); ++i) {
+	for (i = 0; (i < 512) && ((line = fgets(buffer, sizeof(buffer), fp)) != NULL); ++i) {
 		if (strncmp(line, "```", 3) == 0) {
 			pre = !pre;
 			continue;
 		}
+
+		len = strlen(line);
+		if (len >= 2 && line[len - 2] == '\r') line[len - 2] = '\0';
+		else if (line[len - 1] == '\n') line[len - 1] = '\0';
 
 		if (pre) {
 			sel = new_selector('`');
@@ -357,9 +355,6 @@ Selector *parse_selector_list(Selector *from, char *str) {
 		if (last) last->next = sel;
 		else if (list == NULL) { list = sel; last = sel; }
 		last = sel;
-
-		str = str_skip(str, "\r");
-		str = str_skip(str, "\n");
 	}
 
 	if (i == 512) error("gemtext is truncated to 512 lines");
@@ -470,7 +465,19 @@ out:
 }
 
 
-static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const char *, const char *, size_t, void *), void *arg) {
+static int write_all(FILE *fp, const char *buffer, size_t length) {
+	size_t total = 0, out;
+
+	do {
+		if ((out = fwrite(&buffer[total], 1, length - total, fp)) == 0) return 0;
+		total += out;
+	} while (total < length);
+
+	return 1;
+}
+
+
+static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 	struct addrinfo hints, *result, *it;
 	char request[1024], prompt[256], *data = NULL, *crlf, *meta, *line;
 	struct timeval tv = {0};
@@ -556,7 +563,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const 
 
 	for (;;) {
 		if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
-			if (!cb(sel, meta, crlf + 1, received, arg)) goto fail;
+			if (!write_all(fp, crlf + 1, received)) goto fail;
 			total += received;
 			if (total > (1024 * 256)) fprintf(stderr, "downloading %.2f kb...\r", (double)total / 1024.0);
 			continue;
@@ -592,6 +599,8 @@ static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const 
 		error("failed to download `%s`: %s", sel->url, *meta ? meta : data);
 	}
 
+	if ((*mime = strdup(meta)) == NULL) goto fail;
+
 	ret = (data[0] - '0') * 10 + (data[1] - '0');
 
 fail:
@@ -609,10 +618,10 @@ static void sigint(int sig) {
 }
 
 
-int download(Selector *sel, int (*cb)(Selector *, const char *, const char *, size_t, void *), void *arg) {
+int download(Selector *sel, FILE *fp, char **mime) {
 	struct sigaction sa = {.sa_handler = sigint}, old;
 	SSL_CTX *ctx = NULL;
-	int status, redirs = 0;
+	int status, redirs = 0, ret = 0;
 
 	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 40;
 
@@ -624,7 +633,9 @@ int download(Selector *sel, int (*cb)(Selector *, const char *, const char *, si
 	sigaction(SIGINT, &sa, &old);
 
 	do {
-		status = do_download(sel, ctx, cb, arg);
+		status = do_download(sel, ctx, fp, mime);
+		if ((ret = (status >= 20 && status <= 29))) break;
+		free(*mime); *mime = NULL;
 	} while ((status >= 10 && status <= 19) || (status >= 30 && status <= 39 && ++redirs < 5));
 
 	sigaction(SIGINT, &old, NULL);
@@ -632,30 +643,13 @@ int download(Selector *sel, int (*cb)(Selector *, const char *, const char *, si
 	SSL_CTX_free(ctx);
 
 	if (redirs == 5) error("too many redirects from `%s`", sel->url);
-	return (status >= 20 && status <= 29) ? 1 : 0;
-}
-
-
-static int append_to_file(Selector *sel, const char *meta, const char *buffer, size_t len, void *arg) {
-	size_t total = 0, out;
-	Response *r = (Response *)arg;
-
-	(void)sel;
-
-	if ((r->mime == NULL) && ((r->mime = strdup(meta)) == NULL)) return 0;
-
-	do {
-		if ((out = fwrite(&buffer[total], 1, len - total, r->fp)) == 0) return 0;
-		total += out;
-	} while (total < len);
-
-	return 1;
+	return ret;
 }
 
 
 void download_to_file(Selector *sel) {
-	Response r = {0};
-	char *filename, *def, *download_dir, suggestion[1024];
+	FILE *fp;
+	char *mime = NULL, *filename, *def, *download_dir, suggestion[1024];
 	int ret;
 
 	def = strrchr(sel->path, '/');
@@ -666,69 +660,42 @@ void download_to_file(Selector *sel) {
 
 	if ((filename = read_line("enter filename (press ENTER for `%s`): ", suggestion)) == NULL) return;
 	if (!strlen(filename)) filename = suggestion;
-	if ((r.fp = fopen(filename, "wb")) == NULL) {
+	if ((fp = fopen(filename, "wb")) == NULL) {
 		error("cannot create file `%s`: %s", filename, strerror(errno));
 		return;
 	}
-	ret = download(sel, append_to_file, &r);
-	fclose(r.fp);
-	free(r.mime);
-	if (r.fp && !ret) unlink(filename);
-}
-
-
-static int append_by_type(Selector *sel, const char *meta, const char *buffer, size_t len, void *arg) {
-	static char template[1024];
-	const char *tmpdir;
-	size_t total, out;
-	FILE *fp;
-	int fd;
-	Response *r = (Response *)arg;
-
-	(void)sel;
-
-	if (r->mime == NULL) {
-		if ((r->mime = strdup(meta)) == NULL) return 0;
-		if (strncmp(r->mime, "text/gemini", 11)) {
-			if (fflush(r->fp) == EOF) return 0;
-
-			if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
-			snprintf(template, sizeof(template), "%sgplaces.XXXXXXXX", tmpdir);
-			snprintf(r->filename, sizeof(r->filename), "%s", template);
-			if (((fd = mkstemp(r->filename)) == -1) || ((fp = fdopen(fd, "w")) == NULL)) {
-				error("cannot create temporary file: %s", strerror(errno));
-				return 0;
-			}
-			for (total = 0; total < r->length; total += out)
-				if ((out = fwrite(&r->buffer[total], 1, r->length - total, r->fp)) == 0) return 0;
-			fclose(r->fp);
-			r->fp = fp;
-		}
-	}
-
-	for (total = 0; total < len; total += out)
-		if ((out = fwrite(&buffer[total], 1, len - total, r->fp)) == 0) return 0;
-
-	return 1;
+	ret = download(sel, fp, &mime);
+	fclose(fp);
+	free(mime);
+	if (fp && !ret) unlink(filename);
 }
 
 
 Selector *download_to_menu(Selector *sel) {
-	Response r = {0};
+	static char filename[1024], template[1024];
+	FILE *fp;
+	const char *tmpdir, *handler;
 	Selector *list = NULL;
-	const char *handler;
-	
-	if ((r.fp = open_memstream(&r.buffer, &r.length)) == NULL) return NULL;
-	if (!download(sel, append_by_type, &r)) goto out;
-	if (fflush(r.fp) == EOF) goto out;
-	if (!strncmp(r.mime, "text/gemini", 11)) list = parse_selector_list(sel, r.buffer);
-	else if ((handler = find_mime_handler(r.mime)) != NULL) execute_handler(handler, r.filename, sel);
+	char *mime = NULL;
+	int fd;
+
+	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
+	snprintf(template, sizeof(template), "%sgplaces.XXXXXXXX", tmpdir);
+	snprintf(filename, sizeof(filename), "%s", template);
+	if (((fd = mkstemp(filename)) == -1) || ((fp = fdopen(fd, "r+w")) == NULL)) {
+		error("cannot create temporary file: %s", strerror(errno));
+		goto out;
+	}
+	if (!download(sel, fp, &mime) || fflush(fp) == EOF) goto out;
+	if (!strncmp(mime, "text/gemini", 11)) {
+		if (fseek(fp, 0, SEEK_SET) == -1) goto out;
+		list = parse_selector_list(sel, fp);
+	} else if ((handler = find_mime_handler(mime)) != NULL) execute_handler(handler, filename, sel);
 
 out:
-	if (*r.filename) unlink(r.filename);
-	free(r.mime);
-	if (r.fp) fclose(r.fp);
-	free(r.buffer);
+	if (*filename) unlink(filename);
+	free(mime);
+	if (fp) fclose(fp);
 	return list;
 }
 
@@ -767,6 +734,7 @@ void print_menu(FILE *fp, Selector *list, const char *filter) {
 	for (; list; list = list->next) {
 		if (filter && !str_contains(list->name, filter) && (!list->path || !str_contains(list->path, filter))) continue;
 		rem = (int)strlen(list->name);
+		if (rem == 0) { fputc('\n', fp); continue; }
 		for (p = list->name; rem > 0; rem -= out, p += out) {
 			out = rem < length ? rem : length;
 			switch (list->type) {
