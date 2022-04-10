@@ -37,6 +37,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <regex.h>
 
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
@@ -132,17 +133,6 @@ static char *str_next(char **str, const char *delims) {
 	*str = begin + strcspn(begin, delims);
 	if (**str != '\0') { **str = '\0'; ++*str; }
 	return begin;
-}
-
-static int str_contains(const char *haystack, const char *needle) {
-	const char *a, *b;
-	for (; *haystack; ++haystack) {
-		for (a = haystack, b = needle; *a && *b; ++a, ++b) {
-			if (tolower(*a) != tolower(*b)) break;
-		}
-		if (*b == '\0') return 1;
-	}
-	return 0;
 }
 
 
@@ -739,8 +729,12 @@ static int ndigits(int n) {
 
 
 static void print_raw(FILE *fp, Selector *list, const char *filter) {
+	regex_t re;
+
+	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
+
 	for (; list; list = list->next) {
-		if (filter && !str_contains(list->name, filter) && (!list->path || !str_contains(list->path, filter))) continue;
+		if (filter && (regexec(&re, list->name, 0, NULL, 0) != 0) && (!list->url || regexec(&re, list->url, 0, NULL, 0) != 0)) continue;
 		switch (list->type) {
 			case 'l': fprintf(fp, "=> %s %s\n", list->url, list->name); break;
 			case '>':
@@ -748,19 +742,23 @@ static void print_raw(FILE *fp, Selector *list, const char *filter) {
 			default: fprintf(fp, "%s\n", list->name);
 		}
 	}
+
+	if (filter) regfree(&re);
 }
 
 
 static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
+	regex_t re;
 	int length, out, rem;
 	const char *p;
 
 	if (!isatty(STDOUT_FILENO)) return print_raw(fp, list, filter);
 
+	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
 	length = get_terminal_width();
 
 	for (; list; list = list->next) {
-		if (filter && !str_contains(list->name, filter) && (!list->path || !str_contains(list->path, filter))) continue;
+		if (filter && (regexec(&re, list->name, 0, NULL, 0) != 0) && (!list->url || regexec(&re, list->url, 0, NULL, 0) != 0)) continue;
 		rem = (int)strlen(list->name);
 		if (rem == 0) { fputc('\n', fp); continue; }
 		for (p = list->name; rem > 0; rem -= out, p += out) {
@@ -789,6 +787,8 @@ static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
 			}
 		}
 	}
+
+	if (filter) regfree(&re);
 }
 
 
@@ -823,7 +823,7 @@ static void page_gemtext(Selector *sel) {
 static void show_gemtext(Selector *sel, const char *filter) {
 	int lines, height;
 	Selector *it;
-	if (isatty(STDOUT_FILENO)) {
+	if (!filter && isatty(STDOUT_FILENO)) {
 		for (lines = 0, it = sel; it; it = it->next, ++lines);
 		height = get_terminal_height();
 		if (lines > height) page_gemtext(sel);
