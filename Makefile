@@ -2,7 +2,7 @@
 PREFIX = /usr/local
 MANDIR = $(PREFIX)/share/man
 CC = cc
-CFLAGS ?= -O0 -g -Wall -Wextra
+CFLAGS ?= -O2 -Wall -Wextra
 CFLAGS += $(shell pkg-config --cflags libcurl libssl libcrypto)
 LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
