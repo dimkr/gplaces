@@ -106,10 +106,6 @@ static void panic(const char *fmt, ...) {
 
 
 /*============================================================================*/
-static void str_free(char *str) {
-	free(str);
-}
-
 static char *str_copy(const char *str) {
 	char *new;
 	if ((new = strdup(str)) == NULL) panic("cannot allocate new string");
@@ -154,8 +150,8 @@ static int str_contains(const char *haystack, const char *needle) {
 static void free_variable(Variable *var) {
 	while (var) {
 		Variable *next = var->next;
-		str_free(var->name);
-		str_free(var->data);
+		free(var->name);
+		free(var->data);
 		free(var);
 		var = next;
 	}
@@ -185,7 +181,7 @@ static char *set_var(Variable **list, const char *name, const char *fmt, ...) {
 			var->data = str_copy(buffer);
 			*list = var;
 		} else {
-			str_free(var->data);
+			free(var->data);
 			var->data = str_copy(buffer);
 		}
 	}
@@ -214,7 +210,7 @@ static Selector *new_selector(const char type) {
 static void free_selector(Selector *sel) {
 	while (sel) {
 		Selector *next = sel->next;
-		str_free(sel->name);
+		free(sel->name);
 		curl_free(sel->scheme);
 		curl_free(sel->host);
 		curl_free(sel->port);
@@ -1019,7 +1015,7 @@ static void cmd_bookmarks(char *line) {
 		if (url) {
 			Selector *sel = parse_selector(NULL, url);
 			if (sel) {
-				str_free(sel->name);
+				free(sel->name);
 				sel->name = str_copy(name);
 				bookmarks = prepend_selector(bookmarks, sel);
 			}
@@ -1098,7 +1094,7 @@ static void eval(const char *input, const char *filename) {
 		str = str_skip(str, "\r\n");
 	}
 
-	str_free(copy);
+	free(copy);
 	--nested;
 }
 
