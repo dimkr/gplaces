@@ -2,9 +2,11 @@
 
 Because Gemini deserves a light client with a high power to weight ratio!
 
-gplaces is named after [Going Places](https://en.wikipedia.org/wiki/Going_Places_(Herb_Alpert_and_the_Tijuana_Brass_album)), the 1965 album by Herb Alpert and The Tijuana Brass.
+gplaces is named after [Going Places](https://en.wikipedia.org/wiki/Going_Places_(Herb_Alpert_and_the_Tijuana_Brass_album)), the 1965 album by Herb Alpert and The Tijuana Brass. The "o" is omitted from the executable name so it doesn't mess up tab completion for Gopher users and Go developers.
 
 The gplaces logo is an artist's impression of a Gemini VII capsule with the red accents of a [Humes and Berg](https://humesandberg.com) Stonelined straight trumpet mute. Sort of.
+
+gplaces is originally a Gemini port of the [delve](https://github.com/kieselsteini/delve) Gopher client by Sebastian Steinhauer.
 
 ## Overview
 - configurable MIME type handlers
