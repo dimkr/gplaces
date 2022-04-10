@@ -345,9 +345,7 @@ Selector *parse_selector_list(Selector *from, FILE *fp) {
 			str_next(&line, " \t\r\n");
 			sel = new_selector('*');
 			sel->name = str_copy(line);
-		} else if (strncmp(line, "```", 3) == 0)
-			pre = !pre;
-		else {
+		} else {
 			sel = new_selector('i');
 			sel->name = str_copy(line);
 		}
