@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=gplaces
+Comment=A simple terminal based Gemini client
+Exec=gplaces %u
+Icon=gplaces
+Terminal=true
+Type=Application
+MimeType=x-scheme-handler/gemini
+Categories=Network

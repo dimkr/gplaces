@@ -1,6 +1,8 @@
 # see LICENSE for copyright and license details
 PREFIX = /usr/local
 MANDIR = $(PREFIX)/share/man
+ICONDIR = $(PREFIX)/share/icons
+APPDIR = $(PREFIX)/share/applications
 CC = cc
 CFLAGS ?= -O2 -Wall -Wextra
 CFLAGS += $(shell pkg-config --cflags libcurl libssl libcrypto)
@@ -10,6 +12,8 @@ OBJ = bestline/bestline.o gplaces.o
 BIN = gplaces
 CONF = gplaces.conf
 MAN = gplaces.1
+ICON = gplaces.svg
+APP = gplaces.desktop
 
 default: $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)
@@ -25,6 +29,10 @@ install: default
 	@install $(CONF) $(DESTDIR)$(PREFIX)/etc/${CONF}
 	@mkdir -p $(DESTDIR)$(MANDIR)/man1
 	@install $(MAN) $(DESTDIR)$(MANDIR)/man1/${MAN}
+	@mkdir -p $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps
+	@install $(ICON) $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps/${ICON}
+	@mkdir -p $(DESTDIR)$(APPDIR)
+	@install $(APP) $(DESTDIR)$(APPDIR)/${APP}
 
 uninstall:
 	@rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
