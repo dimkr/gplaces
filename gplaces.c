@@ -1155,10 +1155,17 @@ void shell_name_completion(const char *text, bestlineCompletions *lc) {
 }
 
 void shell() {
-	char *line, *base, prompt[256];
+	static char path[1024], prompt[256];
+	const char *home;
+	char *line, *base;
 	Selector *to = NULL;
 
 	bestlineSetCompletionCallback(shell_name_completion);
+
+	if ((home = getenv("HOME")) != NULL) {
+		snprintf(path, sizeof(path), "%s/.gplaces_history", home);
+		bestlineHistoryLoad(path);
+	}
 
 	eval("open $HOME_CAPSULE", NULL);
 
@@ -1171,6 +1178,7 @@ void shell() {
 		free(base);
 	}
 
+	if (home != NULL) bestlineHistorySave(path);
 	bestlineHistoryFree();
 }
 

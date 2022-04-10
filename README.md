@@ -14,6 +14,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 - bookmarks
 - variables
 - command aliases
+- sh-style history with ~/.gplaces_history
 - VT100 compatible with ANSI escape sequences
 - no exotic external dependencies, no NIH
 	- ~GNU readline is fully optional~ bestline
@@ -39,7 +40,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|238|34|999
+C|1|239|34|1006
 
 ## Help
 Just type `help` when the client is running.
