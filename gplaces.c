@@ -73,12 +73,12 @@ typedef struct Help {
 
 
 /*============================================================================*/
-Variable *variables = NULL;
-Variable *aliases = NULL;
-Variable *typehandlers = NULL;
-Selector *bookmarks = NULL;
-Selector *history = NULL;
-Selector *menu = NULL;
+static Variable *variables = NULL;
+static Variable *aliases = NULL;
+static Variable *typehandlers = NULL;
+static Selector *bookmarks = NULL;
+static Selector *history = NULL;
+static Selector *menu = NULL;
 
 
 /*============================================================================*/
