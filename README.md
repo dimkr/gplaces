@@ -13,7 +13,6 @@ Named after [Going Places](https://en.wikipedia.org/wiki/Going_Places_(Herb_Alpe
 	- ~GNU readline is fully optional~ bestline
 	- openssl
 	- libcurl
-- internal pager for text & menus
 - SSH-style TOFU with ~/.gplaces_hosts
 - about *1k lines* of *C* code
 
@@ -34,7 +33,7 @@ Named after [Going Places](https://en.wikipedia.org/wiki/Going_Places_(Herb_Alpe
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|237|34|1093
+C|1|229|34|1102
 
 ## Help
 Just type `help` when the client is running.

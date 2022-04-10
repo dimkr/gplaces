@@ -228,9 +228,10 @@ int get_var_integer(const char *name, int def) {
 
 
 /*============================================================================*/
-Selector *new_selector() {
+Selector *new_selector(const char type) {
 	Selector *new = calloc(1, sizeof(Selector));
 	if (new == NULL) panic("cannot allocate new selector");
+	new->type = type;
 	return new;
 }
 
@@ -264,11 +265,9 @@ int set_selector_url(Selector *sel, const char *url) {
 
 
 Selector *copy_selector(Selector *sel) {
-	Selector *new = new_selector();
-	new->next = NULL;
-	new->index = 1;
-	new->type = sel->type;
+	Selector *new = new_selector(sel->type);
 	new->name = str_copy(sel->name);
+	new->index = 1;
 	if (sel->cu && ((new->cu = curl_url_dup(sel->cu)) == NULL) | !set_selector_url(new, new->url)) panic("cannot copy selector URL");
 	return new;
 }
@@ -317,8 +316,7 @@ Selector *parse_selector(Selector *from, char *str) {
 		url = buffer;
 	}
 
-	sel = new_selector();
-	sel->type = '1';
+	sel = new_selector('l');
 	sel->name = str_copy(str);
 	sel->cu = (from && from->cu) ? curl_url_dup(from->cu) : curl_url();
 	if (!sel->cu || !set_selector_url(sel, url)) {
@@ -333,36 +331,40 @@ Selector *parse_selector(Selector *from, char *str) {
 Selector *parse_selector_list(Selector *from, char *str) {
 	char *line, *url;
 	Selector *list = NULL, *sel;
-	int pre = 0;
+	int pre = 0, i;
 
-	while ((line = str_split(&str, "\n")) != NULL) {
+	for (i = 0; (i < 512) && ((line = str_split(&str, "\n")) != NULL); ++i) {
 		if (strncmp(line, "```", 3) == 0) {
 			pre = !pre;
 			continue;
 		}
 
 		if (pre) {
-			sel = new_selector();
-			sel->type = '`';
+			sel = new_selector('`');
 			sel->name = str_copy(line);
 		} else if (line[0] == '=' && line[1] == '>') {
 			line += 2;
 			url = str_next(&line, " \t\r\n");
 			sel = parse_selector(from, url);
-			if (!sel) continue; // TODO
 			if (*line) {
 				free(sel->name);
 				sel->name = str_copy(*line ? line : url);
 			}
 		} else if (*line == '#') {
-			sel = new_selector();
-			sel->type = 't';
+			sel = new_selector('#');
+			sel->name = str_copy(line);
+		} else if (*line == '>') {
+			str_next(&line, " \t\r\n");
+			sel = new_selector('>');
+			sel->name = str_copy(line);
+		} else if (line[0] == '*' && line[1] == ' ') {
+			str_next(&line, " \t\r\n");
+			sel = new_selector('*');
 			sel->name = str_copy(line);
 		} else if (strncmp(line, "```", 3) == 0)
 			pre = !pre;
 		else {
-			sel = new_selector();
-			sel->type = 'i';
+			sel = new_selector('i');
 			sel->name = str_copy(line);
 		}
 
@@ -371,6 +373,8 @@ Selector *parse_selector_list(Selector *from, char *str) {
 		str = str_skip(str, "\r");
 		str = str_skip(str, "\n");
 	}
+
+	if (i == 512) error("gemtext is truncated to 512 lines");
 
 	return list;
 }
@@ -412,37 +416,23 @@ char *read_line(const char *fmt, ...) {
 }
 
 
-int get_terminal_height() {
+int get_terminal_width() {
 	struct winsize wz;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &wz);
-	return wz.ws_row - 2; /* substract 2 lines (1 for tmux etc., 1 for the prompt) */
-}
-
-
-int show_pager_stop() {
-	char buffer[256], *line;
-
-	printf("\33[0;32m-- press RETURN to continue (or 'q' and return to quit) --\33[0m");
-	fflush(stdout);
-	if ((line = fgets(buffer, sizeof(buffer), stdin)) == NULL) return 1;
-	line = str_skip(line, " \t\v");
-	return line[0] == 'q' || line[0] == 'Q';
+	return wz.ws_col > 80 ? wz.ws_col : 80;
 }
 
 
 void print_text(const char *text) {
 	char *copy, *str, *line, *p;
-	int i, pages, height, length;
+	int length;
 
-	height = get_terminal_height();
-	pages = get_var_boolean("PAGE_TEXT");
-	length = get_var_integer("LINE_LENGTH", 120);
+	length = get_terminal_width();
 
 	copy = str = str_copy(text);
-	for (i = 0; (line = str_split(&str, "\n")) != NULL; ++i) {
+	for ( ; (line = str_split(&str, "\n")) != NULL; ) {
 		for (p = line; *p; ++p) if (*p == '\r') *p = '\0'; /* remove any CR */
 		printf("%.*s\n", length, line);
-		if (pages && i >= height) { if (show_pager_stop()) break; i = 0; }
 		str = str_skip(str, "\r"); /* just skip CR so we can show empty lines */
 	}
 	str_free(copy);
@@ -504,12 +494,16 @@ out:
 static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const char *, const char *, size_t, void *), void *arg) {
 	struct addrinfo hints, *result, *it;
 	char request[1024], prompt[256], *data = NULL, *crlf, *meta, *line;
-	struct timeval tv = {.tv_sec = 15};
+	struct timeval tv = {0};
 	size_t total, cap = 2 + 1 + 1024 + 2 + 1;
-	int fd = -1, received, ret = 40;
+	int timeout, fd = -1, received, ret = 40;
 	BIO *bio = NULL;
 	SSL *ssl = NULL;
 	X509 *cert = NULL;
+
+	timeout = get_var_integer("TIMEOUT", 15);
+	if (timeout <= 1) timeout = 15;
+	tv.tv_sec = timeout;
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = AF_UNSPEC;
@@ -763,28 +757,46 @@ out:
 /*============================================================================*/
 
 
+static int ndigits(int n) {
+	int digits = 0;
+	for ( ; n > 0; n /= 10, ++digits);
+	return digits;
+}
+
+
 void print_menu(Selector *list, const char *filter) {
-	int i, height, pages, length, out, rem;
+	int length, out, rem;
 	const char *p;
 
-	height = get_terminal_height();
-	pages = get_var_boolean("PAGE_TEXT");
-	length = get_var_integer("LINE_LENGTH", 128);
+	length = get_terminal_width();
 
-	for (i = 0; list; list = list->next) {
+	for (; list; list = list->next) {
 		if (filter && !str_contains(list->name, filter) && (!list->path || !str_contains(list->path, filter))) continue;
-		for (rem = (int)strlen(list->name), p = list->name; rem > 0; rem -= out, p += out) {
+		rem = (int)strlen(list->name);
+		for (p = list->name; rem > 0; rem -= out, p += out) {
+			out = rem < length ? rem : length;
 			switch (list->type) {
-				case 'i': out = printf("%.*s", rem < length ? rem : length, p); break;
-				case '1':
-					if (p == list->name) out = printf("\33[1m%4d\33[0m | \33[4;36m%.*s\33[0m", list->index, rem < length ? rem : length, p);
-					else out = printf("     | \33[4;36m%.*s\33[0m", rem < length ? rem : length, p);
+				case 'l':
+					if (p == list->name) {
+						if (out == length) out -= 3 + ndigits(list->index);
+						printf("\33[4;36m(\33[1m%d) %.*s\33[0m\n", list->index, out, p);
+					} else printf("\33[4;36m%.*s\33[0m\n", out, p);
 					break;
-				case 't': out = printf("%.*s", rem < length ? rem : length, p); break;
-				case '`': out = (int)fwrite(p, 1, rem, stdout); break;
+				case '#':
+				case 'i': printf("%.*s\n", out, p); break;
+				case '`':
+					out = rem;
+					printf("%s\n", p);
+					break;
+				case '>':
+					if (out == length) out -= 2;
+					printf("%c %.*s\n", list->type, out, p);
+					break;
+				default:
+					if (out == length) out -= 2;
+					if (p == list->name) printf("%c %.*s\n", list->type, out, p);
+					else printf("  %.*s\n", out, p);
 			}
-			putchar('\n'); 
-			if (pages && ++i >= height) { if (show_pager_stop()) break; i = 0; }
 		}
 	}
 }
@@ -851,7 +863,7 @@ void execute_handler(const char *handler, const char *filename, Selector *to) {
 void navigate(Selector *to) {
 	const char *handler;
 
-	if (to->type != '1') return;
+	if (to->type != 'l') return;
 
 	if (to->url && strncmp(to->url, "gemini://", 9)) {
 		if ((handler = find_mime_handler(to->scheme)) == NULL) return;
@@ -895,13 +907,13 @@ static const Help gemini_help[] = {
 		"\tWhen both <name> and <value> are defined as new alias is created.\n" \
 		"\n" \
 		"Examples:\n" \
-		"\talias b back # create a shorthand for back\n" \
+		"\talias b back # create a shorthand for back" \
 	},
 	{
 		"authors",
 		"Credit goes to the following people:\n\n" \
 		"\tDima Krasner <dima@dimakrasner.com>\n" \
-		"\tSebastian Steinhauer <s.steinhauer@yahoo.de>\n" \
+		"\tSebastian Steinhauer <s.steinhauer@yahoo.de>" \
 	},
 	{
 		"back",
@@ -909,7 +921,7 @@ static const Help gemini_help[] = {
 		"\tBACK\n" \
 		"\n" \
 		"Description:\n" \
-		"\tGo back in history.\n" \
+		"\tGo back in history." \
 	},
 	{
 		"bookmarks",
@@ -926,14 +938,14 @@ static const Help gemini_help[] = {
 		"\tBOOKMARKS <name> <url>\n" \
 		"\n" \
 		"Description:\n" \
-		"\tDefine a new bookmark with the given <name> and <url>.\n" \
+		"\tDefine a new bookmark with the given <name> and <url>." \
 	},
 	{
 		"commands",
 		"available commands\n" \
 		"alias         back          bookmarks     go            help\n" \
 		"history       open          quit          save          see\n" \
-		"set           show          type\n"
+		"set           show          type"
 	},
 	{
 		"help",
@@ -941,7 +953,7 @@ static const Help gemini_help[] = {
 		"\tHELP [<topic>]\n" \
 		"\n" \
 		"Description:\n" \
-		"\tShow all help topics or the help text for a specific <topic>.\n" \
+		"\tShow all help topics or the help text for a specific <topic>." \
 	},
 	{
 		"history",
@@ -952,7 +964,7 @@ static const Help gemini_help[] = {
 		"\tShow the gemini history. If a <filter> is specified, it will\n" \
 		"\tshow all selectors containing the <filter> in name or path.\n" \
 		"\tIf <item-id> is specified, navigate to the given <item-id>\n" \
-		"\tfrom history.\n" \
+		"\tfrom history." \
 	},
 	{
 		"license",
@@ -971,7 +983,7 @@ static const Help gemini_help[] = {
 		"GNU General Public License for more details.\n" \
 		"\n" \
 		"You should have received a copy of the GNU General Public License\n" \
-		"along with this program.  If not, see <https://www.gnu.org/licenses/>.\n" \
+		"along with this program.  If not, see <https://www.gnu.org/licenses/>." \
 	},
 	{
 		"open",
@@ -979,7 +991,7 @@ static const Help gemini_help[] = {
 		"\tOPEN <url>\n" \
 		"\n" \
 		"Description:\n" \
-		"\tOpens the given <url>.\n" \
+		"\tOpens the given <url>." \
 	},
 	{
 		"go",
@@ -987,7 +999,7 @@ static const Help gemini_help[] = {
 		"\tGO <url>\n" \
 		"\n" \
 		"Description:\n" \
-		"\tAlias for open.\n" \
+		"\tAlias for open." \
 	},
 	{
 		"quit",
@@ -995,7 +1007,7 @@ static const Help gemini_help[] = {
 		"\tQUIT\n" \
 		"\n" \
 		"Description:\n" \
-		"\tQuit the gemini client.\n"
+		"\tQuit the gemini client."
 	},
 	{
 		"save",
@@ -1004,7 +1016,7 @@ static const Help gemini_help[] = {
 		"\n" \
 		"Description:\n" \
 		"\tSaves the given <item-id> from the menu to the disk.\n" \
-		"\tYou will be asked for a filename.\n" \
+		"\tYou will be asked for a filename." \
 	},
 	{
 		"see",
@@ -1012,7 +1024,7 @@ static const Help gemini_help[] = {
 		"\tSEE <item-id>\n" \
 		"\n" \
 		"Description:\n" \
-		"\tShow the full gemini URL for the menu selector id.\n" \
+		"\tShow the full gemini URL for the menu selector id." \
 	},
 	{
 		"set",
@@ -1023,7 +1035,7 @@ static const Help gemini_help[] = {
 		"\tIf no <name> is given it will show all variables.\n" \
 		"\tWhen <name> is given it will show this specific variable.\n" \
 		"\tIf <data> is specified the variable will have this value.\n" \
-		"\tWhen the variable does not exist the variable will be created.\n" \
+		"\tWhen the variable does not exist the variable will be created." \
 	},
 	{
 		"show",
@@ -1032,7 +1044,7 @@ static const Help gemini_help[] = {
 		"\n" \
 		"Description:\n" \
 		"\tShow the current gemini menu. If a <filter> is specified, it will\n" \
-		"\tshow all selectors containing the <filter> in name or path.\n"
+		"\tshow all selectors containing the <filter> in name or path."
 	},
 	{
 		"type",
@@ -1056,15 +1068,13 @@ static const Help gemini_help[] = {
 		"\t%P - path\n" \
 		"\t%n - name\n"
 		"\t%u - URL\n" \
-		"\t%f - filename\n" \
+		"\t%f - filename" \
 	},
 	{
 		"variables",
 		"Following variables are used by gplaces:\n" \
 		"\tHOME_CAPSULE - the gemini URL which will be opened on startup\n" \
 		"\tDOWNLOAD_DIRECTORY - the directory which will be default for downloads\n" \
-		"\tPAGE_TEXT - when `on` or `true` menus & text will be paged\n" \
-		"\tLINE_LENGTH - defines how long a menu/text line will be displayed\n" \
 	},
 	{ NULL, NULL }
 };
