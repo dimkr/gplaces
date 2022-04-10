@@ -95,30 +95,31 @@ void execute_handler(const char *handler, const char *filename, Selector *to);
 
 
 /*============================================================================*/
-void vlogf(const char *color, const char *fmt, va_list va) {
+void vlogf(FILE *fp, const char *color, const char *fmt, va_list va) {
+	if (!isatty(fileno(fp))) { vfprintf(fp, fmt, va); return; }
 	printf("\33[%sm", color);
-	vprintf(fmt, va);
+	vfprintf(fp, fmt, va);
 	puts("\33[0m");
 }
 
 void info(const char *fmt, ...) {
 	va_list va;
 	va_start(va, fmt);
-	vlogf("34", fmt, va);
+	vlogf(stdout, "34", fmt, va);
 	va_end(va);
 }
 
 void error(const char *fmt, ...) {
 	va_list va;
 	va_start(va, fmt);
-	vlogf("31", fmt, va);
+	vlogf(stderr, "31", fmt, va);
 	va_end(va);
 }
 
 void panic(const char *fmt, ...) {
 	va_list va;
 	va_start(va, fmt);
-	vlogf("31", fmt, va);
+	vlogf(stderr, "31", fmt, va);
 	va_end(va);
 	exit(EXIT_FAILURE);
 }
@@ -573,14 +574,14 @@ static int do_download(Selector *sel, SSL_CTX *ctx, int (*cb)(Selector *, const 
 		if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
 			if (!cb(sel, meta, crlf + 1, received, arg)) goto fail;
 			total += received;
-			if (total > (1024 * 256)) printf("downloading %.2f kb...\r", (double)total / 1024.0);
+			if (total > (1024 * 256)) fprintf(stderr, "downloading %.2f kb...\r", (double)total / 1024.0);
 			continue;
 		}
 		if ((received == 0) || (SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN)) break; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
 		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
 		goto fail;
 	}
-	if (total > (1024 * 256)) puts("");
+	if (total > (1024 * 256) && isatty(STDOUT_FILENO)) puts("");
 
 	SSL_free(ssl); ssl = NULL; bio = NULL;
 
@@ -758,9 +759,24 @@ static int ndigits(int n) {
 }
 
 
+static void print_raw(FILE *fp, Selector *list, const char *filter) {
+	for (; list; list = list->next) {
+		if (filter && !str_contains(list->name, filter) && (!list->path || !str_contains(list->path, filter))) continue;
+		switch (list->type) {
+			case 'l': fprintf(fp, "=> %s %s\n", list->url, list->name); break;
+			case '>':
+			case '*': fprintf(fp, "%c %s\n", list->type, list->name); break;
+			default: fprintf(fp, "%s\n", list->name);
+		}
+	}
+}
+
+
 void print_menu(FILE *fp, Selector *list, const char *filter) {
 	int length, out, rem;
 	const char *p;
+
+	if (!isatty(STDOUT_FILENO)) return print_raw(fp, list, filter);
 
 	length = get_terminal_width();
 
@@ -799,7 +815,7 @@ void print_menu(FILE *fp, Selector *list, const char *filter) {
 const char *find_mime_handler(const char *mime) {
 	const char *handler = set_var(&typehandlers, mime, NULL);
 	if (!handler)
-		printf("no handler for `%s`\n", mime);
+		fprintf(stderr, "no handler for `%s`\n", mime);
 	return handler;
 }
 
@@ -908,9 +924,11 @@ void navigate(Selector *to) {
 	free_selector(menu);
 	menu = new;
 
-	for (lines = 0, sel = new; sel; sel = sel->next, ++lines);
-	height = get_terminal_height();
-	if (lines > height) page(new);
+	if (isatty(STDOUT_FILENO)) {
+		for (lines = 0, sel = new; sel; sel = sel->next, ++lines);
+		height = get_terminal_height();
+		if (lines > height) page(new);
+	}
 	print_menu(stdout, new, NULL);
 }
 
@@ -1297,12 +1315,13 @@ void quit_client() {
 	free_selector(bookmarks);
 	free_selector(history);
 	free_selector(menu);
-	puts("\33[0m");
+	if (isatty(STDOUT_FILENO)) puts("\33[0m");
 }
 
 
 int main(int argc, char **argv) {
 	atexit(quit_client);
+	setlinebuf(stdout); /* if stdout is a file, flush after every line */
 
 	SSL_library_init();
 	SSL_load_error_strings();
@@ -1310,7 +1329,7 @@ int main(int argc, char **argv) {
 	load_config_files();
 	parse_arguments(argc, argv);
 
-	puts(
+	if (isatty(STDOUT_FILENO)) puts(
 		"gplaces - 0.16.0  Copyright (C) 2022  Dima Krasner\n" \
 		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"This program comes with ABSOLUTELY NO WARRANTY; for details type `help license'.\n" \
