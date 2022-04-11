@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           apt-get update -qq
-          apt-get install --no-install-recommends -y git ca-certificates gcc libc6-dev make libssl-dev libcurl4-openssl-dev libmagic-dev
+          apt-get install --no-install-recommends -y git ca-certificates gcc libc6-dev make pkg-config libssl-dev libcurl4-openssl-dev libmagic-dev
       - name: Checkout code
         uses: actions/checkout@v2
         with:
