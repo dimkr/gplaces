@@ -57,7 +57,7 @@
 typedef struct Selector {
 	struct Selector *next;
 	int index;
-	char type, *raw, *name, *scheme, *host, *port, *path, *url, *mime;
+	char type, *raw, *repr, *scheme, *host, *port, *path, *url, *mime;
 	CURLU *cu;
 } Selector;
 
@@ -207,7 +207,7 @@ static void free_selector(Selector *sel) {
 	while (sel) {
 		Selector *next = sel->next;
 		free(sel->raw);
-		free(sel->name);
+		free(sel->repr);
 		curl_free(sel->scheme);
 		curl_free(sel->host);
 		curl_free(sel->port);
@@ -301,31 +301,31 @@ static Selector *parse_gemtext(Selector *from, FILE *fp) {
 
 		if (pre) {
 			sel = new_selector('`', line);
-			sel->name = str_copy(line);
+			sel->repr = str_copy(line);
 		} else if (line[0] == '=' && line[1] == '>') {
 			sel = new_selector('l', line);
 			line += 2;
 			url = str_next(&line, " \t\r\n");
 			if (!parse_url(from, sel, url)) { free_selector(sel); continue; }
 			if (*line) {
-				free(sel->name);
-				sel->name = str_copy(*line ? line : url);
+				free(sel->repr);
+				sel->repr = str_copy(*line ? line : url);
 			}
 			sel->index = index++;
 		} else if (*line == '#') {
 			sel = new_selector('#', line);
-			sel->name = str_copy(line);
+			sel->repr = str_copy(line);
 		} else if (*line == '>') {
 			sel = new_selector('>', line);
 			str_next(&line, " \t\r\n");
-			sel->name = str_copy(line);
+			sel->repr = str_copy(line);
 		} else if (line[0] == '*' && line[1] == ' ') {
 			sel = new_selector('*', line);
 			str_next(&line, " \t\r\n");
-			sel->name = str_copy(line);
+			sel->repr = str_copy(line);
 		} else {
 			sel = new_selector('i', line);
-			sel->name = str_copy(line);
+			sel->repr = str_copy(line);
 		}
 
 		if (last) last->next = sel;
@@ -427,7 +427,7 @@ static void execute_handler(const char *handler, const char *filename, Selector 
 				case 'h': append = to->host; break;
 				case 'p': append = to->port; break;
 				case 'P': append = to->path; break;
-				case 'n': append = to->name; break;
+				case 'r': append = to->repr; break;
 				case 'u': append = to->url; break;
 				case 'f': append = filename; break;
 			}
@@ -689,7 +689,7 @@ static void download_to_file(Selector *sel) {
 
 	def = strrchr(sel->path, '/');
 	if (*def == '/') ++def;
-	if (!*def) def = sel->name;
+	if (!*def) def = sel->repr;
 	if ((download_dir = set_var(&variables, "DOWNLOAD_DIRECTORY", NULL)) == NULL) download_dir = ".";
 	snprintf(suggestion, sizeof(suggestion), "%s/%s", download_dir, def);
 
@@ -767,13 +767,13 @@ static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
 
 	for (; list; list = list->next) {
 		if (filter && regexec(&re, list->raw, 0, NULL, 0) != 0) continue;
-		rem = (int)strlen(list->name);
+		rem = (int)strlen(list->repr);
 		if (rem == 0) { fputc('\n', fp); continue; }
-		for (p = list->name; rem > 0; rem -= out, p += out) {
+		for (p = list->repr; rem > 0; rem -= out, p += out) {
 			out = rem < length ? rem : length;
 			switch (list->type) {
 				case 'l':
-					if (p == list->name) {
+					if (p == list->repr) {
 						if (out == length) out -= 3 + ndigits(list->index);
 						fprintf(fp, "\33[4;36m(\33[1m%d) %.*s\33[0m\n", list->index, out, p);
 					} else printf("\33[4;36m%.*s\33[0m\n", out, p);
@@ -790,7 +790,7 @@ static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
 					break;
 				default:
 					if (out == length) out -= 2;
-					if (p == list->name) fprintf(fp, "%c %.*s\n", list->type, out, p);
+					if (p == list->repr) fprintf(fp, "%c %.*s\n", list->type, out, p);
 					else fprintf(fp, "  %.*s\n", out, p);
 			}
 		}
@@ -1045,8 +1045,8 @@ static void cmd_bookmarks(char *line) {
 		if (url) {
 			Selector *sel = new_selector('l', url);
 			if (parse_url(NULL, sel, url)) {
-				free(sel->name);
-				sel->name = str_copy(name);
+				free(sel->repr);
+				sel->repr = str_copy(name);
 				bookmarks = prepend_selector(bookmarks, sel);
 			}
 		} else show_gemtext(bookmarks, name);
