@@ -520,7 +520,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 	static char request[1024];
 	char *data = NULL, *crlf, *meta, *line;
 	struct timeval tv = {0};
-	size_t total, cap = 2 + 1 + 1024 + 2 + 1;
+	size_t total, chunks = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
 	int timeout, fd = -1, received, ret = 40;
 	BIO *bio = NULL;
 	SSL *ssl = NULL;
@@ -592,28 +592,10 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 	if (data[1] < '0' || data[0] > '9' || data[1] < '0' || data[1] > '9' || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
 	data[total] = '\0';
 
-	cap = 1024 * 64;
-	if ((data = realloc(data, cap)) == NULL) panic("cannot allocate download data");
-
 	crlf = &data[total - 2];
 	*crlf = '\0';
 	meta = &data[3];
 	if (data[2] != ' ' || meta >= crlf) meta = "";
-
-	for (;;) {
-		if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
-			if (!write_all(fp, crlf + 1, received)) goto fail;
-			total += received;
-			if (total > (1024 * 256)) fprintf(stderr, "downloading %.2f kb...\r", (double)total / 1024.0);
-			continue;
-		}
-		if (received == 0 || SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
-		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
-		goto fail;
-	}
-	if (total > 1024 * 256 && interactive) puts("");
-
-	SSL_free(ssl); ssl = NULL; bio = NULL;
 
 	switch (data[0]) {
 		case '2':
@@ -637,6 +619,21 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 		default:
 			error("failed to download `%s`: %s", sel->url, *meta ? meta : data);
 	}
+
+	for (;;) {
+		if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
+			if (!write_all(fp, crlf + 1, received)) goto fail;
+			total += received;
+			if (total > 2048 && interactive && ++chunks <= 80) fputc('.', stderr);
+			continue;
+		}
+		if (received == 0 || SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+		goto fail;
+	}
+	if (total > 2048 && interactive) fputc('\n', stderr);
+
+	SSL_free(ssl); ssl = NULL; bio = NULL;
 
 	if ((*mime = strdup(meta)) == NULL) goto fail;
 
