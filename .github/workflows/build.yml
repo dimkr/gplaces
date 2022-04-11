@@ -19,6 +19,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install --no-install-recommends -y libssl-dev libcurl4-openssl-dev
+          sudo apt-get install --no-install-recommends -y libssl-dev libcurl4-openssl-dev libmagic-dev
       - name: Build
-        run: make
+        run: |
+          make
+          make clean
+          make WITH_LIBMAGIC=1
+          make clean
+          make WITH_LIBMAGIC=0
