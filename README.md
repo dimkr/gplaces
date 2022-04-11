@@ -28,7 +28,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 
 ## How to compile?
 - clone this git repo
-- just type `make` on any Unix compatible system
+- just type `make` or `make WITH_LIBMAGIC=0` on any Unix compatible system
 	- currently tested on
 		- Linux
 - type `make install` to install it on the system (defaults to /usr/local)
