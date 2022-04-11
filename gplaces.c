@@ -57,7 +57,7 @@
 typedef struct Selector {
 	struct Selector *next;
 	int index;
-	char type, *raw, *repr, *scheme, *host, *port, *path, *url, *mime;
+	char type, *raw, *repr, *scheme, *host, *port, *path, *url;
 	CURLU *cu;
 } Selector;
 
