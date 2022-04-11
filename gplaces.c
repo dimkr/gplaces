@@ -57,7 +57,7 @@
 typedef struct Selector {
 	struct Selector *next;
 	int index;
-	char type, *name, *scheme, *host, *port, *path, *url, *mime;
+	char type, *raw, *name, *scheme, *host, *port, *path, *url, *mime;
 	CURLU *cu;
 } Selector;
 
@@ -194,10 +194,11 @@ static int get_var_integer(const char *name, int def) {
 
 
 /*============================================================================*/
-static Selector *new_selector(const char type) {
+static Selector *new_selector(const char type, const char *raw) {
 	Selector *new = calloc(1, sizeof(Selector));
 	if (new == NULL) panic("cannot allocate new selector");
 	new->type = type;
+	new->raw = str_copy(raw);
 	return new;
 }
 
@@ -205,6 +206,7 @@ static Selector *new_selector(const char type) {
 static void free_selector(Selector *sel) {
 	while (sel) {
 		Selector *next = sel->next;
+		free(sel->raw);
 		free(sel->name);
 		curl_free(sel->scheme);
 		curl_free(sel->host);
@@ -267,21 +269,16 @@ static Selector *find_selector(Selector *list, const char *line) {
 }
 
 
-static Selector *parse_selector(Selector *from, char *str) {
-	char *url = str;
-	Selector *sel;
+static int parse_url(Selector *from, Selector *sel, const char *url) {
+	if (url == NULL || *url == '\0') return 0;
 
-	if (str == NULL || *str == '\0') return NULL;
-
-	sel = new_selector('l');
-	sel->name = str_copy(str);
 	sel->cu = (from && from->cu) ? curl_url_dup(from->cu) : curl_url();
 	if (!sel->cu || !set_selector_url(sel, from, url)) {
 		free_selector(sel);
-		return NULL;
+		return 0;
 	}
 
-	return sel;
+	return 1;
 }
 
 
@@ -303,30 +300,31 @@ static Selector *parse_gemtext(Selector *from, FILE *fp) {
 		else if (line[len - 1] == '\n') line[len - 1] = '\0';
 
 		if (pre) {
-			sel = new_selector('`');
+			sel = new_selector('`', line);
 			sel->name = str_copy(line);
 		} else if (line[0] == '=' && line[1] == '>') {
+			sel = new_selector('l', line);
 			line += 2;
 			url = str_next(&line, " \t\r\n");
-			sel = parse_selector(from, url);
+			if (!parse_url(from, sel, url)) { free_selector(sel); continue; }
 			if (*line) {
 				free(sel->name);
 				sel->name = str_copy(*line ? line : url);
 			}
 			sel->index = index++;
 		} else if (*line == '#') {
-			sel = new_selector('#');
+			sel = new_selector('#', line);
 			sel->name = str_copy(line);
 		} else if (*line == '>') {
+			sel = new_selector('>', line);
 			str_next(&line, " \t\r\n");
-			sel = new_selector('>');
 			sel->name = str_copy(line);
 		} else if (line[0] == '*' && line[1] == ' ') {
+			sel = new_selector('*', line);
 			str_next(&line, " \t\r\n");
-			sel = new_selector('*');
 			sel->name = str_copy(line);
 		} else {
-			sel = new_selector('i');
+			sel = new_selector('i', line);
 			sel->name = str_copy(line);
 		}
 
@@ -750,15 +748,8 @@ static void print_raw(FILE *fp, Selector *list, const char *filter) {
 
 	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
 
-	for (; list; list = list->next) {
-		if (filter && regexec(&re, list->name, 0, NULL, 0) != 0 && (!list->url || regexec(&re, list->url, 0, NULL, 0) != 0)) continue;
-		switch (list->type) {
-			case 'l': fprintf(fp, "=> %s %s\n", list->url, list->name); break;
-			case '>':
-			case '*': fprintf(fp, "%c %s\n", list->type, list->name); break;
-			default: fprintf(fp, "%s\n", list->name);
-		}
-	}
+	for (; list; list = list->next)
+		if (!filter || regexec(&re, list->raw, 0, NULL, 0) == 0) fprintf(fp, "%s\n", list->raw);
 
 	if (filter) regfree(&re);
 }
@@ -775,7 +766,7 @@ static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
 	length = get_terminal_width();
 
 	for (; list; list = list->next) {
-		if (filter && regexec(&re, list->name, 0, NULL, 0) != 0 && (!list->url || regexec(&re, list->url, 0, NULL, 0) != 0)) continue;
+		if (filter && regexec(&re, list->raw, 0, NULL, 0) != 0) continue;
 		rem = (int)strlen(list->name);
 		if (rem == 0) { fputc('\n', fp); continue; }
 		for (p = list->name; rem > 0; rem -= out, p += out) {
@@ -1003,9 +994,9 @@ static void cmd_quit(char *line) {
 
 
 static void cmd_open(char *line) {
-	Selector *to = parse_selector(NULL, next_token(&line));
-	if (!to) return;
-	navigate(to);
+	const char *url = next_token(&line);
+	Selector *to = new_selector('l', url);
+	if (parse_url(NULL, to, url)) navigate(to);
 	free_selector(to);
 }
 
@@ -1052,8 +1043,8 @@ static void cmd_bookmarks(char *line) {
 		char *name = next_token(&line);
 		char *url = next_token(&line);
 		if (url) {
-			Selector *sel = parse_selector(NULL, url);
-			if (sel) {
+			Selector *sel = new_selector('l', url);
+			if (parse_url(NULL, sel, url)) {
 				free(sel->name);
 				sel->name = str_copy(name);
 				bookmarks = prepend_selector(bookmarks, sel);
