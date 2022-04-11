@@ -82,14 +82,15 @@ static Variable *typehandlers = NULL;
 static Selector *bookmarks = NULL;
 static Selector *menu = NULL;
 static char prompt[256] = "(\33[35m\33[0m)> ";
+static int interactive;
 
 
 /*============================================================================*/
 static void vlogf(FILE *fp, const char *color, const char *fmt, va_list va) {
-	if (!isatty(fileno(fp))) { vfprintf(fp, fmt, va); return; }
-	printf("\33[%sm", color);
+	if (interactive) fprintf(fp, "\33[%sm", color);
 	vfprintf(fp, fmt, va);
-	puts("\33[0m");
+	if (interactive) fputs("\33[0m", fp);
+	else fputc('\n', fp);
 }
 
 static void error(const char *fmt, ...) {
@@ -608,7 +609,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
 		goto fail;
 	}
-	if (total > 1024 * 256 && isatty(STDOUT_FILENO)) puts("");
+	if (total > 1024 * 256 && interactive) puts("");
 
 	SSL_free(ssl); ssl = NULL; bio = NULL;
 
@@ -769,7 +770,7 @@ static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
 	int length, out, rem;
 	const char *p;
 
-	if (!isatty(STDOUT_FILENO)) return print_raw(fp, list, filter);
+	if (!interactive) return print_raw(fp, list, filter);
 
 	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
 	length = get_terminal_width();
@@ -841,7 +842,7 @@ static void page_gemtext(Selector *sel) {
 static void show_gemtext(Selector *sel, const char *filter) {
 	int lines, height;
 	Selector *it;
-	if (!filter && isatty(STDOUT_FILENO)) {
+	if (!filter && interactive) {
 		for (lines = 0, it = sel; it; it = it->next, ++lines);
 		height = get_terminal_height();
 		if (lines > height) page_gemtext(sel);
@@ -1246,7 +1247,7 @@ static void quit_client() {
 	free_variable(typehandlers);
 	free_selector(bookmarks);
 	free_selector(menu);
-	if (isatty(STDOUT_FILENO)) puts("\33[0m");
+	if (interactive) puts("\33[0m");
 }
 
 
@@ -1257,10 +1258,12 @@ int main(int argc, char **argv) {
 	SSL_library_init();
 	SSL_load_error_strings();
 
+	interactive = isatty(STDOUT_FILENO);
+
 	load_config_files();
 	parse_arguments(argc, argv);
 
-	if (isatty(STDOUT_FILENO)) puts(
+	if (interactive) puts(
 		"gplaces - 0.16.0  Copyright (C) 2022  Dima Krasner\n" \
 		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"This program comes with ABSOLUTELY NO WARRANTY; for details type `help license'.\n" \
