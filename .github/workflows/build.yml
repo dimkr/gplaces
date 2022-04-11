@@ -32,3 +32,23 @@ jobs:
           make WITH_LIBMAGIC=1
           make clean
           make WITH_LIBMAGIC=0
+  edge:
+    runs-on: ubuntu-latest
+    container:
+      image: alpine:edge
+    steps:
+      - name: Install dependencies
+        run: |
+          apk add git gcc musl-dev make pkgconf libressl-dev curl-dev file-dev
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Build
+        run: |
+          make
+          make clean
+          make WITH_LIBMAGIC=1
+          make clean
+          make WITH_LIBMAGIC=0
