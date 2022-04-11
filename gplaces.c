@@ -214,12 +214,12 @@ static void free_selector(Selector *sel) {
 
 
 static int set_selector_url(Selector *sel, const char *url) {
-	if ((curl_url_set(sel->cu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK)) return 0;
+	if (curl_url_set(sel->cu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK) return 0;
 
 	switch (curl_url_get(sel->cu, CURLUPART_PORT, &sel->port, 0)) {
-	case CURLUE_OK: break;
-	case CURLUE_NO_PORT: sel->port = str_copy("1965"); break;
-	default: free_selector(sel); return 0;
+		case CURLUE_OK: break;
+		case CURLUE_NO_PORT: sel->port = str_copy("1965"); break;
+		default: free_selector(sel); return 0;
 	}
 
 	return 1;
@@ -272,7 +272,7 @@ static Selector *parse_gemtext(Selector *from, FILE *fp) {
 	size_t len;
 	int pre = 0, i, index = 1;
 
-	for (i = 0; (i < 512) && ((line = fgets(buffer, sizeof(buffer), fp)) != NULL); ++i) {
+	for (i = 0; i < 512 && (line = fgets(buffer, sizeof(buffer), fp)) != NULL; ++i) {
 		if (strncmp(line, "```", 3) == 0) {
 			pre = !pre;
 			continue;
@@ -386,9 +386,9 @@ static void reap(const char *command, pid_t pid) {
 
 	for (;;) {
 		ret = waitpid(pid, &status, 0);
-		if ((ret < 0) && (errno == EINTR)) continue;
-		if ((ret == pid) && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
-		else if ((ret == pid) && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
+		if (ret < 0 && errno == EINTR) continue;
+		if (ret == pid && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
+		else if (ret == pid && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
 		break;
 	}
 }
@@ -467,14 +467,14 @@ static int tofu(X509 *cert) {
 		while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
 			if (strncmp(line, namebuf, namelen)) continue;
 			if (line[namelen] != ' ') continue;
-			trust = (strncmp(&line[namelen + 1], hex, hlen) == 0) && (line[namelen + 1 + hlen] == '\n');
+			trust = strncmp(&line[namelen + 1], hex, hlen) == 0 && line[namelen + 1 + hlen] == '\n';
 			goto out;
 		}
 
 		fclose(fp); fp = NULL;
 	}
 
-	if (trust) trust = (((fp = fopen(hosts, "a")) != NULL) && (fprintf(fp, "%s %s\n", namebuf, hex) > 0));
+	if (trust) trust = (fp = fopen(hosts, "a")) != NULL && fprintf(fp, "%s %s\n", namebuf, hex) > 0;
 
 out:
 	if (fp) fclose(fp);
@@ -536,7 +536,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 	setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
-	if (((ssl = SSL_new(ctx)) == NULL) || ((bio = BIO_new_socket(fd, BIO_NOCLOSE)) == NULL)) {
+	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_NOCLOSE)) == NULL) {
 		error("cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
 		goto fail;
 	}
@@ -545,7 +545,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 	SSL_set_bio(ssl, bio, bio);
 	SSL_set_connect_state(ssl);
 
-	if ((SSL_do_handshake(ssl) != 1) || ((cert = SSL_get_peer_certificate(ssl)) == NULL)) {
+	if (SSL_do_handshake(ssl) != 1 || (cert = SSL_get_peer_certificate(ssl)) == NULL) {
 		error("cannot establish secure connection to `%s`:`%s`: %s", sel->host, sel->port, ERR_reason_error_string(ERR_get_error()));
 		goto fail;
 	}
@@ -565,7 +565,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 
 	for (total = 0; total < cap - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
 		if ((received = SSL_read(ssl, &data[total], 1)) > 0) continue;
-		if ((received == 0) || (SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN)) break;
+		if (received == 0 || SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break;
 		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
 		goto fail;
 	}
@@ -578,7 +578,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 	crlf = &data[total - 2];
 	*crlf = '\0';
 	meta = &data[3];
-	if ((data[2] != ' ') || (meta >= crlf)) meta = "";
+	if (data[2] != ' ' || meta >= crlf) meta = "";
 
 	for (;;) {
 		if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
@@ -587,35 +587,35 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 			if (total > (1024 * 256)) fprintf(stderr, "downloading %.2f kb...\r", (double)total / 1024.0);
 			continue;
 		}
-		if ((received == 0) || (SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN)) break; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+		if (received == 0 || SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
 		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
 		goto fail;
 	}
-	if (total > (1024 * 256) && isatty(STDOUT_FILENO)) puts("");
+	if (total > 1024 * 256 && isatty(STDOUT_FILENO)) puts("");
 
 	SSL_free(ssl); ssl = NULL; bio = NULL;
 
 	switch (data[0]) {
-	case '2':
-		if (!*meta) goto fail;
-		break;
+		case '2':
+			if (!*meta) goto fail;
+			break;
 
-	case '1':
-		if (!*meta) goto fail;
-		snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", meta);
-		if ((line = bestline(prompt)) == NULL) goto fail;
-		bestlineHistoryAdd(line);
-		if ((curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK)) { free(line); goto fail; }
-		free(line);
-		break;
+		case '1':
+			if (!*meta) goto fail;
+			snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", meta);
+			if ((line = bestline(prompt)) == NULL) goto fail;
+			bestlineHistoryAdd(line);
+			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK) { free(line); goto fail; }
+			free(line);
+			break;
 
-	case '3':
-		if (!*meta) goto fail;
-		if ((curl_url_set(sel->cu, CURLUPART_URL, meta, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) || (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK)) goto fail;
-		break;
+		case '3':
+			if (!*meta) goto fail;
+			if (curl_url_set(sel->cu, CURLUPART_URL, meta, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK) goto fail;
+			break;
 
-	default:
-		error("failed to download `%s`: %s", sel->url, *meta ? meta : data);
+		default:
+			error("failed to download `%s`: %s", sel->url, *meta ? meta : data);
 	}
 
 	if ((*mime = strdup(meta)) == NULL) goto fail;
@@ -702,7 +702,7 @@ static Selector *download_to_menu(Selector *sel) {
 	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
 	snprintf(template, sizeof(template), "%sgplaces.XXXXXXXX", tmpdir);
 	snprintf(filename, sizeof(filename), "%s", template);
-	if (((fd = mkstemp(filename)) == -1) || ((fp = fdopen(fd, "r+w")) == NULL)) {
+	if ((fd = mkstemp(filename)) == -1 || (fp = fdopen(fd, "r+w")) == NULL) {
 		error("cannot create temporary file: %s", strerror(errno));
 		goto out;
 	}
@@ -734,7 +734,7 @@ static void print_raw(FILE *fp, Selector *list, const char *filter) {
 	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
 
 	for (; list; list = list->next) {
-		if (filter && (regexec(&re, list->name, 0, NULL, 0) != 0) && (!list->url || regexec(&re, list->url, 0, NULL, 0) != 0)) continue;
+		if (filter && regexec(&re, list->name, 0, NULL, 0) != 0 && (!list->url || regexec(&re, list->url, 0, NULL, 0) != 0)) continue;
 		switch (list->type) {
 			case 'l': fprintf(fp, "=> %s %s\n", list->url, list->name); break;
 			case '>':
@@ -758,7 +758,7 @@ static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
 	length = get_terminal_width();
 
 	for (; list; list = list->next) {
-		if (filter && (regexec(&re, list->name, 0, NULL, 0) != 0) && (!list->url || regexec(&re, list->url, 0, NULL, 0) != 0)) continue;
+		if (filter && regexec(&re, list->name, 0, NULL, 0) != 0 && (!list->url || regexec(&re, list->url, 0, NULL, 0) != 0)) continue;
 		rem = (int)strlen(list->name);
 		if (rem == 0) { fputc('\n', fp); continue; }
 		for (p = list->name; rem > 0; rem -= out, p += out) {
@@ -798,7 +798,7 @@ static void page_gemtext(Selector *sel) {
 	pid_t pid;
 	const char *pager;
 
-	if (((pager = set_var(&variables, "PAGER", NULL)) == NULL) && ((pager = getenv("PAGER")) == NULL)) pager = "less -r";
+	if ((pager = set_var(&variables, "PAGER", NULL)) == NULL && (pager = getenv("PAGER")) == NULL) pager = "less -r";
 
 	if (pipe(fds) < 0) return;
 	if ((pid = fork()) == 0) {
