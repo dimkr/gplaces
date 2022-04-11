@@ -5,8 +5,8 @@ MANDIR = $(PREFIX)/share/man
 ICONDIR = $(PREFIX)/share/icons
 APPDIR = $(PREFIX)/share/applications
 CC = cc
-CFLAGS ?= -O2 -Wall -Wextra -DCONFDIR=\"$(CONFDIR)\"
-CFLAGS += $(shell pkg-config --cflags libcurl libssl libcrypto)
+CFLAGS ?= -O2 -Wall -Wextra
+CFLAGS += -DCONFDIR=\"$(CONFDIR)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
 LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
 WITH_LIBMAGIC ?= $(shell pkg-config --exists libmagic && echo 1 || echo 0)

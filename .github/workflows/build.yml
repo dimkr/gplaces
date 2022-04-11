@@ -29,7 +29,7 @@ jobs:
         run: |
           make
           make clean
-          make WITH_LIBMAGIC=1
+          CFLAGS=-O3 make WITH_LIBMAGIC=1
           make clean
           make WITH_LIBMAGIC=0
   edge:
@@ -49,6 +49,6 @@ jobs:
         run: |
           make
           make clean
-          make WITH_LIBMAGIC=1
+          CFLAGS=-O3 make WITH_LIBMAGIC=1
           make clean
           make WITH_LIBMAGIC=0
