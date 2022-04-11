@@ -806,7 +806,7 @@ static void page_gemtext(Selector *sel) {
 		close(fds[1]);
 		dup2(fds[0], STDIN_FILENO);
 		close(fds[0]);
-		execlp("sh", "sh", "-c", pager, (char *)NULL);
+		execl("/bin/sh", "sh", "-c", pager, (char *)NULL);
 		exit(EXIT_FAILURE);
 	} else if (pid < 0) return;
 
