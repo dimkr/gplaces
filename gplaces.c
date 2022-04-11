@@ -386,7 +386,7 @@ static void reap(const char *command, pid_t pid) {
 
 	for (;;) {
 		ret = waitpid(pid, &status, 0);
-		if ((ret < 0) && (errno == EAGAIN)) continue;
+		if ((ret < 0) && (errno == EINTR)) continue;
 		if ((ret == pid) && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
 		else if ((ret == pid) && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
 		break;
