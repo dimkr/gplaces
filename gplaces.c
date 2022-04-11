@@ -46,6 +46,8 @@
 
 #include <curl/curl.h>
 
+#include <magic.h>
+
 #include "bestline/bestline.h"
 
 
@@ -213,8 +215,29 @@ static void free_selector(Selector *sel) {
 }
 
 
-static int set_selector_url(Selector *sel, const char *url) {
-	if (curl_url_set(sel->cu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK) return 0;
+static int set_selector_url(Selector *sel, Selector *from, const char *url) {
+	static char buffer[1024];
+
+	switch (curl_url_set(sel->cu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME)) {
+		case CURLUE_OK: break;
+		case CURLE_URL_MALFORMAT:
+			if (!from) {
+				snprintf(buffer, sizeof(buffer), "gemini://%s", url);
+				if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) == CURLUE_OK) break;
+			}
+			/* fall through */
+		default: return 0;
+	}
+
+	if (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK) return 0;
+
+	if (!strcmp(sel->scheme, "file")) {
+		sel->host = str_copy("");
+		sel->port = str_copy("");
+		return 1;
+	}
+
+	if (curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK) return 0;
 
 	switch (curl_url_get(sel->cu, CURLUPART_PORT, &sel->port, 0)) {
 		case CURLUE_OK: break;
@@ -242,21 +265,15 @@ static Selector *find_selector(Selector *list, const char *line) {
 
 
 static Selector *parse_selector(Selector *from, char *str) {
-	static char buffer[1024];
 	char *url = str;
 	Selector *sel;
 
 	if (str == NULL || *str == '\0') return NULL;
 
-	if (!from && strncmp(url, "gemini://", 9)) {
-		snprintf(buffer, sizeof(buffer), "gemini://%s", url);
-		url = buffer;
-	}
-
 	sel = new_selector('l');
 	sel->name = str_copy(str);
 	sel->cu = (from && from->cu) ? curl_url_dup(from->cu) : curl_url();
-	if (!sel->cu || !set_selector_url(sel, url)) {
+	if (!sel->cu || !set_selector_url(sel, from, url)) {
 		free_selector(sel);
 		return NULL;
 	}
@@ -834,23 +851,37 @@ static void show_gemtext(Selector *sel, const char *filter) {
 
 
 static void navigate(Selector *to) {
-	const char *handler;
+	const char *mime = NULL, *handler = NULL;
 	Selector *new;
+	FILE *fp;
+	size_t len;
+	magic_t mag;
 
-	if (to->type != 'l') return;
+	if (!strcmp(to->scheme, "file")) {
+		if ((len = strlen(to->path)) >= 4 && !strcmp(&to->path[len - 4], ".gmi")) {
+			if ((fp = fopen(to->path, "r")) == NULL) return;
+			new = parse_gemtext(to, fp);
+			fclose(fp);
+		} else {
+			if ((mag = magic_open(MAGIC_MIME_TYPE | MAGIC_NO_CHECK_COMPRESS)) == NULL) return;
+			if (magic_load(mag, NULL) == 0) mime = magic_file(mag, to->path);
+			if (mime) handler = find_mime_handler(mime);
+			magic_close(mag);
+			goto handle;
+		}
+	} else if (strcmp(to->scheme, "gemini")) {
+		handler = find_mime_handler(to->scheme);
+		goto handle;
+	} else new = download_to_menu(to);
 
-	if (to->url && strncmp(to->url, "gemini://", 9)) {
-		if ((handler = find_mime_handler(to->scheme)) == NULL) return;
-		execute_handler(handler, to->url, to);
-		return;
-	}
-
-	new = download_to_menu(to);
 	if (new == NULL) return;
 	snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", to->url);
 	free_selector(menu);
 	menu = new;
-	show_gemtext(new, NULL);
+	return show_gemtext(new, NULL);
+
+handle:
+	if (handler) execute_handler(handler, to->url, to);
 }
 
 

@@ -6,9 +6,9 @@ ICONDIR = $(PREFIX)/share/icons
 APPDIR = $(PREFIX)/share/applications
 CC = cc
 CFLAGS ?= -O2 -Wall -Wextra -DCONFDIR=\"$(CONFDIR)\"
-CFLAGS += $(shell pkg-config --cflags libcurl libssl libcrypto)
+CFLAGS += $(shell pkg-config --cflags libcurl libssl libcrypto libmagic)
 LDFLAGS ?=
-LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
+LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto libmagic)
 OBJ = bestline/bestline.o gplaces.o
 BIN = gplaces
 CONF = gplaces.conf
