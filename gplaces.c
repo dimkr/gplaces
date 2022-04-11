@@ -635,7 +635,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 
 	SSL_free(ssl); ssl = NULL; bio = NULL;
 
-	if ((*mime = strdup(meta)) == NULL) goto fail;
+	*mime = str_copy(meta);
 
 	ret = (data[0] - '0') * 10 + (data[1] - '0');
 
