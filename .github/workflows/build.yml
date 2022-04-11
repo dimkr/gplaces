@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: [ubuntu:jammy, debian:bullseye-slim]
+        image: ["ubuntu:jammy", "debian:bullseye-slim"]
     container:
       image: ${{ matrix.image }}
     steps:
