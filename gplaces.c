@@ -799,6 +799,7 @@ static void page_gemtext(Selector *sel) {
 	const char *pager;
 
 	if ((pager = set_var(&variables, "PAGER", NULL)) == NULL && (pager = getenv("PAGER")) == NULL) pager = "less -r";
+	if (!strcmp(pager, "cat")) return;
 
 	if (pipe(fds) < 0) return;
 	if ((pid = fork()) == 0) {
