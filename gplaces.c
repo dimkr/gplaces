@@ -46,7 +46,9 @@
 
 #include <curl/curl.h>
 
-#include <magic.h>
+#ifdef GPLACES_USE_LIBMAGIC
+	#include <magic.h>
+#endif
 
 #include "bestline/bestline.h"
 
@@ -852,11 +854,14 @@ static void show_gemtext(Selector *sel, const char *filter) {
 
 
 static void navigate(Selector *to) {
-	const char *mime = NULL, *handler = NULL;
+	const char *handler = NULL;
 	Selector *new;
 	FILE *fp;
 	size_t len;
+#ifdef GPLACES_USE_LIBMAGIC
 	magic_t mag;
+	const char *mime = NULL;
+#endif
 
 	if (!strcmp(to->scheme, "file")) {
 		if ((len = strlen(to->path)) >= 4 && !strcmp(&to->path[len - 4], ".gmi")) {
@@ -864,10 +869,14 @@ static void navigate(Selector *to) {
 			new = parse_gemtext(to, fp);
 			fclose(fp);
 		} else {
+#ifdef GPLACES_USE_LIBMAGIC
 			if ((mag = magic_open(MAGIC_MIME_TYPE | MAGIC_NO_CHECK_COMPRESS)) == NULL) return;
 			if (magic_load(mag, NULL) == 0) mime = magic_file(mag, to->path);
 			if (mime) handler = find_mime_handler(mime);
 			magic_close(mag);
+#else
+			error("unable to detect the MIME type of %s", to->path);
+#endif
 			goto handle;
 		}
 	} else if (strcmp(to->scheme, "gemini")) {

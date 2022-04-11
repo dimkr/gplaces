@@ -6,9 +6,14 @@ ICONDIR = $(PREFIX)/share/icons
 APPDIR = $(PREFIX)/share/applications
 CC = cc
 CFLAGS ?= -O2 -Wall -Wextra -DCONFDIR=\"$(CONFDIR)\"
-CFLAGS += $(shell pkg-config --cflags libcurl libssl libcrypto libmagic)
+CFLAGS += $(shell pkg-config --cflags libcurl libssl libcrypto)
 LDFLAGS ?=
-LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto libmagic)
+LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
+WITH_LIBMAGIC ?= $(shell pkg-config --exists libmagic && echo 1 || echo 0)
+ifeq ($(WITH_LIBMAGIC),1)
+	CFLAGS += -DGPLACES_USE_LIBMAGIC $(shell pkg-config --cflags libmagic)
+	LDFLAGS += $(shell pkg-config --libs libmagic)
+endif
 OBJ = bestline/bestline.o gplaces.o
 BIN = gplaces
 CONF = gplaces.conf
