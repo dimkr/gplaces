@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install --no-install-recommends -y gcc make libssl-dev libcurl4-openssl-dev libmagic-dev
+          sudo apt-get install --no-install-recommends -y git gcc make libssl-dev libcurl4-openssl-dev libmagic-dev
       - name: Build
         run: |
           make
