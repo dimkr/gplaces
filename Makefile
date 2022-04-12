@@ -31,7 +31,7 @@ clean:
 install: default
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin/
 	@install $(BIN) $(DESTDIR)$(PREFIX)/bin/${BIN}
-	@mkdir -p $(DESTDIR)$(PREFIX)$(CONFDIR)
+	@mkdir -p $(DESTDIR)$(CONFDIR)
 	@install $(CONF) $(DESTDIR)$(CONFDIR)/${CONF}
 	@mkdir -p $(DESTDIR)$(MANDIR)/man1
 	@install $(MAN) $(DESTDIR)$(MANDIR)/man1/${MAN}
@@ -42,4 +42,7 @@ install: default
 
 uninstall:
 	@rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
-	@rm -f $(DESTDIR)$(PREFIX)/etc/$(CONF)
+	@rm -f $(DESTDIR)$(CONFDIR)/$(CONF)
+	@rm -f $(DESTDIR)$(MANDIR)/man1/${MAN}
+	@rm -f $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps/${ICON}
+	@rm -f $(DESTDIR)$(APPDIR)/${APP}
