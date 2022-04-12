@@ -514,7 +514,7 @@ static int write_all(FILE *fp, const char *buffer, size_t length) {
 }
 
 
-static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
+static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int ask) {
 	struct addrinfo hints, *result, *it;
 	static char request[1024];
 	char *data = NULL, *crlf, *meta, *line;
@@ -602,7 +602,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime) {
 			break;
 
 		case '1':
-			if (!*meta) goto fail;
+			if (!ask || !*meta) goto fail;
 			snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", meta);
 			if ((line = bestline(prompt)) == NULL) goto fail;
 			bestlineHistoryAdd(line);
@@ -653,7 +653,7 @@ static void sigint(int sig) {
 }
 
 
-static int download(Selector *sel, FILE *fp, char **mime) {
+static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	struct sigaction sa = {.sa_handler = sigint}, old;
 	SSL_CTX *ctx = NULL;
 	int status, redirs = 0, ret = 0;
@@ -668,7 +668,7 @@ static int download(Selector *sel, FILE *fp, char **mime) {
 	sigaction(SIGINT, &sa, &old);
 
 	do {
-		status = do_download(sel, ctx, fp, mime);
+		status = do_download(sel, ctx, fp, mime, ask);
 		if ((ret = (status >= 20 && status <= 29))) break;
 		free(*mime); *mime = NULL;
 	} while ((status >= 10 && status <= 19) || (status >= 30 && status <= 39 && ++redirs < 5));
@@ -700,14 +700,14 @@ static void download_to_file(Selector *sel) {
 		error("cannot create file `%s`: %s", filename, strerror(errno));
 		return;
 	}
-	ret = download(sel, fp, &mime);
+	ret = download(sel, fp, &mime, 1);
 	fclose(fp);
 	free(mime);
 	if (fp && !ret) unlink(filename);
 }
 
 
-static Selector *download_to_menu(Selector *sel) {
+static Selector *download_to_temp(Selector *sel, int ask, int gemtext) {
 	static char filename[1024], template[1024];
 	FILE *fp;
 	const char *tmpdir, *handler;
@@ -722,11 +722,11 @@ static Selector *download_to_menu(Selector *sel) {
 		error("cannot create temporary file: %s", strerror(errno));
 		goto out;
 	}
-	if (!download(sel, fp, &mime) || fflush(fp) == EOF) goto out;
+	if (!download(sel, fp, &mime, ask) || fflush(fp) == EOF) goto out;
 	if (!strncmp(mime, "text/gemini", 11)) {
 		if (fseek(fp, 0, SEEK_SET) == -1) goto out;
 		list = parse_gemtext(sel, fp);
-	} else if ((handler = find_mime_handler(mime)) != NULL) execute_handler(handler, filename, sel);
+	} else if (!gemtext && (handler = find_mime_handler(mime)) != NULL) execute_handler(handler, filename, sel);
 
 out:
 	if (*filename) unlink(filename);
@@ -871,7 +871,7 @@ static void navigate(Selector *to) {
 	} else if (strcmp(to->scheme, "gemini")) {
 		handler = find_mime_handler(to->scheme);
 		goto handle;
-	} else new = download_to_menu(to);
+	} else new = download_to_temp(to, 1, 0);
 
 	if (new == NULL) return;
 	snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", to->url);
@@ -1076,7 +1076,7 @@ static void cmd_subscriptions(char *line) {
 		strftime(ts, sizeof(ts), "%Y-%m-%d", tm);
 
 		for (sel = subscriptions; sel; sel = sel->next) {
-			if ((list = download_to_menu(sel)) == NULL) continue;
+			if ((list = download_to_temp(sel, 0, 1)) == NULL) continue;
 
 			copy = new_selector('l', sel->raw);
 			if (!parse_url(NULL, copy, sel->url)) { free_selector(copy); continue; }
