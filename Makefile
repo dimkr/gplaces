@@ -1,6 +1,6 @@
 # see LICENSE for copyright and license details
 PREFIX = /usr/local
-CONFDIR = /etc
+CONFDIR ?= $(PREFIX)/etc
 MANDIR = $(PREFIX)/share/man
 ICONDIR = $(PREFIX)/share/icons
 APPDIR = $(PREFIX)/share/applications
