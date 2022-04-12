@@ -38,6 +38,7 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <regex.h>
+#include "queue.h"
 
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
@@ -52,19 +53,22 @@
 
 #include "bestline/bestline.h"
 
-
 /*============================================================================*/
 typedef struct Selector {
-	struct Selector *next;
+	SIMPLEQ_ENTRY(Selector) next;
 	int index;
 	char type, *raw, *repr, *scheme, *host, *port, *path, *url;
 	CURLU *cu;
 } Selector;
 
+typedef SIMPLEQ_HEAD(, Selector) SelectorList;
+
 typedef struct Variable {
-	struct Variable *next;
+	LIST_ENTRY(Variable) next;
 	char *name, *data;
 } Variable;
+
+typedef LIST_HEAD(, Variable) VariableList;
 
 typedef struct Command {
 	const char *name;
@@ -78,12 +82,12 @@ typedef struct Help {
 
 
 /*============================================================================*/
-static Variable *variables = NULL;
-static Variable *aliases = NULL;
-static Variable *typehandlers = NULL;
-static Selector *bookmarks = NULL;
-static Selector *subscriptions = NULL;
-static Selector *menu = NULL;
+static VariableList variables = LIST_HEAD_INITIALIZER(variables);
+static VariableList aliases = LIST_HEAD_INITIALIZER(aliases);
+static VariableList typehandlers = LIST_HEAD_INITIALIZER(typehandlers);
+static SelectorList bookmarks = SIMPLEQ_HEAD_INITIALIZER(bookmarks);
+static SelectorList subscriptions = SIMPLEQ_HEAD_INITIALIZER(subscriptions);
+static SelectorList menu = SIMPLEQ_HEAD_INITIALIZER(menu);
 static char prompt[256] = "(\33[35m\33[0m)> ";
 static int interactive;
 
@@ -143,22 +147,21 @@ static char *str_next(char **str, const char *delims) {
 
 
 /*============================================================================*/
-static void free_variable(Variable *var) {
-	while (var) {
-		Variable *next = var->next;
+static void free_variables(VariableList *vars) {
+	Variable *var, *tmp;
+	LIST_FOREACH_SAFE(var, vars, next, tmp) {
 		free(var->name);
 		free(var->data);
 		free(var);
-		var = next;
 	}
 }
 
 
-static char *set_var(Variable **list, const char *name, const char *fmt, ...) {
+static char *set_var(VariableList *list, const char *name, const char *fmt, ...) {
 	Variable *var;
 
 	if (name == NULL) return NULL;
-	for (var = *list; var; var = var->next) {
+	LIST_FOREACH(var, list, next) {
 		if (!strcasecmp(var->name, name)) break;
 	}
 
@@ -172,10 +175,9 @@ static char *set_var(Variable **list, const char *name, const char *fmt, ...) {
 
 		if (var == NULL) {
 			if ((var = malloc(sizeof(Variable))) == NULL) panic("cannot allocate new variable");
-			var->next = *list;
 			var->name = str_copy((char*)name);
 			var->data = str_copy(buffer);
-			*list = var;
+			LIST_INSERT_HEAD(list, var, next);
 		} else {
 			free(var->data);
 			var->data = str_copy(buffer);
@@ -205,19 +207,21 @@ static Selector *new_selector(const char type, const char *raw) {
 
 
 static void free_selector(Selector *sel) {
-	while (sel) {
-		Selector *next = sel->next;
-		free(sel->raw);
-		free(sel->repr);
-		curl_free(sel->scheme);
-		curl_free(sel->host);
-		curl_free(sel->port);
-		curl_free(sel->path);
-		curl_free(sel->url);
-		if (sel->cu) curl_url_cleanup(sel->cu);
-		free(sel);
-		sel = next;
-	}
+	free(sel->raw);
+	free(sel->repr);
+	curl_free(sel->scheme);
+	curl_free(sel->host);
+	curl_free(sel->port);
+	curl_free(sel->path);
+	curl_free(sel->url);
+	if (sel->cu) curl_url_cleanup(sel->cu);
+	free(sel);
+}
+
+
+static void free_selectors(SelectorList *list) {
+	Selector *sel, *tmp;
+	SIMPLEQ_FOREACH_SAFE(sel, list, next, tmp) free_selector(sel);
 }
 
 
@@ -255,17 +259,11 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 }
 
 
-static Selector *prepend_selector(Selector *list, Selector *sel) {
-	sel->next = list;
-	sel->index = list ? list->index + 1 : 1;
-	return sel;
-}
-
-
-static Selector *find_selector(Selector *list, const char *line) {
+static Selector *find_selector(SelectorList *list, const char *line) {
+	Selector *sel;
 	int index;
 	if ((index = atoi(line)) <= 0) return NULL;
-	for (; list; list = list->next) if (list->index == index) return list;
+	SIMPLEQ_FOREACH(sel, list, next) if (sel->index == index) return sel;
 	return NULL;
 }
 
@@ -283,10 +281,11 @@ static int parse_url(Selector *from, Selector *sel, const char *url) {
 }
 
 
-static Selector *parse_gemtext(Selector *from, FILE *fp) {
+static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 	static char buffer[1024];
 	char *line, *url;
-	Selector *list = NULL, *last = NULL, *sel;
+	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
+	Selector *sel;
 	size_t len;
 	int pre = 0, i, index = 1;
 
@@ -329,9 +328,7 @@ static Selector *parse_gemtext(Selector *from, FILE *fp) {
 			sel->repr = str_copy(line);
 		}
 
-		if (last) last->next = sel;
-		else if (list == NULL) { list = sel; last = sel; }
-		last = sel;
+		SIMPLEQ_INSERT_TAIL(&list, sel, next);
 	}
 
 	if (i == 512) error("gemtext is truncated to 512 lines");
@@ -639,7 +636,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	ret = (data[0] - '0') * 10 + (data[1] - '0');
 
 fail:
-	if (data) free(data);
+	free(data);
 	if (cert) X509_free(cert);
 	if (ssl) SSL_free(ssl);
 	else if (bio) BIO_free(bio);
@@ -707,11 +704,11 @@ static void download_to_file(Selector *sel) {
 }
 
 
-static Selector *download_to_temp(Selector *sel, int ask, int gemtext) {
+static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 	static char filename[1024], template[1024];
 	FILE *fp;
 	const char *tmpdir, *handler;
-	Selector *list = NULL;
+	SelectorList list = LIST_HEAD_INITIALIZER(list);
 	char *mime = NULL;
 	int fd;
 
@@ -744,20 +741,22 @@ static int ndigits(int n) {
 }
 
 
-static void print_raw(FILE *fp, Selector *list, const char *filter) {
+static void print_raw(FILE *fp, SelectorList *list, const char *filter) {
 	regex_t re;
+	Selector *sel;
 
 	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
 
-	for (; list; list = list->next)
-		if (!filter || regexec(&re, list->raw, 0, NULL, 0) == 0) fprintf(fp, "%s\n", list->raw);
+	SIMPLEQ_FOREACH(sel, list, next)
+		if (!filter || regexec(&re, sel->raw, 0, NULL, 0) == 0) fprintf(fp, "%s\n", sel->raw);
 
 	if (filter) regfree(&re);
 }
 
 
-static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
+static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 	regex_t re;
+	Selector *sel;
 	int length, out, rem;
 	const char *p;
 
@@ -766,17 +765,17 @@ static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
 	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
 	length = get_terminal_width();
 
-	for (; list; list = list->next) {
-		if (filter && regexec(&re, list->raw, 0, NULL, 0) != 0) continue;
-		rem = (int)strlen(list->repr);
+	SIMPLEQ_FOREACH(sel, list, next) {
+		if (filter && regexec(&re, sel->raw, 0, NULL, 0) != 0) continue;
+		rem = (int)strlen(sel->repr);
 		if (rem == 0) { fputc('\n', fp); continue; }
-		for (p = list->repr; rem > 0; rem -= out, p += out) {
+		for (p = sel->repr; rem > 0; rem -= out, p += out) {
 			out = rem < length ? rem : length;
-			switch (list->type) {
+			switch (sel->type) {
 				case 'l':
-					if (p == list->repr) {
-						if (out == length) out -= 3 + ndigits(list->index);
-						fprintf(fp, "\33[4;36m(\33[1m%d) %.*s\33[0m\n", list->index, out, p);
+					if (p == sel->repr) {
+						if (out == length) out -= 3 + ndigits(sel->index);
+						fprintf(fp, "\33[4;36m(\33[1m%d) %.*s\33[0m\n", sel->index, out, p);
 					} else printf("\33[4;36m%.*s\33[0m\n", out, p);
 					break;
 				case '#':
@@ -787,11 +786,11 @@ static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
 					break;
 				case '>':
 					if (out == length) out -= 2;
-					fprintf(fp, "%c %.*s\n", list->type, out, p);
+					fprintf(fp, "%c %.*s\n", sel->type, out, p);
 					break;
 				default:
 					if (out == length) out -= 2;
-					if (p == list->repr) fprintf(fp, "%c %.*s\n", list->type, out, p);
+					if (p == sel->repr) fprintf(fp, "%c %.*s\n", sel->type, out, p);
 					else fprintf(fp, "  %.*s\n", out, p);
 			}
 		}
@@ -801,7 +800,7 @@ static void print_gemtext(FILE *fp, Selector *list, const char *filter) {
 }
 
 
-static void page_gemtext(Selector *sel) {
+static void page_gemtext(SelectorList *list) {
 	int fds[2];
 	FILE *fp;
 	pid_t pid;
@@ -822,7 +821,7 @@ static void page_gemtext(Selector *sel) {
 	close(fds[0]);
 
 	if ((fp = fdopen(fds[1], "w")) != NULL) {
-		print_gemtext(fp, sel, NULL);
+		print_gemtext(fp, list, NULL);
 		fclose(fp);
 	}
 
@@ -830,21 +829,21 @@ static void page_gemtext(Selector *sel) {
 }
 
 
-static void show_gemtext(Selector *sel, const char *filter) {
-	int lines, height;
+static void show_gemtext(SelectorList *list, const char *filter) {
+	int lines = 0, height;
 	Selector *it;
 	if (!filter && interactive) {
-		for (lines = 0, it = sel; it; it = it->next, ++lines);
+		SIMPLEQ_FOREACH(it, list, next) ++lines;
 		height = get_terminal_height();
-		if (lines > height) page_gemtext(sel);
+		if (lines > height) page_gemtext(list);
 	}
-	print_gemtext(stdout, sel, filter);
+	print_gemtext(stdout, list, filter);
 }
 
 
 static void navigate(Selector *to) {
 	const char *handler = NULL;
-	Selector *new;
+	SelectorList new = SIMPLEQ_HEAD_INITIALIZER(new);
 	FILE *fp;
 	size_t len;
 #ifdef GPLACES_USE_LIBMAGIC
@@ -873,18 +872,18 @@ static void navigate(Selector *to) {
 		goto handle;
 	} else new = download_to_temp(to, 1, 0);
 
-	if (new == NULL) return;
+	if (SIMPLEQ_EMPTY(&new)) return;
 	snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", to->url);
-	free_selector(menu);
+	free_selectors(&menu);
 	menu = new;
-	return show_gemtext(new, NULL);
+	return show_gemtext(&new, NULL);
 
 handle:
 	if (handler) execute_handler(handler, to->url, to);
 }
 
 
-static void edit_variable(Variable **vars, char *line) {
+static void edit_variable(VariableList *vars, char *line) {
 	char *name = next_token(&line);
 	char *data = next_token(&line);
 
@@ -893,7 +892,7 @@ static void edit_variable(Variable **vars, char *line) {
 		else puts(set_var(vars, name, NULL));
 	} else {
 		Variable *it;
-		for (it = *vars; it; it = it->next) printf("%s = \"%s\"\n", it->name, it->data);
+		LIST_FOREACH(it, vars, next) printf("%s = \"%s\"\n", it->name, it->data);
 	}
 }
 
@@ -1004,12 +1003,12 @@ static void cmd_open(char *line) {
 
 
 static void cmd_show(char *line) {
-	show_gemtext(menu, next_token(&line));
+	show_gemtext(&menu, next_token(&line));
 }
 
 
 static void cmd_save(char *line) {
-	Selector *to = find_selector(menu, line);
+	Selector *to = find_selector(&menu, line);
 	if (to) download_to_file(to);
 }
 
@@ -1039,7 +1038,7 @@ static void cmd_help(char *line) {
 
 
 static void cmd_bookmarks(char *line) {
-	Selector *to = find_selector(bookmarks, line);
+	Selector *it, *to = find_selector(&bookmarks, line);
 	if (to != NULL) navigate(to);
 	else {
 		char *name = next_token(&line);
@@ -1049,16 +1048,19 @@ static void cmd_bookmarks(char *line) {
 			if (parse_url(NULL, sel, url)) {
 				free(sel->repr);
 				sel->repr = str_copy(name);
-				bookmarks = prepend_selector(bookmarks, sel);
+				sel->index = 1;
+				SIMPLEQ_FOREACH(it, &bookmarks, next) ++sel->index;
+				SIMPLEQ_INSERT_TAIL(&bookmarks, sel, next);
 			}
-		} else show_gemtext(bookmarks, name);
+		} else show_gemtext(&bookmarks, name);
 	}
 }
 
 
 static void cmd_subscriptions(char *line) {
 	char ts[11];
-	Selector *sel, *list, *it, *copy, *feed, *last = NULL;
+	SelectorList list, feed = SIMPLEQ_HEAD_INITIALIZER(feed);
+	Selector *sel, *it, *copy;
 	struct tm *tm;
 	time_t t;
 	int index = 1;
@@ -1068,21 +1070,22 @@ static void cmd_subscriptions(char *line) {
 		if (parse_url(NULL, sel, url)) {
 			free(sel->repr);
 			sel->repr = str_copy(url);
-			subscriptions = prepend_selector(subscriptions, sel);
+			SIMPLEQ_INSERT_TAIL(&subscriptions, sel, next);
 		}
 	} else {
 		t = time(NULL);
 		tm = gmtime(&t);
 		strftime(ts, sizeof(ts), "%Y-%m-%d", tm);
 
-		for (sel = subscriptions; sel; sel = sel->next) {
-			if ((list = download_to_temp(sel, 0, 1)) == NULL) continue;
+		SIMPLEQ_FOREACH(sel, &subscriptions, next) {
+			list = download_to_temp(sel, 0, 1);
+			if (SIMPLEQ_EMPTY(&list)) continue;
 
 			copy = new_selector('l', sel->raw);
 			if (!parse_url(NULL, copy, sel->url)) { free_selector(copy); continue; }
 			copy->index = index++;
 
-			for (it = list; it; it = it->next) {
+			SIMPLEQ_FOREACH(it, &list, next) {
 				if (it->type == '#' && (it->raw[1] == ' ' ||  it->raw[1] == '\t')) {
 					copy->repr = str_copy(&it->repr[2]);
 					break;
@@ -1090,28 +1093,24 @@ static void cmd_subscriptions(char *line) {
 			}
 
 			if (!copy->repr) copy->repr = str_copy(sel->repr);
-			if (last) last->next = copy;
-			else feed = copy;
-			last = copy;
+			SIMPLEQ_INSERT_TAIL(&feed, copy, next);
 
-			for (it = list; it; it = it->next) {
+			SIMPLEQ_FOREACH(it, &list, next) {
 				if (it->type == 'l' && !strncmp(it->repr, ts, 10)) {
 					copy = new_selector('l', it->raw);
 					copy->repr = str_copy(it->repr);
 					if (!parse_url(NULL, copy, it->url)) { free_selector(copy); continue; }
 					copy->index = index++;
-					if (last) last->next = copy;
-					else feed = copy;
-					last = copy;
+					SIMPLEQ_INSERT_TAIL(&feed, copy, next);
 				}
 			}
 
-			free_selector(list);
+			free_selectors(&list);
 		}
-		if (!feed) return;
-		free_selector(menu);
+		if (SIMPLEQ_EMPTY(&feed)) return;
+		free_selectors(&menu);
 		menu = feed;
-		show_gemtext(feed, NULL);
+		show_gemtext(&feed, NULL);
 	}
 }
 
@@ -1122,7 +1121,7 @@ static void cmd_set(char *line) {
 
 
 static void cmd_see(char *line) {
-	Selector *to = find_selector(menu, line);
+	Selector *to = find_selector(&menu, line);
 	if (to) puts(to->url);
 }
 
@@ -1202,7 +1201,7 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	for (cmd = gemini_commands; cmd->name; ++cmd)
 		if (!strncasecmp(cmd->name, text, len)) bestlineAddCompletion(lc, cmd->name);
 
-	for (alias = aliases; alias; alias = alias->next)
+	LIST_FOREACH(alias, &aliases, next)
 		if (!strncasecmp(alias->name, text, len)) bestlineAddCompletion(lc, alias->name);
 }
 
@@ -1224,7 +1223,7 @@ static void shell() {
 
 	for (;;) {
 		if ((line = base = bestline(prompt)) == NULL) break;
-		if ((to = find_selector(menu, line)) != NULL) {
+		if ((to = find_selector(&menu, line)) != NULL) {
 			if (to->url) {
 				snprintf(command, sizeof(command), "open %s", to->url);
 				bestlineHistoryAdd(command);
@@ -1243,27 +1242,27 @@ static void shell() {
 
 
 /*============================================================================*/
-static void load_config_file(const char *filename) {
+static int load_config_file(const char *filename) {
 	long length;
 	FILE *fp = NULL;
 	char *data = NULL;
+	int ret = 0;
 
-	if ((fp = fopen(filename, "rb")) == NULL) goto fail;
-	if (fseek(fp, 0, SEEK_END)) goto fail;
-	if ((length = ftell(fp)) <= 0) goto fail;
-	if (fseek(fp, 0, SEEK_SET)) goto fail;
-	if ((data = malloc(length + 1)) == NULL) goto fail;
-	if (fread(data, 1, length, fp) != (size_t)length) goto fail;
-	fclose(fp);
+	if ((fp = fopen(filename, "rb")) == NULL) goto out;
+	if (fseek(fp, 0, SEEK_END)) goto out;
+	if ((length = ftell(fp)) <= 0) goto out;
+	if (fseek(fp, 0, SEEK_SET)) goto out;
+	if ((data = malloc(length + 1)) == NULL) goto out;
+	if (fread(data, 1, length, fp) != (size_t)length) goto out;
 	data[length] = '\0';
 
 	eval(data, filename);
-	free(data);
-	return;
+	ret = 1;
 
-fail:
-	if (data) free(data);
+out:
+	free(data);
 	if (fp) fclose(fp);
+	return ret;
 }
 
 
@@ -1271,12 +1270,11 @@ static void load_config_files() {
 	static char buffer[1024];
 	char *home;
 
-	load_config_file(CONFDIR"/gplaces.conf");
 	if ((home = getenv("HOME")) != NULL) {
 		snprintf(buffer, sizeof(buffer), "%s/.gplaces.conf", home);
-		load_config_file(buffer);
+		if (load_config_file(buffer)) return;
 	}
-	load_config_file("gplaces.conf");
+	load_config_file(CONFDIR"/gplaces.conf");
 }
 
 
@@ -1302,12 +1300,12 @@ static void parse_arguments(int argc, char **argv) {
 
 
 static void quit_client() {
-	free_variable(variables);
-	free_variable(aliases);
-	free_variable(typehandlers);
-	free_selector(bookmarks);
-	free_selector(subscriptions);
-	free_selector(menu);
+	free_variables(&variables);
+	free_variables(&aliases);
+	free_variables(&typehandlers);
+	free_selectors(&bookmarks);
+	free_selectors(&subscriptions);
+	free_selectors(&menu);
 	if (interactive) puts("\33[0m");
 }
 
