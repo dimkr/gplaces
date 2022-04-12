@@ -82,6 +82,7 @@ static Variable *variables = NULL;
 static Variable *aliases = NULL;
 static Variable *typehandlers = NULL;
 static Selector *bookmarks = NULL;
+static Selector *subscriptions = NULL;
 static Selector *menu = NULL;
 static char prompt[256] = "(\33[35m\33[0m)> ";
 static int interactive;
@@ -920,7 +921,7 @@ static const Help gemini_help[] = {
 		"commands",
 		"alias         bookmarks     go            help          open\n" \
 		"quit          save          see           set           show\n" \
-		"type"
+		"subscriptions type"
 	},
 	{
 		"help",
@@ -1055,6 +1056,66 @@ static void cmd_bookmarks(char *line) {
 }
 
 
+static void cmd_subscriptions(char *line) {
+	char ts[11];
+	Selector *sel, *list, *it, *copy, *feed, *last = NULL;
+	struct tm *tm;
+	time_t t;
+	int index = 1;
+	char *url = next_token(&line);
+	if (url) {
+		Selector *sel = new_selector('l', url);
+		if (parse_url(NULL, sel, url)) {
+			free(sel->repr);
+			sel->repr = str_copy(url);
+			subscriptions = prepend_selector(subscriptions, sel);
+		}
+	} else {
+		t = time(NULL);
+		tm = gmtime(&t);
+		strftime(ts, sizeof(ts), "%Y-%m-%d", tm);
+
+		for (sel = subscriptions; sel; sel = sel->next) {
+			if ((list = download_to_menu(sel)) == NULL) continue;
+
+			copy = new_selector('l', sel->raw);
+			if (!parse_url(NULL, copy, sel->url)) { free_selector(copy); continue; }
+			copy->index = index++;
+
+			for (it = list; it; it = it->next) {
+				if (it->type == '#' && (it->raw[1] == ' ' ||  it->raw[1] == '\t')) {
+					copy->repr = str_copy(&it->repr[2]);
+					break;
+				}
+			}
+
+			if (!copy->repr) copy->repr = str_copy(sel->repr);
+			if (last) last->next = copy;
+			else feed = copy;
+			last = copy;
+
+			for (it = list; it; it = it->next) {
+				if (it->type == 'l' && !strncmp(it->repr, ts, 10)) {
+					copy = new_selector('l', it->raw);
+					copy->repr = str_copy(it->repr);
+					if (!parse_url(NULL, copy, it->url)) { free_selector(copy); continue; }
+					copy->index = index++;
+					if (last) last->next = copy;
+					else feed = copy;
+					last = copy;
+				}
+			}
+
+			free_selector(list);
+		}
+		if (!feed) return;
+		free_selector(menu);
+		menu = feed;
+		show_gemtext(feed, NULL);
+	}
+}
+
+
 static void cmd_set(char *line) {
 	edit_variable(&variables, line);
 }
@@ -1084,6 +1145,7 @@ static const Command gemini_commands[] = {
 	{ "save", cmd_save },
 	{ "help", cmd_help },
 	{ "bookmarks", cmd_bookmarks },
+	{ "subscriptions", cmd_subscriptions },
 	{ "set", cmd_set },
 	{ "see", cmd_see },
 	{ "alias", cmd_alias },
@@ -1244,6 +1306,7 @@ static void quit_client() {
 	free_variable(aliases);
 	free_variable(typehandlers);
 	free_selector(bookmarks);
+	free_selector(subscriptions);
 	free_selector(menu);
 	if (interactive) puts("\33[0m");
 }

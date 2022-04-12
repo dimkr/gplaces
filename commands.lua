@@ -1,7 +1,7 @@
 -- just a simple script to create the help content for `commands`
 local commands = {
 	"quit", "open", "go", "show", "save", "help", "bookmarks",
-	"set", "see", "alias", "type",
+	"set", "see", "alias", "type", "subscriptions"
 }
 table.sort(commands)
 for i, name in ipairs(commands) do
