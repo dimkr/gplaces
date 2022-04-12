@@ -228,15 +228,11 @@ static void free_selectors(SelectorList *list) {
 static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 	static char buffer[1024];
 
-	switch (curl_url_set(sel->cu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME)) {
-		case CURLUE_OK: break;
-		case CURLE_URL_MALFORMAT:
-			if (!from) {
-				snprintf(buffer, sizeof(buffer), "gemini://%s", url);
-				if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) == CURLUE_OK) break;
-			}
-			/* fall through */
-		default: return 0;
+	/* TODO: why does curl_url_set() return CURLE_OUT_OF_MEMORY if the scheme is missing, but only inside the Flatpak sandbox? */
+	if (curl_url_set(sel->cu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) {
+		if (from) return 0;
+		snprintf(buffer, sizeof(buffer), "gemini://%s", url);
+		if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
 	}
 
 	if (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK) return 0;
