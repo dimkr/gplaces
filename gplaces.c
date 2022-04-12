@@ -310,7 +310,7 @@ static Selector *parse_gemtext(Selector *from, FILE *fp) {
 			if (*line) {
 				free(sel->repr);
 				sel->repr = str_copy(*line ? line : url);
-			}
+			} else sel->repr = str_copy(url);
 			sel->index = index++;
 		} else if (*line == '#') {
 			sel = new_selector('#', line);
@@ -994,7 +994,8 @@ static void cmd_quit(char *line) {
 
 
 static void cmd_open(char *line) {
-	const char *url = next_token(&line);
+	const char *url;
+	if ((url = next_token(&line)) == NULL || *url == '\0') return;
 	Selector *to = new_selector('l', url);
 	if (parse_url(NULL, to, url)) navigate(to);
 	free_selector(to);
