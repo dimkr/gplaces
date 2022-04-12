@@ -13,7 +13,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 - "powerful" shell
 - bookmarks
 - subscriptions
-	- only [simple subscriptions](gemini://gemini.circumlunar.space/docs/companion/subscription.gmi) are supported, to avoid [XML parsing](https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=xml)
+	- only [simple subscriptions](https://gemini.circumlunar.space/docs/companion/subscription.gmi) are supported, to avoid [XML parsing](https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=xml)
 - variables
 - command aliases
 - sh-style history with ~/.gplaces_history
