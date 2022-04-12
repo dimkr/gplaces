@@ -272,10 +272,7 @@ static int parse_url(Selector *from, Selector *sel, const char *url) {
 	if (url == NULL || *url == '\0') return 0;
 
 	sel->cu = (from && from->cu) ? curl_url_dup(from->cu) : curl_url();
-	if (!sel->cu || !set_selector_url(sel, from, url)) {
-		free_selector(sel);
-		return 0;
-	}
+	if (!sel->cu || !set_selector_url(sel, from, url)) return 0;
 
 	return 1;
 }
