@@ -96,7 +96,7 @@ static int interactive;
 static void vlogf(FILE *fp, const char *color, const char *fmt, va_list va) {
 	if (interactive) fprintf(fp, "\33[%sm", color);
 	vfprintf(fp, fmt, va);
-	if (interactive) fputs("\33[0m", fp);
+	if (interactive) fputs("\33[0m\n", fp);
 	else fputc('\n', fp);
 }
 
