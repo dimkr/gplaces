@@ -487,6 +487,7 @@ static int tofu(X509 *cert) {
 
 out:
 	if (fp) fclose(fp);
+	EVP_PKEY_free(pub);
 	OPENSSL_free(hex);
 	return trust;
 }
