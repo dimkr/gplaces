@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           apt-get update -qq
-          apt-get install --no-install-recommends -y git ca-certificates gcc libc6-dev make pkg-config libssl-dev libcurl4-openssl-dev libmagic-dev
+          apt-get install --no-install-recommends -y git ca-certificates gcc libc6-dev make pkg-config libssl-dev libmbedtls-dev libcurl4-openssl-dev libmagic-dev
       - name: Checkout code
         uses: actions/checkout@v2
         with:
@@ -32,6 +32,8 @@ jobs:
           CFLAGS=-O3 make WITH_LIBMAGIC=1
           make clean
           make WITH_LIBMAGIC=0
+          make clean
+          CFLAGS=-O3 make WITH_MBEDTLS=1
   edge:
     runs-on: ubuntu-latest
     container:
@@ -39,7 +41,7 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
-          apk add git gcc musl-dev make pkgconf libressl-dev curl-dev file-dev
+          apk add git gcc musl-dev make pkgconf libressl-dev mbedtls-dev curl-dev file-dev
       - name: Checkout code
         uses: actions/checkout@v2
         with:
@@ -52,3 +54,5 @@ jobs:
           CFLAGS=-O3 make WITH_LIBMAGIC=1
           make clean
           make WITH_LIBMAGIC=0
+          make clean
+          CFLAGS=-O3 make WITH_MBEDTLS=1

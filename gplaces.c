@@ -40,10 +40,20 @@
 #include <regex.h>
 #include "queue.h"
 
-#include <openssl/ssl.h>
-#include <openssl/bio.h>
-#include <openssl/sha.h>
-#include <openssl/err.h>
+#ifdef GPLACES_USE_MBEDTLS
+	#include <mbedtls/net_sockets.h>
+	#include <mbedtls/entropy.h>
+	#include <mbedtls/ctr_drbg.h>
+	#include <mbedtls/ssl.h>
+	#include <mbedtls/x509.h>
+	#include <mbedtls/base64.h>
+	#include <mbedtls/error.h>
+#else
+	#include <openssl/ssl.h>
+	#include <openssl/bio.h>
+	#include <openssl/sha.h>
+	#include <openssl/err.h>
+#endif
 
 #include <curl/curl.h>
 
@@ -443,16 +453,24 @@ static void execute_handler(const char *handler, const char *filename, Selector 
 
 
 /*============================================================================*/
+#ifdef GPLACES_USE_MBEDTLS
+static int tofu(const mbedtls_x509_crt *cert) {
+#else
 static int tofu(X509 *cert) {
+#endif
 	static char hosts[1024], buffer[2048], namebuf[1024];
-	X509_NAME *name;
 	const char *home;
-	EVP_PKEY *pub;
-	char *p, *hex, *line;
-	size_t len, hlen;
+	char *line;
+	size_t hlen;
 	FILE *fp;
-	BIGNUM *bn;
 	int trust = 1, namelen;
+
+#ifndef GPLACES_USE_MBEDTLS
+	X509_NAME *name;
+	EVP_PKEY *pub;
+	BIGNUM *bn;
+	char *hex, *p;
+	size_t len;
 
 	if ((name = X509_get_subject_name(cert)) == NULL) return 0;
 	if ((namelen = X509_NAME_get_text_by_NID(name, NID_commonName, namebuf, sizeof(namebuf))) <= 0) return 0;
@@ -469,6 +487,12 @@ static int tofu(X509 *cert) {
 	BN_free(bn);
 	if (!hex) return 0;
 	hlen = strlen(hex);
+#else
+	char hex[2048];
+
+	if ((namelen = mbedtls_x509_dn_gets(namebuf, sizeof(namebuf), &cert->subject)) < 4) return 0;
+	if (mbedtls_base64_encode((unsigned char *)hex, sizeof(hex), &hlen, (unsigned char *)namebuf, namelen) != 0) return 0;
+#endif
 
 	if ((home = getenv("HOME")) == NULL) return 0;
 	snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
@@ -487,7 +511,9 @@ static int tofu(X509 *cert) {
 
 out:
 	if (fp) fclose(fp);
+#ifndef GPLACES_USE_MBEDTLS
 	OPENSSL_free(hex);
+#endif
 	return trust;
 }
 
@@ -504,16 +530,30 @@ static int write_all(FILE *fp, const char *buffer, size_t length) {
 }
 
 
+#ifdef GPLACES_USE_MBEDTLS
+static int do_download(Selector *sel, mbedtls_ssl_config *conf, FILE *fp, char **mime, int ask) {
+#else
 static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int ask) {
+#endif
 	struct addrinfo hints, *result, *it;
 	static char request[1024];
 	char *data = NULL, *crlf, *meta, *line;
 	struct timeval tv = {0};
 	size_t total, chunks = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
 	int timeout, fd = -1, received, ret = 40;
+#ifdef GPLACES_USE_MBEDTLS
+	static char errbuf[512];
+	mbedtls_ssl_context ssl;
+	const mbedtls_x509_crt *cert;
+	mbedtls_net_context net = {0};
+	int err;
+
+	mbedtls_ssl_init(&ssl);
+#else
 	BIO *bio = NULL;
 	SSL *ssl = NULL;
 	X509 *cert = NULL;
+#endif
 
 	timeout = get_var_integer("TIMEOUT", 15);
 	if (timeout <= 1) timeout = 15;
@@ -545,6 +585,23 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 	setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
+#ifdef GPLACES_USE_MBEDTLS
+	if (mbedtls_ssl_setup(&ssl, conf) != 0) goto fail;
+
+	net.fd = fd;
+	mbedtls_ssl_set_bio(&ssl, &net, mbedtls_net_send, mbedtls_net_recv, mbedtls_net_recv_timeout);
+	if (mbedtls_ssl_set_hostname(&ssl, sel->host) != 0) goto fail;
+
+	if ((err = mbedtls_ssl_handshake(&ssl)) != 0) {
+		mbedtls_strerror(err, errbuf, sizeof(errbuf));
+		error("cannot establish secure connection to `%s`:`%s`: %s", sel->host, sel->port, errbuf);
+		goto fail;
+	}
+	if ((cert = mbedtls_ssl_get_peer_cert(&ssl)) == NULL) {
+		error("cannot establish secure connection to `%s`:`%s`: no certificate", sel->host, sel->port);
+		goto fail;
+	}
+#else
 	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_NOCLOSE)) == NULL) {
 		error("cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
 		goto fail;
@@ -558,6 +615,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 		error("cannot establish secure connection to `%s`:`%s`: %s", sel->host, sel->port, ERR_reason_error_string(ERR_get_error()));
 		goto fail;
 	}
+#endif
 
 	if (!tofu(cert)) {
 		error("cannot establish secure connection to `%s`:`%s`: certificate has changed", sel->host, sel->port);
@@ -565,7 +623,11 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	}
 
 	snprintf(request, sizeof(request), "%s\r\n", sel->url);
+#ifdef GPLACES_USE_MBEDTLS
+	if (mbedtls_ssl_write(&ssl, (unsigned char *)request, strlen(request)) == 0) {
+#else
 	if (SSL_write(ssl, request, strlen(request)) == 0) {
+#endif
 		error("cannot send request to `%s`:`%s`", sel->host, sel->port);
 		goto fail;
 	}
@@ -573,9 +635,16 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	if ((data = malloc(cap)) == NULL) panic("cannot allocate download data");
 
 	for (total = 0; total < cap - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
+#ifdef GPLACES_USE_MBEDTLS
+		if ((received = mbedtls_ssl_read(&ssl, (unsigned char *)&data[total], 1)) > 0) continue;
+		if (received == 0 || received == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) break;
+		mbedtls_strerror(received, errbuf, sizeof(errbuf));
+		error("failed to download `%s`: %s", sel->url, errbuf);
+#else
 		if ((received = SSL_read(ssl, &data[total], 1)) > 0) continue;
 		if (received == 0 || SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break;
 		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+#endif
 		goto fail;
 	}
 	if (data[1] < '0' || data[0] > '9' || data[1] < '0' || data[1] > '9' || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
@@ -610,19 +679,27 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	}
 
 	for (;;) {
+#ifdef GPLACES_USE_MBEDTLS
+		if ((received = mbedtls_ssl_read(&ssl, (unsigned char *)crlf + 1, cap - (crlf - data) - 1)) > 0) {
+#else
 		if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
+#endif
 			if (!write_all(fp, crlf + 1, received)) goto fail;
 			total += received;
 			if (total > 2048 && interactive && ++chunks <= 80) fputc('.', stderr);
 			continue;
 		}
+#ifdef GPLACES_USE_MBEDTLS
+		if (received == 0 || received == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) break; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+		mbedtls_strerror(received, errbuf, sizeof(errbuf));
+		error("failed to download `%s`: %s", sel->url, errbuf);
+#else
 		if (received == 0 || SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
 		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+#endif
 		goto fail;
 	}
 	if (total > 2048 && interactive) fputc('\n', stderr);
-
-	SSL_free(ssl); ssl = NULL; bio = NULL;
 
 	*mime = str_copy(meta);
 
@@ -630,9 +707,13 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 
 fail:
 	free(data);
+#ifdef GPLACES_USE_MBEDTLS
+	mbedtls_ssl_free(&ssl);
+#else
 	if (cert) X509_free(cert);
 	if (ssl) SSL_free(ssl);
 	else if (bio) BIO_free(bio);
+#endif
 	if (fd != -1) close(fd);
 	return ret;
 }
@@ -645,27 +726,50 @@ static void sigint(int sig) {
 
 static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	struct sigaction sa = {.sa_handler = sigint}, old;
-	SSL_CTX *ctx = NULL;
-	int status, redirs = 0, ret = 0;
+	int status, redirs = 0, ret = 40;
 
-	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 40;
-
+#ifdef GPLACES_USE_MBEDTLS
+	mbedtls_ssl_config conf;
+	mbedtls_ctr_drbg_context ctr_drbg;
+	mbedtls_entropy_context entropy;
+	mbedtls_ssl_config_init(&conf);
+	mbedtls_ctr_drbg_init(&ctr_drbg);
+	mbedtls_entropy_init(&entropy);
+	if (mbedtls_ssl_config_defaults(&conf, MBEDTLS_SSL_IS_CLIENT, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT) != 0) goto out;
+	if (mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, NULL, 0) != 0) goto out;
+	mbedtls_ssl_conf_rng(&conf, mbedtls_ctr_drbg_random, &ctr_drbg);
+	mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_NONE);
+	mbedtls_ssl_conf_min_version(&conf, MBEDTLS_SSL_MAJOR_VERSION_3, MBEDTLS_SSL_MINOR_VERSION_2);
+#else
+	SSL_CTX *ctx;
+	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) goto out;
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 	SSL_CTX_set_verify_depth(ctx, 1);
-
+#endif
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGINT, &sa, &old);
 
 	do {
+#ifdef GPLACES_USE_MBEDTLS
+		status = do_download(sel, &conf, fp, mime, ask);
+#else
 		status = do_download(sel, ctx, fp, mime, ask);
+#endif
 		if ((ret = (status >= 20 && status <= 29))) break;
 		free(*mime); *mime = NULL;
 	} while ((status >= 10 && status <= 19) || (status >= 30 && status <= 39 && ++redirs < 5));
 
 	sigaction(SIGINT, &old, NULL);
 
-	SSL_CTX_free(ctx);
+out:
+#ifdef GPLACES_USE_MBEDTLS
+	mbedtls_ctr_drbg_free(&ctr_drbg);
+	mbedtls_entropy_free(&entropy);
+	mbedtls_ssl_config_free(&conf);
+#else
+	if (ctx) SSL_CTX_free(ctx);
+#endif
 
 	if (redirs == 5) error("too many redirects from `%s`", sel->url);
 	return ret;
@@ -1307,8 +1411,10 @@ int main(int argc, char **argv) {
 	atexit(quit_client);
 	setlinebuf(stdout); /* if stdout is a file, flush after every line */
 
+#ifndef GPLACES_USE_MBEDTLS
 	SSL_library_init();
 	SSL_load_error_strings();
+#endif
 
 	interactive = isatty(STDOUT_FILENO);
 
