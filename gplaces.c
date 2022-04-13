@@ -596,7 +596,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 			if (!ask || !*meta) goto fail;
 			snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", meta);
 			if ((line = bestline(prompt)) == NULL) goto fail;
-			bestlineHistoryAdd(line);
+			if (interactive) bestlineHistoryAdd(line);
 			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK) { free(line); goto fail; }
 			free(line);
 			break;
@@ -913,8 +913,8 @@ static const Help gemini_help[] = {
 	{
 		"commands",
 		"alias         bookmarks     go            help          open\n" \
-		"quit          save          see           set           show\n" \
-		"subscriptions type"
+		"save          see           set           show          subscriptions\n" \
+		"type"
 	},
 	{
 		"help",
@@ -948,10 +948,6 @@ static const Help gemini_help[] = {
 		"GO <url>" \
 	},
 	{
-		"quit",
-		"QUIT" \
-	},
-	{
 		"save",
 		"SAVE <item-id>" \
 	},
@@ -981,12 +977,6 @@ static const Help gemini_help[] = {
 
 
 /*============================================================================*/
-static void cmd_quit(char *line) {
-	(void)line;
-	exit(EXIT_SUCCESS);
-}
-
-
 static void cmd_open(char *line) {
 	const char *url;
 	if ((url = next_token(&line)) == NULL || *url == '\0') return;
@@ -1131,7 +1121,6 @@ static void cmd_type(char *line) {
 
 
 static const Command gemini_commands[] = {
-	{ "quit", cmd_quit },
 	{ "open", cmd_open },
 	{ "go", cmd_open },
 	{ "show", cmd_show },
@@ -1202,15 +1191,16 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 
 static void shell() {
 	static char path[1024], command[1024];
-	const char *home;
+	const char *home = NULL;
 	char *line, *base;
 	Selector *to = NULL;
 
-	bestlineSetCompletionCallback(shell_name_completion);
-
-	if ((home = getenv("HOME")) != NULL) {
-		snprintf(path, sizeof(path), "%s/.gplaces_history", home);
-		bestlineHistoryLoad(path);
+	if (interactive) {
+		bestlineSetCompletionCallback(shell_name_completion);
+		if ((home = getenv("HOME")) != NULL) {
+			snprintf(path, sizeof(path), "%s/.gplaces_history", home);
+			bestlineHistoryLoad(path);
+		}
 	}
 
 	eval("open $HOME_CAPSULE", NULL);
@@ -1220,18 +1210,17 @@ static void shell() {
 		if ((to = find_selector(&menu, line)) != NULL) {
 			if (to->url) {
 				snprintf(command, sizeof(command), "open %s", to->url);
-				bestlineHistoryAdd(command);
-			} else bestlineHistoryAdd(line);
+				if (interactive) bestlineHistoryAdd(command);
+			} else if (interactive) bestlineHistoryAdd(line);
 			navigate(to);
 		} else {
 			eval(line, NULL);
-			bestlineHistoryAdd(line);
+			if (interactive) bestlineHistoryAdd(line);
 		}
 		free(base);
 	}
 
-	if (home != NULL) bestlineHistorySave(path);
-	bestlineHistoryFree();
+	if (interactive && home != NULL) bestlineHistorySave(path);
 }
 
 
