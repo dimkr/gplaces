@@ -23,10 +23,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
         with:
+          path: gplaces # mitigation for build failure after CVE-2022-24765 was mitigated
           submodules: recursive
           fetch-depth: 0
       - name: Build
         run: |
+          cd gplaces
           make
           make clean
           CFLAGS=-O3 make WITH_LIBMAGIC=1
