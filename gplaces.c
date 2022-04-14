@@ -88,7 +88,7 @@ static VariableList typehandlers = LIST_HEAD_INITIALIZER(typehandlers);
 static SelectorList bookmarks = SIMPLEQ_HEAD_INITIALIZER(bookmarks);
 static SelectorList subscriptions = SIMPLEQ_HEAD_INITIALIZER(subscriptions);
 static SelectorList menu = SIMPLEQ_HEAD_INITIALIZER(menu);
-static char prompt[256] = "(\33[35m\33[0m)> ";
+static char prompt[256] = "()> ";
 static int interactive;
 
 
