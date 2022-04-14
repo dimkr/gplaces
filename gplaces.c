@@ -595,8 +595,10 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 		case '1':
 			if (!ask || !*meta) goto fail;
 			snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", meta);
+			if (data[1] == '1') bestlineMaskModeEnable();
 			if ((line = bestline(prompt)) == NULL) goto fail;
-			if (interactive) bestlineHistoryAdd(line);
+			if (data[1] != '1' && interactive) bestlineHistoryAdd(line);
+			if (data[1] == '1') bestlineMaskModeDisable();
 			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK) { free(line); goto fail; }
 			free(line);
 			break;
