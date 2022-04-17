@@ -1158,8 +1158,8 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 }
 
 
-static void shell() {
-	static char path[1024], command[1024];
+static void shell(int argc, char **argv) {
+	static char path[1024];
 	const char *home = NULL;
 	char *line, *base;
 	Selector *to = NULL;
@@ -1172,13 +1172,13 @@ static void shell() {
 		}
 	}
 
+	if (optind < argc) eval(argv[optind], NULL);
+
 	for (;;) {
 		if ((line = base = bestline(prompt)) == NULL) break;
 		if ((to = find_selector(&menu, line)) != NULL) {
-			if (to->url) {
-				snprintf(command, sizeof(command), "open %s", to->url);
-				if (interactive) bestlineHistoryAdd(command);
-			} else if (interactive) bestlineHistoryAdd(line);
+			if (to->url && interactive) bestlineHistoryAdd(to->url);
+			else if (interactive) bestlineHistoryAdd(line);
 			navigate(to);
 		} else {
 			eval(line, NULL);
@@ -1192,7 +1192,7 @@ static void shell() {
 
 
 /*============================================================================*/
-static int load_config_file(const char *filename) {
+static int load_rc_file(const char *filename) {
 	long length;
 	FILE *fp = NULL;
 	char *data = NULL;
@@ -1216,36 +1216,36 @@ out:
 }
 
 
-static void load_config_files() {
+static void load_rc_files(const char *rcfile) {
 	static char buffer[1024];
 	const char *home;
 
+	if (rcfile) { load_rc_file(rcfile); return; }
 	if ((home = getenv("HOME")) != NULL) {
-		snprintf(buffer, sizeof(buffer), "%s/.gplaces.conf", home);
-		if (load_config_file(buffer)) return;
+		snprintf(buffer, sizeof(buffer), "%s/.gplacesrc", home);
+		if (load_rc_file(buffer)) return;
 	}
-	load_config_file(CONFDIR"/gplaces.conf");
+	load_rc_file(CONFDIR"/gplacesrc");
 }
 
 
-static void parse_arguments(int argc, char **argv) {
+static const char *parse_arguments(int argc, char **argv) {
+	const char *rcfile = NULL;
 	int ch;
-	while ((ch = getopt(argc, argv, "c:")) != -1) {
+	while ((ch = getopt(argc, argv, "r:")) != -1) {
 		switch (ch) {
-			case 'c':
-				load_config_file(optarg);
+			case 'r':
+				rcfile = optarg;
 				break;
+
 			default:
 				fprintf(stderr,
-					"usage: gplaces [-c config-file] [url]\n"
+					"usage: gplaces [-r rc-file] [url]\n"
 				);
 				exit(EXIT_SUCCESS);
-				break;
 		}
 	}
-
-	argc -= optind; argv += optind;
-	if (argc > 0) set_var(&variables, "HOME_CAPSULE", "%s", argv[0]);
+	return rcfile;
 }
 
 
@@ -1269,8 +1269,7 @@ int main(int argc, char **argv) {
 
 	interactive = isatty(STDOUT_FILENO);
 
-	load_config_files();
-	parse_arguments(argc, argv);
+	load_rc_files(parse_arguments(argc, argv));
 
 	if (interactive) puts(
 		"gplaces - 0.16.0  Copyright (C) 2022  Dima Krasner\n" \
@@ -1282,7 +1281,7 @@ int main(int argc, char **argv) {
 		"Type `help` for help.\n" \
 	);
 
-	shell();
+	shell(argc, argv);
 
 	return 0;
 }

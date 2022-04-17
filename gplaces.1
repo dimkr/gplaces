@@ -3,7 +3,7 @@
 gplaces - a Gemini client
 .SH SYNOPSIS
 .B gplaces
-[-c config-file] [url]
+[-r rc-file] [url]
 .SH DESCRIPTION
 A simple terminal based Gemini client.
 .SH COMMAND SYNTAX
@@ -152,8 +152,8 @@ A format string can have the following formating options:
 .RE
 .SH OPTIONS
 .TP
-.B -c
-Specifies the configuration file to use. If unspecified, gplaces tries ~/.gplaces.conf and /etc/gplaces.conf.
+.B -r
+Specifies the initialization file to use. If unspecified, gplaces tries ~/.gplacesrc and /etc/gplacesrc.
 .SH CONFIGURATION
 .TP
 .B mkcert

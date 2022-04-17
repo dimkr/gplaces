@@ -1,5 +1,5 @@
-# gplaces Gemini client configuration example
-# place this file in ~/.gplaces.conf or /etc/gplaces.conf
+# gplaces Gemini client initialization example
+# place this file in ~/.gplacesrc or /etc/gplacesrc
 
 # define default handlers
 type https "xdg-open %u"
@@ -8,6 +8,7 @@ type "text/plain; charset=utf-8" "xdg-open %f"
 # define some aliases
 alias feed		"subscriptions"
 alias search	"geminispace.info/search"
+alias home		"gemini.circumlunar.space"
 
 # define some bookmarks
 bookmarks "CAPCOM"		gemini.circumlunar.space/capcom
@@ -25,5 +26,3 @@ set mkcert "openssl req -new -subj /CN=`whoami` -x509 -newkey ec -pkeyopt ec_par
 
 set pager "less -r"							# pager for long text; change to cat to disable paging
 set timeout 15								# download timeout
-
-gemini.circumlunar.space					# open this URL on startup

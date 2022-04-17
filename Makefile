@@ -16,7 +16,7 @@ ifeq ($(WITH_LIBMAGIC),1)
 endif
 OBJ = bestline/bestline.o gplaces.o
 BIN = gplaces
-CONF = gplaces.conf
+CONF = gplacesrc
 MAN = gplaces.1
 ICON = gplaces.svg
 APP = gplaces.desktop
