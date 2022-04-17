@@ -763,9 +763,10 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 					if (p == sel->repr) {
 						extra = 3 + ndigits(sel->index);
 						if (out + extra > length) out -= extra;
-						fprintf(fp, "\33[4;36m(\33[1m%d) %.*s\33[0m\n", sel->index, out, p);
-					} else printf("\33[4;36m%.*s\33[0m\n", out, p);
-					break;
+						fprintf(fp, "\33[4;36m(%d)\33[0;39m %.*s\n", sel->index, out, p);
+						break;
+					}
+					/* fall through */
 				case '#':
 				case 'i': fprintf(fp, "%.*s\n", out, p); break;
 				case '`':
