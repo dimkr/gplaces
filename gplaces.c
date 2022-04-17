@@ -498,7 +498,7 @@ static int write_all(FILE *fp, const char *buffer, size_t length) {
 static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int ask) {
 	struct addrinfo hints, *result, *it;
 	static char request[1024];
-	char *data = NULL, *crlf, *meta, *line;
+	char *data = NULL, *crlf, *meta, *line, *url;
 	struct timeval tv = {0};
 	size_t total, chunks = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
 	int timeout, fd = -1, received, ret = 40;
@@ -589,7 +589,8 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 			if ((line = bestline(prompt)) == NULL) goto fail;
 			if (data[1] != '1' && interactive) bestlineHistoryAdd(line);
 			if (data[1] == '1') bestlineMaskModeDisable();
-			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK) { free(line); goto fail; }
+			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) { free(line); goto fail; }
+			curl_free(sel->url); sel->url = url;
 			free(line);
 			break;
 
