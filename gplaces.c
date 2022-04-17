@@ -427,51 +427,45 @@ static void execute_handler(const char *handler, const char *filename, Selector 
 
 
 /*============================================================================*/
-static int tofu(X509 *cert) {
-	static char hosts[1024], buffer[2048], namebuf[1024];
-	X509_NAME *name;
+static int tofu(X509 *cert, const char *host) {
+	static char hosts[1024], buffer[1024 + 1 + EVP_MAX_MD_SIZE * 2 + 2];
+	static unsigned char md[EVP_MAX_MD_SIZE];
+	size_t hlen;
 	const char *home;
-	EVP_PKEY *pub;
-	char *p, *hex, *line;
-	size_t len, hlen;
+	char *hex, *line;
 	FILE *fp;
 	BIGNUM *bn;
-	int trust = 1, namelen;
+	unsigned int mdlen;
+	int trust = 1;
 
-	if ((name = X509_get_subject_name(cert)) == NULL) return 0;
-	if ((namelen = X509_NAME_get_text_by_NID(name, NID_commonName, namebuf, sizeof(namebuf))) <= 0) return 0;
+	if (X509_digest(cert, EVP_sha512(), md, &mdlen) == 0) return 0;
 
-	if ((fp = open_memstream(&p, &len)) == NULL) return 0;
-	if ((pub = X509_get_pubkey(cert)) == NULL) return 0;
-	i2d_PUBKEY_fp(fp, pub);
-	fclose(fp);
-	bn = BN_bin2bn((const unsigned char *)p, len, NULL);
-	free(p);
+	bn = BN_bin2bn(md, mdlen, NULL);
 	if (!bn) return 0;
 
 	hex = BN_bn2hex(bn);
 	BN_free(bn);
 	if (!hex) return 0;
-	hlen = strlen(hex);
+
+	hlen = strlen(host);
 
 	if ((home = getenv("HOME")) == NULL) return 0;
 	snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
 	if ((fp = fopen(hosts, "r")) != NULL) {
 		while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
-			if (strncmp(line, namebuf, namelen)) continue;
-			if (line[namelen] != ' ') continue;
-			trust = strncmp(&line[namelen + 1], hex, hlen) == 0 && line[namelen + 1 + hlen] == '\n';
+			if (strncmp(line, host, hlen)) continue;
+			if (line[hlen] != ' ') continue;
+			trust = strncmp(&line[hlen + 1], hex, hlen) == 0 && line[hlen + 1 + mdlen * 2] == '\n';
 			goto out;
 		}
 
 		fclose(fp); fp = NULL;
 	}
 
-	if (trust) trust = (fp = fopen(hosts, "a")) != NULL && fprintf(fp, "%s %s\n", namebuf, hex) > 0;
+	if (trust) trust = (fp = fopen(hosts, "a")) != NULL && fprintf(fp, "%s %s\n", host, hex) > 0;
 
 out:
 	if (fp) fclose(fp);
-	EVP_PKEY_free(pub);
 	OPENSSL_free(hex);
 	return trust;
 }
@@ -546,7 +540,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 		goto fail;
 	}
 
-	if (!tofu(cert)) {
+	if (!tofu(cert, sel->host)) {
 		error("cannot establish secure connection to `%s`:`%s`: certificate has changed", sel->host, sel->port);
 		goto fail;
 	}
