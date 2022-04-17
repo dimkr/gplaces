@@ -202,13 +202,14 @@ static Selector *new_selector(const char type, const char *raw) {
 	if (new == NULL) panic("cannot allocate new selector");
 	new->type = type;
 	new->raw = str_copy(raw);
+	new->repr = new->raw;
 	return new;
 }
 
 
 static void free_selector(Selector *sel) {
 	free(sel->raw);
-	free(sel->repr);
+	if (sel->repr != sel->raw) free(sel->repr);
 	curl_free(sel->scheme);
 	curl_free(sel->host);
 	curl_free(sel->port);
@@ -292,34 +293,23 @@ static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 		if (len >= 2 && line[len - 2] == '\r') line[len - 2] = '\0';
 		else if (line[len - 1] == '\n') line[len - 1] = '\0';
 
-		if (pre) {
+		if (pre)
 			sel = new_selector('`', line);
-			sel->repr = str_copy(line);
-		} else if (line[0] == '=' && line[1] == '>') {
+		else if (line[0] == '=' && line[1] == '>') {
 			sel = new_selector('l', line);
 			line += 2;
 			url = str_next(&line, " \t\r\n");
 			if (!parse_url(from, sel, url)) { free_selector(sel); continue; }
-			if (*line) {
-				free(sel->repr);
-				sel->repr = str_copy(*line ? line : url);
-			} else sel->repr = str_copy(url);
+			if (*line) sel->repr = str_copy(line);
+			else sel->repr = str_copy(url);
 			sel->index = index++;
-		} else if (*line == '#') {
+		} else if (*line == '#')
 			sel = new_selector('#', line);
-			sel->repr = str_copy(line);
-		} else if (*line == '>') {
-			sel = new_selector('>', line);
+		else if (*line == '>' || (line[0] == '*' && line[1] == ' ')) {
+			sel = new_selector(*line, line);
 			str_next(&line, " \t\r\n");
 			sel->repr = str_copy(line);
-		} else if (line[0] == '*' && line[1] == ' ') {
-			sel = new_selector('*', line);
-			str_next(&line, " \t\r\n");
-			sel->repr = str_copy(line);
-		} else {
-			sel = new_selector('i', line);
-			sel->repr = str_copy(line);
-		}
+		} else sel = new_selector('i', line);
 
 		SIMPLEQ_INSERT_TAIL(&list, sel, next);
 	}
@@ -1033,7 +1023,6 @@ static void cmd_bookmarks(char *line) {
 		if (url) {
 			Selector *sel = new_selector('l', url);
 			if (parse_url(NULL, sel, url)) {
-				free(sel->repr);
 				sel->repr = str_copy(name);
 				sel->index = 1;
 				SIMPLEQ_FOREACH(it, &bookmarks, next) ++sel->index;
@@ -1054,11 +1043,8 @@ static void cmd_subscriptions(char *line) {
 	char *url = next_token(&line);
 	if (url) {
 		Selector *sel = new_selector('l', url);
-		if (parse_url(NULL, sel, url)) {
-			free(sel->repr);
-			sel->repr = str_copy(url);
-			SIMPLEQ_INSERT_TAIL(&subscriptions, sel, next);
-		}
+		if (parse_url(NULL, sel, url)) SIMPLEQ_INSERT_TAIL(&subscriptions, sel, next);
+		else free_selector(sel);
 	} else {
 		t = time(NULL);
 		tm = gmtime(&t);
@@ -1073,20 +1059,19 @@ static void cmd_subscriptions(char *line) {
 			copy->index = index++;
 
 			SIMPLEQ_FOREACH(it, &list, next) {
-				if (it->type == '#' && (it->raw[1] == ' ' ||  it->raw[1] == '\t')) {
+				if (it->type == '#' && (it->raw[1] == ' ' || it->raw[1] == '\t')) {
 					copy->repr = str_copy(&it->repr[2]);
 					break;
 				}
 			}
 
-			if (!copy->repr) copy->repr = str_copy(sel->repr);
 			SIMPLEQ_INSERT_TAIL(&feed, copy, next);
 
 			SIMPLEQ_FOREACH(it, &list, next) {
 				if (it->type == 'l' && !strncmp(it->repr, ts, 10)) {
 					copy = new_selector('l', it->raw);
-					copy->repr = str_copy(it->repr);
 					if (!parse_url(NULL, copy, it->url)) { free_selector(copy); continue; }
+					copy->repr = str_copy(it->repr);
 					copy->index = index++;
 					SIMPLEQ_INSERT_TAIL(&feed, copy, next);
 				}
