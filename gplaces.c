@@ -753,7 +753,7 @@ static void print_raw(FILE *fp, SelectorList *list, const char *filter) {
 static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 	regex_t re;
 	Selector *sel;
-	int length, out, rem;
+	int length, out, rem, extra;
 	const char *p;
 
 	if (!interactive) return print_raw(fp, list, filter);
@@ -770,7 +770,8 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 			switch (sel->type) {
 				case 'l':
 					if (p == sel->repr) {
-						if (out == length) out -= 3 + ndigits(sel->index);
+						extra = 3 + ndigits(sel->index);
+						if (out + extra > length) out -= extra;
 						fprintf(fp, "\33[4;36m(\33[1m%d) %.*s\33[0m\n", sel->index, out, p);
 					} else printf("\33[4;36m%.*s\33[0m\n", out, p);
 					break;
@@ -781,11 +782,11 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 					fprintf(fp, "%s\n", p);
 					break;
 				case '>':
-					if (out == length) out -= 2;
+					if (out + 2 > length) out -= 2;
 					fprintf(fp, "%c %.*s\n", sel->type, out, p);
 					break;
 				default:
-					if (out == length) out -= 2;
+					if (out + 2 > length) out -= 2;
 					if (p == sel->repr) fprintf(fp, "%c %.*s\n", sel->type, out, p);
 					else fprintf(fp, "  %.*s\n", out, p);
 			}
