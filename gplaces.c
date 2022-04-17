@@ -861,7 +861,7 @@ static void navigate(Selector *to) {
 	} else new = download_to_temp(to, 1, 0);
 
 	if (SIMPLEQ_EMPTY(&new)) return;
-	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url);
+	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + 11);
 	free_selectors(&menu);
 	menu = new;
 	return show_gemtext(&new, NULL, 1);
