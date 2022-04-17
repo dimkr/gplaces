@@ -154,10 +154,9 @@ If no <name> is given it will show all type handlers. When <name> is given it wi
 Examples:
 .RS
 type text/plain "less %f" # create a type handler for text files
-.RE
-Format string:
+.SH FORMAT STRINGS
+A format string can have the following formating options:
 .RS
-The <value> for type handlers can have the following formating options:
 .IP
 %% - simply a `%`
 .IP
@@ -180,6 +179,19 @@ The <value> for type handlers can have the following formating options:
 .TP
 .B -c
 Specifies the configuration file to use. If unspecified, gplaces tries ~/.gplaces.conf and /etc/gplaces.conf.
+.SH CONFIGURATION
+.TP
+.B mkcert
+Specifies a client certificates generation command, as a format string. If unspecified or empty, automatic generation of client certificates is disabled.
+.TP
+.B pager
+Specifies a pager used to display long pages. If unspecified, the default is the value of the PAGER environment variable, if set, otherwise "less -r". If set to "cat", paging is disabled.
+.TP
+.B timeout
+Specifies the download timeout. If unspecified or invalid, the default is 15 seconds.
+.TP
+.B home_capsule
+Specifies a URL to open on startup. If empty, no URL is opened on startup.
 .SH AUTHOR
 .P
 Dima Krasner (dima@dimakrasner.com)

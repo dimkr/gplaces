@@ -33,6 +33,7 @@
 #include <sys/ioctl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -497,9 +498,10 @@ static int write_all(FILE *fp, const char *buffer, size_t length) {
 
 static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int ask) {
 	struct addrinfo hints, *result, *it;
-	static char path[1024], request[1024];
+	static char crtpath[1024], keypath[1024], request[1024];
+	struct stat stbuf;
 	char *data = NULL, *crlf, *meta, *line, *url;
-	const char *home;
+	const char *home, *mkcert;
 	struct timeval tv = {0};
 	size_t total, chunks = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
 	int timeout, fd = -1, received, ret = 40;
@@ -602,11 +604,10 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 
 		case '6':
 			if ((home = getenv("HOME")) == NULL) goto fail;
-			snprintf(path, sizeof(path), "%s/.gplaces_%s.crt", home, sel->host);
-			if (SSL_CTX_use_certificate_file(ctx, path, SSL_FILETYPE_PEM)) {
-				snprintf(path, sizeof(path), "%s/.gplaces_%s.key", home, sel->host);
-				if (SSL_CTX_use_PrivateKey_file(ctx, path, SSL_FILETYPE_PEM)) goto out;
-			}
+			snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s.crt", home, sel->host);
+			snprintf(keypath, sizeof(keypath), "%s/.gplaces_%s.key", home, sel->host);
+			if (stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT && (mkcert = set_var(&variables, "mkcert", NULL)) != NULL && *mkcert) execute_handler(mkcert, "", sel);
+			if (SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM) && SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM)) goto out;
 			error("failed to load client certificate for `%s`: %s", sel->host, ERR_reason_error_string(ERR_get_error()));
 			ret = 50;
 			goto fail;

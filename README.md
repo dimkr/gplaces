@@ -24,7 +24,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 	- libcurl
 	- libmagic (optional)
 - SSH-style TOFU with ~/.gplaces_hosts
-- client certificates support via ~/.gplaces_$host.{crt,key}
+- client certificates support via ~/.gplaces_$host.{crt,key}, with optional auto-generation using openssl(1)
 - ~internal~ configurable external pager for text & menus
 - support for non-interactive operation
 - about *1k lines* of *C* code
@@ -46,7 +46,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|241|36|1046
+C|1|241|36|1047
 
 ## Help
 Just type `help` when the client is running.
