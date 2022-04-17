@@ -357,13 +357,6 @@ static char *read_line(const char *fmt, ...) {
 }
 
 
-static int get_terminal_height() {
-	struct winsize wz;
-	ioctl(STDOUT_FILENO, TIOCGWINSZ, &wz);
-	return wz.ws_row - 2; /* substract 2 lines (1 for tmux etc., 1 for the prompt) */
-}
-
-
 static int get_terminal_width() {
 	struct winsize wz;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &wz);
@@ -830,14 +823,8 @@ static void page_gemtext(SelectorList *list) {
 }
 
 
-static void show_gemtext(SelectorList *list, const char *filter) {
-	int lines = 0, height;
-	Selector *it;
-	if (!filter && interactive) {
-		SIMPLEQ_FOREACH(it, list, next) ++lines;
-		height = get_terminal_height();
-		if (lines > height) page_gemtext(list);
-	}
+static void show_gemtext(SelectorList *list, const char *filter, int page) {
+	if (page && !filter && interactive) page_gemtext(list);
 	print_gemtext(stdout, list, filter);
 }
 
@@ -877,7 +864,7 @@ static void navigate(Selector *to) {
 	snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", to->url);
 	free_selectors(&menu);
 	menu = new;
-	return show_gemtext(&new, NULL);
+	return show_gemtext(&new, NULL, 1);
 
 handle:
 	if (handler) execute_handler(handler, to->url, to);
@@ -994,7 +981,7 @@ static void cmd_open(char *line) {
 
 
 static void cmd_show(char *line) {
-	show_gemtext(&menu, next_token(&line));
+	show_gemtext(&menu, next_token(&line), 1);
 }
 
 
@@ -1042,7 +1029,7 @@ static void cmd_bookmarks(char *line) {
 				SIMPLEQ_FOREACH(it, &bookmarks, next) ++sel->index;
 				SIMPLEQ_INSERT_TAIL(&bookmarks, sel, next);
 			}
-		} else show_gemtext(&bookmarks, name);
+		} else show_gemtext(&bookmarks, name, 0);
 	}
 }
 
@@ -1096,7 +1083,7 @@ static void cmd_subscriptions(char *line) {
 		if (SIMPLEQ_EMPTY(&feed)) return;
 		free_selectors(&menu);
 		menu = feed;
-		show_gemtext(&feed, NULL);
+		show_gemtext(&feed, NULL, 0);
 	}
 }
 
