@@ -6,20 +6,17 @@ type https "xdg-open %u"
 type "text/plain; charset=utf-8" "xdg-open %f"
 
 # define some aliases
-alias feed		"subscriptions"
-alias search	"geminispace.info/search"
-alias home		"gemini.circumlunar.space"
-
-# define some bookmarks
-bookmarks "CAPCOM"		gemini.circumlunar.space/capcom
-bookmarks "Spacewalk"	rawtext.club/~sloum/spacewalk.gmi
-bookmarks "gmisub"		calcuode.com/gmisub-aggregate.gmi
+alias feed			subscriptions
+alias search		geminispace.info/search
+alias home			gemini.circumlunar.space
+alias capcom		gemini.circumlunar.space/capcom
+alias spacewalk		rawtext.club/~sloum/spacewalk.gmi
+alias gmisub		calcuode.com/gmisub-aggregate.gmi
 
 # subscribe to some pages
-subscriptions rawtext.club/~sloum/spacewalk.gmi
-subscriptions midnight.pub
-subscriptions gemini.conman.org/boston.gemini
-subscriptions drewdevault.com
+subscriptions	rawtext.club/~sloum/spacewalk.gmi
+subscriptions	midnight.pub
+subscriptions	gemini.conman.org/boston.gemini
 
 # define a generator for ~/.gplaces_%h.crt and ~/.gplaces_%h.key
 set mkcert "openssl req -new -subj /CN=`whoami` -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -days 1825 -nodes -out ~/.gplaces_%h.crt -keyout ~/.gplaces_%h.key"

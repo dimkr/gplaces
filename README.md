@@ -11,11 +11,11 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 ## Overview
 - configurable MIME type handlers
 - "powerful" shell
-- bookmarks
+- ~bookmarks~
 - subscriptions
 	- only [simple subscriptions](https://gemini.circumlunar.space/docs/companion/subscription.gmi) are supported, to avoid [XML parsing](https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=xml)
 - variables
-- command aliases
+- command aliases, can be used to define bookmarks
 - sh-style history with ~/.gplaces_history
 - VT100 compatible with ANSI escape sequences
 - no exotic external dependencies, no NIH
@@ -46,7 +46,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|238|36|1014
+C|1|236|36|981
 
 ## Help
 Just type `help` when the client is running.

@@ -86,7 +86,6 @@ typedef struct Help {
 static VariableList variables = LIST_HEAD_INITIALIZER(variables);
 static VariableList aliases = LIST_HEAD_INITIALIZER(aliases);
 static VariableList typehandlers = LIST_HEAD_INITIALIZER(typehandlers);
-static SelectorList bookmarks = SIMPLEQ_HEAD_INITIALIZER(bookmarks);
 static SelectorList subscriptions = SIMPLEQ_HEAD_INITIALIZER(subscriptions);
 static SelectorList menu = SIMPLEQ_HEAD_INITIALIZER(menu);
 static char prompt[256] = "\33[35m>\33[0m ";
@@ -891,17 +890,9 @@ static const Help gemini_help[] = {
 		"Sebastian Steinhauer <s.steinhauer@yahoo.de>" \
 	},
 	{
-		"back",
-		"BACK" \
-	},
-	{
-		"bookmarks",
-		"BOOKMARKS [<filter>]/[<item-id>]" \
-	},
-	{
 		"commands",
-		"alias         bookmarks     help          save          see\n"
-		"set           show          subscriptions type"
+		"alias         help          save          see           set\n"
+		"show          subscriptions type"
 	},
 	{
 		"help",
@@ -946,11 +937,6 @@ static const Help gemini_help[] = {
 		"type",
 		"TYPE [<name>] [<value>]" \
 	},
-	{
-		"variables",
-		"HOME_CAPSULE - the Gemini URL which will be opened on startup\n" \
-		"DOWNLOAD_DIRECTORY - the directory which will be default for downloads" \
-	},
 	{ NULL, NULL }
 };
 
@@ -988,25 +974,6 @@ static void cmd_help(char *line) {
 		if (i % 5 == 0) puts("");
 	}
 	puts("");
-}
-
-
-static void cmd_bookmarks(char *line) {
-	Selector *it, *to = find_selector(&bookmarks, line);
-	if (to != NULL) navigate(to);
-	else {
-		char *name = next_token(&line);
-		char *url = next_token(&line);
-		if (url) {
-			Selector *sel = new_selector('l', url);
-			if (parse_url(NULL, sel, url)) {
-				sel->repr = str_copy(name);
-				sel->index = 1;
-				SIMPLEQ_FOREACH(it, &bookmarks, next) ++sel->index;
-				SIMPLEQ_INSERT_TAIL(&bookmarks, sel, next);
-			}
-		} else show_gemtext(&bookmarks, name, 0);
-	}
 }
 
 
@@ -1089,7 +1056,6 @@ static const Command gemini_commands[] = {
 	{ "show", cmd_show },
 	{ "save", cmd_save },
 	{ "help", cmd_help },
-	{ "bookmarks", cmd_bookmarks },
 	{ "subscriptions", cmd_subscriptions },
 	{ "set", cmd_set },
 	{ "see", cmd_see },
@@ -1253,7 +1219,6 @@ static void quit_client() {
 	free_variables(&variables);
 	free_variables(&aliases);
 	free_variables(&typehandlers);
-	free_selectors(&bookmarks);
 	free_selectors(&subscriptions);
 	free_selectors(&menu);
 	if (interactive) puts("\33[0m");
