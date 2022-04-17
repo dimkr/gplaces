@@ -8,22 +8,6 @@ gplaces - a Gemini client
 A simple terminal based Gemini client.
 .SH COMMAND SYNTAX
 .TP
-.B ALIAS
-.RS
-Syntax:
-.RS
-ALIAS [<name>] [<value>]
-.RE
-Description:
-.RS
-If no <name> is given it will show all aliases. When <name> is given it will show this specific alias. When both <name> and <value> are defined as new alias is created.
-.RE
-Examples:
-.RS
-alias b back # create a shorthand for back
-.RE
-.RE
-.TP
 .B HELP
 .RS
 Syntax:
@@ -95,20 +79,6 @@ Description:
 Subscribes to <url>. If no <url> is specified, it will show the list of subscriptions and the recent entries in each.
 .RE
 .RE
-.TP
-.B TYPE
-.RS
-Syntax:
-.RS
-TYPE [<name>] [<value>]
-.RE
-Description:
-.RS
-If no <name> is given it will show all type handlers. When <name> is given it will show this specific type handler. If <name> and <value> are defined a new type handler will be installed.
-.RE
-Examples:
-.RS
-type text/plain "less %f" # create a type handler for text files
 .SH FORMAT STRINGS
 A format string can have the following formating options:
 .RS

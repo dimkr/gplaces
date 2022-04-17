@@ -84,8 +84,6 @@ typedef struct Help {
 
 /*============================================================================*/
 static VariableList variables = LIST_HEAD_INITIALIZER(variables);
-static VariableList aliases = LIST_HEAD_INITIALIZER(aliases);
-static VariableList typehandlers = LIST_HEAD_INITIALIZER(typehandlers);
 static SelectorList subscriptions = SIMPLEQ_HEAD_INITIALIZER(subscriptions);
 static SelectorList menu = SIMPLEQ_HEAD_INITIALIZER(menu);
 static char prompt[256] = "\33[35m>\33[0m ";
@@ -365,7 +363,7 @@ static int get_terminal_width() {
 
 /*============================================================================*/
 static const char *find_mime_handler(const char *mime) {
-	const char *handler = set_var(&typehandlers, mime, NULL);
+	const char *handler = set_var(&variables, mime, NULL);
 	if (!handler)
 		fprintf(stderr, "no handler for `%s`\n", mime);
 	return handler;
@@ -881,18 +879,14 @@ static void edit_variable(VariableList *vars, char *line) {
 /*============================================================================*/
 static const Help gemini_help[] = {
 	{
-		"alias",
-		"ALIAS [<name>] [<value>]" \
-	},
-	{
 		"authors",
 		"Dima Krasner <dima@dimakrasner.com>\n" \
 		"Sebastian Steinhauer <s.steinhauer@yahoo.de>" \
 	},
 	{
 		"commands",
-		"alias         help          save          see           set\n"
-		"show          subscriptions type"
+		"help          save          see           set           show\n" \
+		"subscriptions"
 	},
 	{
 		"help",
@@ -1042,16 +1036,6 @@ static void cmd_see(char *line) {
 }
 
 
-static void cmd_alias(char *line) {
-	edit_variable(&aliases, line);
-}
-
-
-static void cmd_type(char *line) {
-	edit_variable(&typehandlers, line);
-}
-
-
 static const Command gemini_commands[] = {
 	{ "show", cmd_show },
 	{ "save", cmd_save },
@@ -1059,8 +1043,6 @@ static const Command gemini_commands[] = {
 	{ "subscriptions", cmd_subscriptions },
 	{ "set", cmd_set },
 	{ "see", cmd_see },
-	{ "alias", cmd_alias },
-	{ "type", cmd_type },
 	{ NULL, NULL }
 };
 
@@ -1070,7 +1052,7 @@ static void eval(const char *input, const char *filename) {
 	static int nested =  0;
 	const Command *cmd;
 	Selector *to;
-	char *str, *copy, *line, *token, *alias;
+	char *str, *copy, *line, *token, *var;
 	int line_no;
 
 	if (nested >= 10) {
@@ -1089,8 +1071,8 @@ static void eval(const char *input, const char *filename) {
 				}
 			}
 			if (cmd->name == NULL) {
-				if ((alias = set_var(&aliases, token, NULL)) != NULL) {
-					eval(alias, token);
+				if ((var = set_var(&variables, token, NULL)) != NULL) {
+					eval(var, token);
 					goto next;
 				}
 			}
@@ -1112,15 +1094,15 @@ next:
 static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	static int len;
 	const Command *cmd;
-	const Variable *alias;
+	const Variable *var;
 
 	len = strlen(text);
 
 	for (cmd = gemini_commands; cmd->name; ++cmd)
 		if (!strncasecmp(cmd->name, text, len)) bestlineAddCompletion(lc, cmd->name);
 
-	LIST_FOREACH(alias, &aliases, next)
-		if (!strncasecmp(alias->name, text, len)) bestlineAddCompletion(lc, alias->name);
+	LIST_FOREACH(var, &variables, next)
+		if (!strncasecmp(var->name, text, len)) bestlineAddCompletion(lc, var->name);
 }
 
 
@@ -1217,8 +1199,6 @@ static const char *parse_arguments(int argc, char **argv) {
 
 static void quit_client() {
 	free_variables(&variables);
-	free_variables(&aliases);
-	free_variables(&typehandlers);
 	free_selectors(&subscriptions);
 	free_selectors(&menu);
 	if (interactive) puts("\33[0m");

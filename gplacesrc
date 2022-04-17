@@ -2,16 +2,16 @@
 # place this file in ~/.gplacesrc or /etc/gplacesrc
 
 # define default handlers
-type https							"xdg-open %u"
-type "text/plain; charset=utf-8"	"xdg-open %f"
+set https							"xdg-open %u"
+set "text/plain; charset=utf-8"		"xdg-open %f"
 
 # define some aliases
-alias feed							subscriptions
-alias search						geminispace.info/search
-alias home							gemini.circumlunar.space
-alias capcom						gemini.circumlunar.space/capcom
-alias spacewalk						rawtext.club/~sloum/spacewalk.gmi
-alias gmisub						calcuode.com/gmisub-aggregate.gmi
+set feed							subscriptions
+set search							geminispace.info/search
+set home							gemini.circumlunar.space
+set capcom							gemini.circumlunar.space/capcom
+set spacewalk						rawtext.club/~sloum/spacewalk.gmi
+set gmisub							calcuode.com/gmisub-aggregate.gmi
 
 # subscribe to some pages
 subscriptions						rawtext.club/~sloum/spacewalk.gmi
