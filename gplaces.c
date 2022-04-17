@@ -1172,8 +1172,6 @@ static void shell() {
 		}
 	}
 
-	eval("$HOME_CAPSULE", NULL);
-
 	for (;;) {
 		if ((line = base = bestline(prompt)) == NULL) break;
 		if ((to = find_selector(&menu, line)) != NULL) {
