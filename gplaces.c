@@ -590,17 +590,14 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 			goto out;
 
 		case '6':
-			if (ask) {
-				if ((home = getenv("HOME")) == NULL) goto fail;
-				snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s.crt", home, sel->host);
-				snprintf(keypath, sizeof(keypath), "%s/.gplaces_%s.key", home, sel->host);
-				if (stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT && (mkcert = set_var(&variables, "mkcert", NULL)) != NULL && *mkcert) execute_handler(mkcert, "", sel);
-				if (SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM) && SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM)) goto out;
-				error("failed to load client certificate for `%s`: %s", sel->host, ERR_reason_error_string(ERR_get_error()));
-				ret = 50;
-				goto fail;
-			}
-			/* fall through */
+			if ((home = getenv("HOME")) == NULL) goto fail;
+			snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s.crt", home, sel->host);
+			snprintf(keypath, sizeof(keypath), "%s/.gplaces_%s.key", home, sel->host);
+			if (ask && stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT && (mkcert = set_var(&variables, "mkcert", NULL)) != NULL && *mkcert) execute_handler(mkcert, "", sel);
+			if (SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM) && SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM)) goto out;
+			error("failed to load client certificate for `%s`: %s", sel->host, ERR_reason_error_string(ERR_get_error()));
+			ret = 50;
+			goto fail;
 
 		default:
 			error("failed to download `%s`: %s", sel->url, *meta ? meta : data);
@@ -657,7 +654,7 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	do {
 		status = do_download(sel, ctx, fp, mime, ask);
 		if ((ret = (status >= 20 && status <= 29))) break;
-	} while ((status >= 10 && status <= 19) || (ask && status >= 60 && status <= 69 && ++needcert == 1) || (status >= 30 && status <= 39 && ++redirs < 5));
+	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69 && ++needcert == 1) || (status >= 30 && status <= 39 && ++redirs < 5));
 
 	sigaction(SIGINT, &old, NULL);
 
