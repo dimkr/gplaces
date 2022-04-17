@@ -855,7 +855,7 @@ static void navigate(Selector *to) {
 	} else if (strcmp(to->scheme, "gemini")) {
 		handler = find_mime_handler(to->scheme);
 		goto handle;
-	} else new = download_to_temp(to, 1, 0);
+	} else new = download_to_temp(to, interactive, 0);
 
 	if (SIMPLEQ_EMPTY(&new)) return;
 	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + 9);
