@@ -927,10 +927,6 @@ static const Help gemini_help[] = {
 		"show",
 		"SHOW [<filter>]" \
 	},
-	{
-		"type",
-		"TYPE [<name>] [<value>]" \
-	},
 	{ NULL, NULL }
 };
 
