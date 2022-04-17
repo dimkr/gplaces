@@ -762,7 +762,7 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 		rem = (int)strlen(sel->repr);
 		if (rem == 0) { fputc('\n', fp); continue; }
 		for (p = sel->repr; rem > 0; rem -= out, p += out) {
-			out = rem < length ? rem : length;
+			out = rem <= length ? rem : length;
 			switch (sel->type) {
 				case 'l':
 					if (p == sel->repr) {
