@@ -497,8 +497,9 @@ static int write_all(FILE *fp, const char *buffer, size_t length) {
 
 static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int ask) {
 	struct addrinfo hints, *result, *it;
-	static char request[1024];
+	static char path[1024], request[1024];
 	char *data = NULL, *crlf, *meta, *line, *url;
+	const char *home;
 	struct timeval tv = {0};
 	size_t total, chunks = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
 	int timeout, fd = -1, received, ret = 40;
@@ -592,15 +593,27 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) { free(line); goto fail; }
 			curl_free(sel->url); sel->url = url;
 			free(line);
-			break;
+			goto out;
 
 		case '3':
 			if (!*meta) goto fail;
 			if (curl_url_set(sel->cu, CURLUPART_URL, meta, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK) goto fail;
-			break;
+			goto out;
+
+		case '6':
+			if ((home = getenv("HOME")) == NULL) goto fail;
+			snprintf(path, sizeof(path), "%s/.gplaces_%s.crt", home, sel->host);
+			if (SSL_CTX_use_certificate_file(ctx, path, SSL_FILETYPE_PEM)) {
+				snprintf(path, sizeof(path), "%s/.gplaces_%s.key", home, sel->host);
+				if (SSL_CTX_use_PrivateKey_file(ctx, path, SSL_FILETYPE_PEM)) goto out;
+			}
+			error("failed to load client certificate for `%s`: %s", sel->host, ERR_reason_error_string(ERR_get_error()));
+			ret = 50;
+			goto fail;
 
 		default:
 			error("failed to download `%s`: %s", sel->url, *meta ? meta : data);
+			goto out;
 	}
 
 	for (;;) {
@@ -616,10 +629,9 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	}
 	if (total > 2048 && interactive) fputc('\n', stderr);
 
-	SSL_free(ssl); ssl = NULL; bio = NULL;
-
 	*mime = str_copy(meta);
 
+out:
 	ret = (data[0] - '0') * 10 + (data[1] - '0');
 
 fail:
@@ -640,7 +652,7 @@ static void sigint(int sig) {
 static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	struct sigaction sa = {.sa_handler = sigint}, old;
 	SSL_CTX *ctx = NULL;
-	int status, redirs = 0, ret = 0;
+	int status, redirs = 0, needcert = 0, ret = 0;
 
 	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 40;
 
@@ -654,8 +666,7 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	do {
 		status = do_download(sel, ctx, fp, mime, ask);
 		if ((ret = (status >= 20 && status <= 29))) break;
-		free(*mime); *mime = NULL;
-	} while ((status >= 10 && status <= 19) || (status >= 30 && status <= 39 && ++redirs < 5));
+	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69 && ++needcert == 1) || (status >= 30 && status <= 39 && ++redirs < 5));
 
 	sigaction(SIGINT, &old, NULL);
 
@@ -1241,7 +1252,7 @@ out:
 
 static void load_config_files() {
 	static char buffer[1024];
-	char *home;
+	const char *home;
 
 	if ((home = getenv("HOME")) != NULL) {
 		snprintf(buffer, sizeof(buffer), "%s/.gplaces.conf", home);
