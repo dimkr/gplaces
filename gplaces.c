@@ -134,15 +134,6 @@ static char *str_split(char **str, const char *delim) {
 	return begin;
 }
 
-static char *str_next(char **str, const char *delims) {
-	char *begin;
-	if (*str == NULL || **str == '\0') return NULL;
-	begin = *str + strspn(*str, delims);
-	*str = begin + strcspn(begin, delims);
-	if (**str != '\0') { **str = '\0'; ++*str; }
-	return begin;
-}
-
 
 /*============================================================================*/
 static void free_variables(VariableList *vars) {
@@ -295,8 +286,12 @@ static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 			sel = new_selector('`', line);
 		else if (line[0] == '=' && line[1] == '>') {
 			sel = new_selector('l', line);
-			line += 2;
-			url = str_next(&line, " \t\r\n");
+			url = line + 2 + strspn(line + 2, " \t");
+			line = url + strcspn(url, " \t");
+			if (*line != '\0') {
+				*line = '\0';
+				line += 1 + strspn(line + 1, " \t");
+			}
 			if (!parse_url(from, sel, url)) { free_selector(sel); continue; }
 			if (*line) sel->repr = str_copy(line);
 			else sel->repr = str_copy(url);
@@ -305,8 +300,7 @@ static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 			sel = new_selector('#', line);
 		else if (*line == '>' || (line[0] == '*' && line[1] == ' ')) {
 			sel = new_selector(*line, line);
-			str_next(&line, " \t\r\n");
-			sel->repr = str_copy(line);
+			sel->repr = str_copy(line + strspn(line, " \t"));
 		} else sel = new_selector('i', line);
 
 		SIMPLEQ_INSERT_TAIL(&list, sel, next);
