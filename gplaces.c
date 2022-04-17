@@ -366,7 +366,7 @@ static int get_terminal_height() {
 static int get_terminal_width() {
 	struct winsize wz;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &wz);
-	return wz.ws_col > 80 ? wz.ws_col : 80;
+	return wz.ws_col > 20 ? wz.ws_col : 20;
 }
 
 
