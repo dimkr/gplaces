@@ -550,17 +550,32 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
 		goto fail;
 	}
-	if (data[1] < '0' || data[0] > '9' || data[1] < '0' || data[1] > '9' || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
+	if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
 	data[total] = '\0';
 
 	crlf = &data[total - 2];
 	*crlf = '\0';
 	meta = &data[3];
-	if (data[2] != ' ' || meta >= crlf) meta = "";
+	if (meta >= crlf) meta = "";
 
 	switch (data[0]) {
 		case '2':
 			if (!*meta) goto fail;
+
+			for (;;) {
+				if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
+					if (!write_all(fp, crlf + 1, received)) goto fail;
+					total += received;
+					if (total > 2048 && interactive && ++chunks <= 80) fputc('.', stderr);
+					continue;
+				}
+				if (received == 0 || SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+				error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+				goto fail;
+			}
+			if (total > 2048 && interactive) fputc('\n', stderr);
+
+			*mime = str_copy(meta);
 			break;
 
 		case '1':
@@ -573,44 +588,29 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) { free(line); goto fail; }
 			curl_free(sel->url); sel->url = url;
 			free(line);
-			goto out;
+			break;
 
 		case '3':
 			if (!*meta || curl_url_set(sel->cu, CURLUPART_URL, meta, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) goto fail;
 			curl_free(sel->url); sel->url = url;
-			goto out;
+			break;
 
 		case '6':
+			if (*meta) error("`%s`: %s", sel->host, meta);
+			else error("client certificate is required for `%s`", sel->host);
 			if ((home = getenv("HOME")) == NULL) goto fail;
 			snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s.crt", home, sel->host);
 			snprintf(keypath, sizeof(keypath), "%s/.gplaces_%s.key", home, sel->host);
-			if (ask && stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT && (mkcert = set_var(&variables, "mkcert", NULL)) != NULL && *mkcert) execute_handler(mkcert, "", sel);
-			if (SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM) && SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM)) goto out;
+			if (ask && stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT && (mkcert = set_var(&variables, "mkcert", NULL)) != NULL && *mkcert != '\0') execute_handler(mkcert, "", sel);
+			if (SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM) == 1 && SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM) == 1) break;
 			error("failed to load client certificate for `%s`: %s", sel->host, ERR_reason_error_string(ERR_get_error()));
 			ret = 50;
 			goto fail;
 
 		default:
 			error("failed to download `%s`: %s", sel->url, *meta ? meta : data);
-			goto out;
 	}
 
-	for (;;) {
-		if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
-			if (!write_all(fp, crlf + 1, received)) goto fail;
-			total += received;
-			if (total > 2048 && interactive && ++chunks <= 80) fputc('.', stderr);
-			continue;
-		}
-		if (received == 0 || SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
-		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
-		goto fail;
-	}
-	if (total > 2048 && interactive) fputc('\n', stderr);
-
-	*mime = str_copy(meta);
-
-out:
 	ret = (data[0] - '0') * 10 + (data[1] - '0');
 
 fail:
@@ -633,7 +633,7 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	SSL_CTX *ctx = NULL;
 	int status, redirs = 0, needcert = 0, ret = 0;
 
-	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 40;
+	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 0;
 
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
@@ -683,7 +683,7 @@ static void download_to_file(Selector *sel) {
 
 static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 	static char filename[1024], template[1024];
-	FILE *fp;
+	FILE *fp = NULL;
 	const char *tmpdir, *handler;
 	SelectorList list = LIST_HEAD_INITIALIZER(list);
 	char *mime = NULL;
@@ -983,7 +983,7 @@ static void cmd_subscriptions(char *line) {
 			if (SIMPLEQ_EMPTY(&list)) continue;
 
 			copy = new_selector('l', sel->raw);
-			if (!parse_url(NULL, copy, sel->url)) { free_selector(copy); continue; }
+			if (!parse_url(NULL, copy, sel->url)) { free_selector(copy); free_selectors(&list); continue; }
 			copy->index = index++;
 
 			SIMPLEQ_FOREACH(it, &list, next) {
