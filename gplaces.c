@@ -903,9 +903,8 @@ static const Help gemini_help[] = {
 	},
 	{
 		"commands",
-		"alias         bookmarks     go            help          open\n" \
-		"save          see           set           show          subscriptions\n" \
-		"type"
+		"alias         bookmarks     help          save          see\n"
+		"set           show          subscriptions type"
 	},
 	{
 		"help",
@@ -929,14 +928,6 @@ static const Help gemini_help[] = {
 		"\n" \
 		"You should have received a copy of the GNU General Public License\n" \
 		"along with this program.  If not, see <https://www.gnu.org/licenses/>." \
-	},
-	{
-		"open",
-		"OPEN <url>" \
-	},
-	{
-		"go",
-		"GO <url>" \
 	},
 	{
 		"save",
@@ -968,15 +959,6 @@ static const Help gemini_help[] = {
 
 
 /*============================================================================*/
-static void cmd_open(char *line) {
-	const char *url;
-	if ((url = next_token(&line)) == NULL || *url == '\0') return;
-	Selector *to = new_selector('l', url);
-	if (parse_url(NULL, to, url)) navigate(to);
-	free_selector(to);
-}
-
-
 static void cmd_show(char *line) {
 	show_gemtext(&menu, next_token(&line), 1);
 }
@@ -1107,8 +1089,6 @@ static void cmd_type(char *line) {
 
 
 static const Command gemini_commands[] = {
-	{ "open", cmd_open },
-	{ "go", cmd_open },
 	{ "show", cmd_show },
 	{ "save", cmd_save },
 	{ "help", cmd_help },
@@ -1126,6 +1106,7 @@ static const Command gemini_commands[] = {
 static void eval(const char *input, const char *filename) {
 	static int nested =  0;
 	const Command *cmd;
+	Selector *to;
 	char *str, *copy, *line, *token, *alias;
 	int line_no;
 
@@ -1137,21 +1118,26 @@ static void eval(const char *input, const char *filename) {
 	str = copy = str_copy(input); /* copy input as it will be modified */
 
 	for (line_no = 1; (line = str_split(&str, "\r\n")) != NULL; ++line_no) {
-		if ((token = next_token(&line)) != NULL) {
+		if ((token = next_token(&line)) != NULL && *token != '\0') {
 			for (cmd = gemini_commands; cmd->name; ++cmd) {
 				if (!strcasecmp(cmd->name, token)) {
 					cmd->func(line);
-					break;
+					goto next;
 				}
 			}
 			if (cmd->name == NULL) {
-				if ((alias = set_var(&aliases, token, NULL)) != NULL) eval(alias, token);
-				else {
-					if (filename == NULL) error("unknown command `%s`", token);
-					else error("unknown command `%s` in file `%s` at line %d", token, filename, line_no);
+				if ((alias = set_var(&aliases, token, NULL)) != NULL) {
+					eval(alias, token);
+					goto next;
 				}
 			}
+			to = new_selector('l', token);
+			if (parse_url(NULL, to, token)) navigate(to);
+			else if (filename == NULL) error("unknown command `%s`", token);
+			else error("unknown command `%s` in file `%s` at line %d", token, filename, line_no);
+			free_selector(to);
 		}
+next:
 		str = str_skip(str, "\r\n");
 	}
 
@@ -1189,7 +1175,7 @@ static void shell() {
 		}
 	}
 
-	eval("open $HOME_CAPSULE", NULL);
+	eval("$HOME_CAPSULE", NULL);
 
 	for (;;) {
 		if ((line = base = bestline(prompt)) == NULL) break;
