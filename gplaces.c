@@ -89,7 +89,7 @@ static VariableList typehandlers = LIST_HEAD_INITIALIZER(typehandlers);
 static SelectorList bookmarks = SIMPLEQ_HEAD_INITIALIZER(bookmarks);
 static SelectorList subscriptions = SIMPLEQ_HEAD_INITIALIZER(subscriptions);
 static SelectorList menu = SIMPLEQ_HEAD_INITIALIZER(menu);
-static char prompt[256] = "()> ";
+static char prompt[256] = "\33[35m>\33[0m ";
 static int interactive;
 
 
@@ -580,7 +580,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 
 		case '1':
 			if (!ask || !*meta) goto fail;
-			snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", meta);
+			snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", meta);
 			if (data[1] == '1') bestlineMaskModeEnable();
 			if ((line = bestline(prompt)) == NULL) goto fail;
 			if (data[1] != '1' && interactive) bestlineHistoryAdd(line);
@@ -861,7 +861,7 @@ static void navigate(Selector *to) {
 	} else new = download_to_temp(to, 1, 0);
 
 	if (SIMPLEQ_EMPTY(&new)) return;
-	snprintf(prompt, sizeof(prompt), "(\33[35m%s\33[0m)> ", to->url);
+	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url);
 	free_selectors(&menu);
 	menu = new;
 	return show_gemtext(&new, NULL, 1);
