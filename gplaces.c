@@ -276,7 +276,7 @@ static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 			sel = new_selector('#', line);
 		else if (*line == '>' || (line[0] == '*' && line[1] == ' ')) {
 			sel = new_selector(*line, line);
-			sel->repr = str_copy(line + strspn(line, " \t"));
+			sel->repr = str_copy(line + 1 + strspn(line + 1, " \t"));
 		} else sel = new_selector('i', line);
 
 		SIMPLEQ_INSERT_TAIL(&list, sel, next);
