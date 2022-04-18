@@ -502,14 +502,12 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 		case '2':
 			if (!*meta) goto fail;
 
-			for (;;) {
-				if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
-					if (fwrite(crlf + 1, 1, received, fp) != (size_t)received) goto fail;
-					total += received;
-					if (total > 2048 && interactive && ++chunks <= 80) fputc('.', stderr);
-					continue;
-				}
-				if (received == 0 || SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+			while ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
+				if (fwrite(crlf + 1, 1, received, fp) != (size_t)received) goto fail;
+				if ((total > 2048 && interactive && ++chunks <= 80)) fputc('.', stderr);
+				total += received;
+			}
+			if (received < 0 && SSL_get_error(ssl, received) != SSL_ERROR_ZERO_RETURN) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
 				error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
 				goto fail;
 			}
