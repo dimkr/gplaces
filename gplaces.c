@@ -416,7 +416,7 @@ out:
 
 static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int ask) {
 	struct addrinfo hints, *result, *it;
-	static char crtpath[1024], keypath[1024], request[1024];
+	static char crtpath[1024], keypath[1024], buffer[1024];
 	struct stat stbuf;
 	char *data = NULL, *crlf, *meta, *line, *url;
 	const char *home, *mkcert;
@@ -476,8 +476,8 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 		goto fail;
 	}
 
-	snprintf(request, sizeof(request), "%s\r\n", sel->url);
-	if (SSL_write(ssl, request, strlen(request)) == 0) {
+	snprintf(buffer, sizeof(buffer), "%s\r\n", sel->url);
+	if (SSL_write(ssl, buffer, strlen(buffer)) == 0) {
 		error("cannot send request to `%s`:`%s`", sel->host, sel->port);
 		goto fail;
 	}
@@ -518,9 +518,9 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 
 		case '1':
 			if (!ask || !*meta) goto fail;
-			snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", meta);
+			snprintf(buffer, sizeof(buffer), "\33[35m%s>\33[0m ", meta);
 			if (data[1] == '1') bestlineMaskModeEnable();
-			if ((line = bestline(prompt)) == NULL) goto fail;
+			if ((line = bestline(buffer)) == NULL) goto fail;
 			if (data[1] != '1' && interactive) bestlineHistoryAdd(line);
 			if (data[1] == '1') bestlineMaskModeDisable();
 			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) { free(line); goto fail; }
@@ -848,7 +848,7 @@ static const Help gemini_help[] = {
 	},
 	{
 		"save",
-		"SAVE <item-id>" \
+		"SAVE <item-id|url>" \
 	},
 	{
 		"see",
@@ -875,6 +875,11 @@ static void cmd_show(char *line) {
 static void cmd_save(char *line) {
 	Selector *to = find_selector(&menu, line);
 	if (to) download_to_file(to);
+	else {
+		to = new_selector('l', line);
+		if (parse_url(NULL, to, line)) download_to_file(to);
+		free_selector(to);
+	}
 }
 
 
