@@ -414,7 +414,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	char *data = NULL, *crlf, *meta, *line, *url;
 	const char *home, *mkcert;
 	struct timeval tv = {0};
-	size_t total, chunks = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
+	size_t total, prog = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
 	int timeout, fd = -1, received, ret = 40;
 	BIO *bio = NULL;
 	SSL *ssl = NULL;
@@ -497,14 +497,14 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 
 			while ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
 				if (fwrite(crlf + 1, 1, received, fp) != (size_t)received) goto fail;
-				if ((total > 2048 && interactive && ++chunks <= 80)) fputc('.', stderr);
 				total += received;
+				if ((total > 2048 && interactive && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
 			}
 			if (received < 0 && SSL_get_error(ssl, received) != SSL_ERROR_ZERO_RETURN) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
 				error(0, "failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
 				goto fail;
 			}
-			if (total > 2048 && interactive) fputc('\n', stderr);
+			if (prog > 0) fputc('\n', stderr);
 
 			*mime = str_copy(meta);
 			break;
