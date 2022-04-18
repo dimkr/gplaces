@@ -315,8 +315,7 @@ static int get_terminal_width() {
 /*============================================================================*/
 static const char *find_mime_handler(const char *mime) {
 	const char *handler = set_var(&variables, mime, NULL);
-	if (!handler)
-		fprintf(stderr, "no handler for `%s`\n", mime);
+	if (!handler) fprintf(stderr, "no handler for `%s`\n", mime);
 	return handler;
 }
 
@@ -325,13 +324,9 @@ static void reap(const char *command, pid_t pid) {
 	pid_t ret;
 	int status;
 
-	for (;;) {
-		ret = waitpid(pid, &status, 0);
-		if (ret < 0 && errno == EINTR) continue;
-		if (ret == pid && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
-		else if (ret == pid && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
-		break;
-	}
+	while ((ret = waitpid(pid, &status, 0)) < 0 && errno == EINTR);
+	if (ret == pid && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
+	else if (ret == pid && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
 }
 
 
@@ -416,18 +411,6 @@ out:
 	if (fp) fclose(fp);
 	OPENSSL_free(hex);
 	return trust;
-}
-
-
-static int write_all(FILE *fp, const char *buffer, size_t length) {
-	size_t total = 0, out;
-
-	do {
-		if ((out = fwrite(&buffer[total], 1, length - total, fp)) == 0) return 0;
-		total += out;
-	} while (total < length);
-
-	return 1;
 }
 
 
@@ -521,7 +504,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 
 			for (;;) {
 				if ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
-					if (!write_all(fp, crlf + 1, received)) goto fail;
+					if (fwrite(crlf + 1, 1, received, fp) != (size_t)received) goto fail;
 					total += received;
 					if (total > 2048 && interactive && ++chunks <= 80) fputc('.', stderr);
 					continue;
