@@ -6,7 +6,6 @@ set https							"xdg-open %u"
 set "text/plain; charset=utf-8"		"xdg-open %f"
 
 # define some aliases
-set feed							subscriptions
 set search							geminispace.info/search
 set home							gemini.circumlunar.space
 set capcom							gemini.circumlunar.space/capcom
@@ -14,9 +13,9 @@ set spacewalk						rawtext.club/~sloum/spacewalk.gmi
 set gmisub							calcuode.com/gmisub-aggregate.gmi
 
 # subscribe to some pages
-subscriptions						rawtext.club/~sloum/spacewalk.gmi
-subscriptions						midnight.pub
-subscriptions						gemini.conman.org/boston.gemini
+sub									rawtext.club/~sloum/spacewalk.gmi
+sub									midnight.pub
+sub									gemini.conman.org/boston.gemini
 
 # define a generator for ~/.gplaces_%h.crt and ~/.gplaces_%h.key
 set mkcert							"openssl req -new -subj /CN=`whoami` -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -days 1825 -nodes -out ~/.gplaces_%h.crt -keyout ~/.gplaces_%h.key"

@@ -814,7 +814,7 @@ static const Help gemini_help[] = {
 	{
 		"commands",
 		"help          save          see           set           show\n" \
-		"subscriptions"
+		"sub"
 	},
 	{
 		"help",
@@ -900,7 +900,7 @@ static void cmd_help(char *line) {
 }
 
 
-static void cmd_subscriptions(char *line) {
+static void cmd_sub(char *line) {
 	char ts[11];
 	SelectorList list, feed = SIMPLEQ_HEAD_INITIALIZER(feed);
 	Selector *sel, *it, *copy;
@@ -969,7 +969,7 @@ static const Command gemini_commands[] = {
 	{ "show", cmd_show },
 	{ "save", cmd_save },
 	{ "help", cmd_help },
-	{ "subscriptions", cmd_subscriptions },
+	{ "sub", cmd_sub },
 	{ "set", cmd_set },
 	{ "see", cmd_see },
 	{ NULL, NULL }
