@@ -609,11 +609,11 @@ static void download_to_file(Selector *sel, const char *def) {
 		free(input);
 		return;
 	}
-	free(input);
 	ret = download(sel, fp, &mime, 1);
 	fclose(fp);
 	free(mime);
 	if (fp && !ret) unlink(filename);
+	free(input);
 }
 
 
