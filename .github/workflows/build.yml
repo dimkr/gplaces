@@ -56,3 +56,26 @@ jobs:
           CFLAGS="-O3 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBMAGIC=1
           make clean
           make WITH_LIBMAGIC=0
+  arch:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:base
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm git gcc make pkgconf
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          path: gplaces # mitigation for build failure after CVE-2022-24765 was mitigated
+          submodules: recursive
+          fetch-depth: 0
+      - name: Build
+        run: |
+          cd gplaces
+          make
+          make clean
+          CFLAGS="-O3 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBMAGIC=1
+          make clean
+          make WITH_LIBMAGIC=0
