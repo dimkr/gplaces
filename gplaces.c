@@ -269,7 +269,6 @@ static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 	char *line, *url;
 	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
 	Selector *sel;
-	size_t len;
 	int pre = 0, i, index = 1;
 
 	for (i = 0; i < 512 && (line = fgets(buffer, sizeof(buffer), fp)) != NULL; ++i) {
@@ -278,9 +277,7 @@ static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 			continue;
 		}
 
-		len = strlen(line);
-		if (len >= 2 && line[len - 2] == '\r') line[len - 2] = '\0';
-		else if (line[len - 1] == '\n') line[len - 1] = '\0';
+		line[strcspn(line, "\r\n")] = '\0';
 
 		if (pre)
 			sel = new_selector('`', line);
@@ -1038,44 +1035,40 @@ static const Command gemini_commands[] = {
 
 
 /*============================================================================*/
-static void eval(const char *input, const char *filename) {
+static void eval(const char *input, const char *filename, int line_no) {
 	static int nested =  0;
 	const Command *cmd;
 	Selector *to;
-	char *str, *copy, *line, *token, *var;
-	int line_no;
+	char *copy, *line, *token, *var;
 
 	if (nested >= 10) {
 		error("eval() nested too deeply");
 		return;
 	} else ++nested;
 
-	str = copy = str_copy(input); /* copy input as it will be modified */
+	copy = line = str_copy(input); /* copy input as it will be modified */
 
-	for (line_no = 1; (line = str_split(&str, "\r\n")) != NULL; ++line_no) {
-		if ((token = next_token(&line)) != NULL && *token != '\0') {
-			for (cmd = gemini_commands; cmd->name; ++cmd) {
-				if (!strcasecmp(cmd->name, token)) {
-					cmd->func(line);
-					goto next;
-				}
+	if ((token = next_token(&line)) != NULL && *token != '\0') {
+		for (cmd = gemini_commands; cmd->name; ++cmd) {
+			if (!strcasecmp(cmd->name, token)) {
+				cmd->func(line);
+				goto out;
 			}
-			if (cmd->name == NULL) {
-				if ((var = set_var(&variables, token, NULL)) != NULL) {
-					eval(var, token);
-					goto next;
-				}
-			}
-			to = new_selector('l', token);
-			if (parse_url(NULL, to, token)) navigate(to);
-			else if (filename == NULL) error("unknown command `%s`", token);
-			else error("unknown command `%s` in file `%s` at line %d", token, filename, line_no);
-			free_selector(to);
 		}
-next:
-		str = str_skip(str, "\r\n");
+		if (cmd->name == NULL) {
+			if ((var = set_var(&variables, token, NULL)) != NULL) {
+				eval(var, NULL, 0);
+				goto out;
+			}
+		}
+		to = new_selector('l', token);
+		if (parse_url(NULL, to, token)) navigate(to);
+		else if (filename == NULL) error("unknown command `%s`", token);
+		else error("unknown command `%s` in file `%s` at line %d", token, filename, line_no);
+		free_selector(to);
 	}
 
+out:
 	free(copy);
 	--nested;
 }
@@ -1110,7 +1103,7 @@ static void shell(int argc, char **argv) {
 		}
 	}
 
-	if (optind < argc) eval(argv[optind], NULL);
+	if (optind < argc) eval(argv[optind], NULL, 0);
 
 	for (;;) {
 		if ((line = base = bestline(prompt)) == NULL) break;
@@ -1119,7 +1112,7 @@ static void shell(int argc, char **argv) {
 			else if (interactive) bestlineHistoryAdd(line);
 			navigate(to);
 		} else {
-			eval(line, NULL);
+			eval(line, NULL, 0);
 			if (interactive) bestlineHistoryAdd(line);
 		}
 		free(base);
@@ -1131,25 +1124,20 @@ static void shell(int argc, char **argv) {
 
 /*============================================================================*/
 static int load_rc_file(const char *filename) {
-	long length;
-	FILE *fp = NULL;
-	char *data = NULL;
-	int ret = 0;
+	static char buffer[1024];
+	char *line;
+	FILE *fp;
+	int line_no = 0, ret;
 
-	if ((fp = fopen(filename, "rb")) == NULL) goto out;
-	if (fseek(fp, 0, SEEK_END)) goto out;
-	if ((length = ftell(fp)) <= 0) goto out;
-	if (fseek(fp, 0, SEEK_SET)) goto out;
-	if ((data = malloc(length + 1)) == NULL) goto out;
-	if (fread(data, 1, length, fp) != (size_t)length) goto out;
-	data[length] = '\0';
+	if ((fp = fopen(filename, "rb")) == NULL) return 0;
+	while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
+		line[strcspn(line, "\r\n")] = '\0';
+		eval(buffer, filename, ++line_no);
+	}
 
-	eval(data, filename);
-	ret = 1;
+	ret = feof(fp);
 
-out:
-	free(data);
-	if (fp) fclose(fp);
+	fclose(fp);
 	return ret;
 }
 
