@@ -146,7 +146,7 @@ static void free_variables(VariableList *vars) {
 }
 
 
-static char *set_var(VariableList *list, const char *name, const char *fmt, ...) {
+static char *set_var(VariableList *list, const char *name, const char *value) {
 	Variable *var;
 
 	if (name == NULL) return NULL;
@@ -154,22 +154,15 @@ static char *set_var(VariableList *list, const char *name, const char *fmt, ...)
 		if (!strcasecmp(var->name, name)) break;
 	}
 
-	if (fmt) {
-		va_list va;
-		static char buffer[1024];
-
-		va_start(va, fmt);
-		vsnprintf(buffer, sizeof(buffer), fmt, va);
-		va_end(va);
-
+	if (value) {
 		if (var == NULL) {
 			if ((var = malloc(sizeof(Variable))) == NULL) panic("cannot allocate new variable");
 			var->name = str_copy((char*)name);
-			var->data = str_copy(buffer);
+			var->data = str_copy(value);
 			LIST_INSERT_HEAD(list, var, next);
 		} else {
 			free(var->data);
-			var->data = str_copy(buffer);
+			var->data = str_copy(value);
 		}
 	}
 
@@ -843,7 +836,7 @@ static void edit_variable(VariableList *vars, char *line) {
 	char *data = next_token(&line);
 
 	if (name != NULL) {
-		if (data) set_var(vars, name, "%s", data);
+		if (data) set_var(vars, name, data);
 		else puts(set_var(vars, name, NULL));
 	} else {
 		Variable *it;
