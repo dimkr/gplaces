@@ -220,7 +220,7 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 static Selector *find_selector(SelectorList *list, const char *line) {
 	Selector *sel;
 	int index;
-	if ((index = atoi(line)) <= 0) return NULL;
+	if (line == NULL || (index = atoi(line)) <= 0) return NULL;
 	SIMPLEQ_FOREACH(sel, list, next) if (sel->index == index) return sel;
 	return NULL;
 }
