@@ -5,7 +5,7 @@ MANDIR = $(PREFIX)/share/man
 ICONDIR = $(PREFIX)/share/icons
 APPDIR = $(PREFIX)/share/applications
 CC = cc
-CFLAGS ?= -O2 -Wall -Wextra
+CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-result
 CFLAGS += -DCONFDIR=\"$(CONFDIR)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
 LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)

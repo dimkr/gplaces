@@ -670,7 +670,7 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 	int length, out, rem, extra;
 	const char *p;
 
-	if (!interactive) return print_raw(fp, list, filter);
+	if (!interactive) { print_raw(fp, list, filter); return; }
 
 	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
 	length = get_terminal_width();
@@ -782,7 +782,8 @@ static void navigate(Selector *to) {
 	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + 9);
 	free_selectors(&menu);
 	menu = new;
-	return show_gemtext(&new, NULL, 1);
+	show_gemtext(&new, NULL, 1);
+	return;
 
 handle:
 	if (handler) execute_handler(handler, to->url, to);
