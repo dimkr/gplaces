@@ -327,24 +327,6 @@ static char *next_token(char **str) {
 }
 
 
-static char *read_line(const char *fmt, ...) {
-	static char buffer[256];
-	char *line;
-	if (fmt != NULL) {
-		va_list va;
-		va_start(va, fmt);
-		vprintf(fmt, va);
-		va_end(va);
-		fflush(stdout);
-	}
-	memset(buffer, 0, sizeof(buffer));
-	if ((line = fgets(buffer, sizeof(buffer), stdin)) == NULL) return NULL;
-	line = str_skip(line, " \v\t");
-	line = str_split(&line, "\r\n");
-	return line ? line : "";
-}
-
-
 static int get_terminal_width() {
 	struct winsize wz;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &wz);
@@ -654,9 +636,9 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 
 
 static void download_to_file(Selector *sel) {
-	static char suggestion[1024];
+	static char suggestion[256], buffer[1024];
 	FILE *fp;
-	char *mime = NULL, *filename, *def, *download_dir;
+	char *mime = NULL, *filename, *choice = suggestion, *def, *download_dir;
 	int ret;
 
 	def = strrchr(sel->path, '/');
@@ -665,12 +647,15 @@ static void download_to_file(Selector *sel) {
 	if ((download_dir = set_var(&variables, "DOWNLOAD_DIRECTORY", NULL)) == NULL) download_dir = ".";
 	snprintf(suggestion, sizeof(suggestion), "%s/%s", download_dir, def);
 
-	if ((filename = read_line("enter filename (press ENTER for `%s`): ", suggestion)) == NULL) return;
-	if (!strlen(filename)) filename = suggestion;
-	if ((fp = fopen(filename, "wb")) == NULL) {
+	snprintf(buffer, sizeof(buffer), "enter filename (press ENTER for `%s`): ", suggestion);
+	if ((filename = bestline(buffer)) == NULL) return;
+	if (*filename != '\0') choice = filename;
+	if ((fp = fopen(choice, "wb")) == NULL) {
 		error("cannot create file `%s`: %s", filename, strerror(errno));
+		free(filename);
 		return;
 	}
+	free(filename);
 	ret = download(sel, fp, &mime, 1);
 	fclose(fp);
 	free(mime);
