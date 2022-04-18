@@ -604,15 +604,13 @@ static void download_to_file(Selector *sel, const char *def) {
 		if (*input != '\0') filename = input;
 		else filename = suggestion;
 	}
-	if ((fp = fopen(filename, "wb")) == NULL) {
-		error(0, "cannot create file `%s`: %s", filename, strerror(errno));
-		free(input);
-		return;
+	if ((fp = fopen(filename, "wb")) == NULL) error(0, "cannot create file `%s`: %s", filename, strerror(errno));
+	else {
+		ret = download(sel, fp, &mime, 1);
+		fclose(fp);
+		free(mime);
+		if (!ret) unlink(filename);
 	}
-	ret = download(sel, fp, &mime, 1);
-	fclose(fp);
-	free(mime);
-	if (fp && !ret) unlink(filename);
 	free(input);
 }
 
