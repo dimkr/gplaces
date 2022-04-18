@@ -121,11 +121,6 @@ static char *str_copy(const char *str) {
 	return new;
 }
 
-static char *str_skip(char *str, const char *delim) {
-	while (*str && strchr(delim, *str)) ++str;
-	return str;
-}
-
 static char *str_split(char **str, const char *delim) {
 	char *begin;
 	if (*str == NULL || **str == '\0') return NULL;
@@ -305,7 +300,7 @@ static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 /*============================================================================*/
 static char *next_token(char **str) {
 	if (*str == NULL) return NULL;
-	*str = str_skip(*str, " \v\t");
+	*str += strspn(*str, " \v\t");
 	switch (**str) {
 		case '\0': case '#': return NULL;
 		case '"': ++*str; return str_split(str, "\"");
