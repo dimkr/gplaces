@@ -586,27 +586,30 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 }
 
 
-static void download_to_file(Selector *sel) {
+static void download_to_file(Selector *sel, const char *def) {
 	static char suggestion[256], buffer[1024];
 	FILE *fp;
-	char *mime = NULL, *filename, *choice = suggestion, *def, *download_dir;
+	char *mime = NULL, *input = NULL, *download_dir;
+	const char *filename = def;
 	int ret;
 
-	def = strrchr(sel->path, '/');
-	if (*def == '/') ++def;
-	if (!*def) def = sel->repr;
-	if ((download_dir = set_var(&variables, "DOWNLOAD_DIRECTORY", NULL)) == NULL) download_dir = ".";
-	snprintf(suggestion, sizeof(suggestion), "%s/%s", download_dir, def);
-
-	snprintf(buffer, sizeof(buffer), "enter filename (press ENTER for `%s`): ", suggestion);
-	if ((filename = bestline(buffer)) == NULL) return;
-	if (*filename != '\0') choice = filename;
-	if ((fp = fopen(choice, "wb")) == NULL) {
+	if (def == NULL) {
+		def = strrchr(sel->path, '/');
+		if (*def == '/') ++def;
+		if (!*def) def = sel->repr;
+		if ((download_dir = set_var(&variables, "DOWNLOAD_DIRECTORY", NULL)) == NULL) download_dir = ".";
+		snprintf(suggestion, sizeof(suggestion), "%s/%s", download_dir, def);
+		snprintf(buffer, sizeof(buffer), "enter filename (press ENTER for `%s`): ", suggestion);
+		if ((input = bestline(buffer)) == NULL) return;
+		if (*input != '\0') filename = input;
+		else filename = suggestion;
+	}
+	if ((fp = fopen(filename, "wb")) == NULL) {
 		error(0, "cannot create file `%s`: %s", filename, strerror(errno));
-		free(filename);
+		free(input);
 		return;
 	}
-	free(filename);
+	free(input);
 	ret = download(sel, fp, &mime, 1);
 	fclose(fp);
 	free(mime);
@@ -841,7 +844,7 @@ static const Help gemini_help[] = {
 	},
 	{
 		"save",
-		"SAVE <item-id|url>" \
+		"SAVE <item-id|url> [<path>]" \
 	},
 	{
 		"see",
@@ -855,6 +858,10 @@ static const Help gemini_help[] = {
 		"show",
 		"SHOW [<filter>]" \
 	},
+	{
+		"sub",
+		"SUB [<url>]" \
+	},
 	{ NULL, NULL }
 };
 
@@ -866,11 +873,14 @@ static void cmd_show(char *line) {
 
 
 static void cmd_save(char *line) {
-	Selector *to = find_selector(&menu, line);
-	if (to) download_to_file(to);
+	char *id, *path;
+	Selector *to;
+	id = next_token(&line);
+	path = next_token(&line);
+	if ((to = find_selector(&menu, id)) != NULL) download_to_file(to, path);
 	else {
 		to = new_selector('l', line);
-		if (parse_url(NULL, to, line)) download_to_file(to);
+		if (parse_url(NULL, to, id)) download_to_file(to, path);
 		free_selector(to);
 	}
 }
