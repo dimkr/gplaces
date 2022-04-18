@@ -98,26 +98,19 @@ static void vlogf(FILE *fp, const char *color, const char *fmt, va_list va) {
 	else fputc('\n', fp);
 }
 
-static void error(const char *fmt, ...) {
+static void error(int fatal, const char *fmt, ...) {
 	va_list va;
 	va_start(va, fmt);
 	vlogf(stderr, "31", fmt, va);
 	va_end(va);
-}
-
-static void panic(const char *fmt, ...) {
-	va_list va;
-	va_start(va, fmt);
-	vlogf(stderr, "31", fmt, va);
-	va_end(va);
-	exit(EXIT_FAILURE);
+	if (fatal) exit(EXIT_FAILURE);
 }
 
 
 /*============================================================================*/
 static char *str_copy(const char *str) {
 	char *new;
-	if ((new = strdup(str)) == NULL) panic("cannot allocate new string");
+	if ((new = strdup(str)) == NULL) error(1, "cannot allocate new string");
 	return new;
 }
 
@@ -142,7 +135,7 @@ static char *set_var(VariableList *list, const char *name, const char *value) {
 
 	if (value) {
 		if (var == NULL) {
-			if ((var = malloc(sizeof(Variable))) == NULL) panic("cannot allocate new variable");
+			if ((var = malloc(sizeof(Variable))) == NULL) error(1, "cannot allocate new variable");
 			var->name = str_copy((char*)name);
 			var->data = str_copy(value);
 			LIST_INSERT_HEAD(list, var, next);
@@ -167,7 +160,7 @@ static int get_var_integer(const char *name, int def) {
 /*============================================================================*/
 static Selector *new_selector(const char type, const char *raw) {
 	Selector *new = calloc(1, sizeof(Selector));
-	if (new == NULL) panic("cannot allocate new selector");
+	if (new == NULL) error(1, "cannot allocate new selector");
 	new->type = type;
 	new->raw = str_copy(raw);
 	new->repr = new->raw;
@@ -282,7 +275,7 @@ static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 		SIMPLEQ_INSERT_TAIL(&list, sel, next);
 	}
 
-	if (i == 512) error("gemtext is truncated to 512 lines");
+	if (i == 512) error(0, "gemtext is truncated to 512 lines");
 
 	return list;
 }
@@ -365,7 +358,7 @@ static void execute_handler(const char *handler, const char *filename, Selector 
 		}
 		exit(EXIT_FAILURE);
 	} else if (pid > 0) reap(command, pid);
-	else error("could not execute `%s`", command);
+	else error(0, "could not execute `%s`", command);
 }
 
 
@@ -437,7 +430,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	hints.ai_protocol = IPPROTO_TCP;
 
 	if (getaddrinfo(sel->host, sel->port, &hints, &result) || result == NULL) {
-		error("cannot resolve hostname `%s`", sel->host);
+		error(0, "cannot resolve hostname `%s`", sel->host);
 		goto fail;
 	}
 
@@ -450,7 +443,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	freeaddrinfo(result);
 
 	if (fd == -1) {
-		error("cannot connect to `%s`:`%s`", sel->host, sel->port);
+		error(0, "cannot connect to `%s`:`%s`", sel->host, sel->port);
 		goto fail;
 	}
 
@@ -458,7 +451,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
 	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_NOCLOSE)) == NULL) {
-		error("cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
+		error(0, "cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
 		goto fail;
 	}
  
@@ -467,27 +460,27 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	SSL_set_connect_state(ssl);
 
 	if (SSL_do_handshake(ssl) != 1 || (cert = SSL_get_peer_certificate(ssl)) == NULL) {
-		error("cannot establish secure connection to `%s`:`%s`: %s", sel->host, sel->port, ERR_reason_error_string(ERR_get_error()));
+		error(0, "cannot establish secure connection to `%s`:`%s`: %s", sel->host, sel->port, ERR_reason_error_string(ERR_get_error()));
 		goto fail;
 	}
 
 	if (!tofu(cert, sel->host)) {
-		error("cannot establish secure connection to `%s`:`%s`: certificate has changed", sel->host, sel->port);
+		error(0, "cannot establish secure connection to `%s`:`%s`: certificate has changed", sel->host, sel->port);
 		goto fail;
 	}
 
 	snprintf(buffer, sizeof(buffer), "%s\r\n", sel->url);
 	if (SSL_write(ssl, buffer, strlen(buffer)) == 0) {
-		error("cannot send request to `%s`:`%s`", sel->host, sel->port);
+		error(0, "cannot send request to `%s`:`%s`", sel->host, sel->port);
 		goto fail;
 	}
 
-	if ((data = malloc(cap)) == NULL) panic("cannot allocate download data");
+	if ((data = malloc(cap)) == NULL) error(1, "cannot allocate download data");
 
 	for (total = 0; total < cap - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
 		if ((received = SSL_read(ssl, &data[total], 1)) > 0) continue;
 		if (received == 0 || SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break;
-		error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+		error(0, "failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
 		goto fail;
 	}
 	if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
@@ -508,7 +501,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 				total += received;
 			}
 			if (received < 0 && SSL_get_error(ssl, received) != SSL_ERROR_ZERO_RETURN) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
-				error("failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+				error(0, "failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
 				goto fail;
 			}
 			if (total > 2048 && interactive) fputc('\n', stderr);
@@ -534,19 +527,19 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 			break;
 
 		case '6':
-			if (*meta) error("`%s`: %s", sel->host, meta);
-			else error("client certificate is required for `%s`", sel->host);
+			if (*meta) error(0, "`%s`: %s", sel->host, meta);
+			else error(0, "client certificate is required for `%s`", sel->host);
 			if ((home = getenv("HOME")) == NULL) goto fail;
 			snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s.crt", home, sel->host);
 			snprintf(keypath, sizeof(keypath), "%s/.gplaces_%s.key", home, sel->host);
 			if (ask && stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT && (mkcert = set_var(&variables, "mkcert", NULL)) != NULL && *mkcert != '\0') execute_handler(mkcert, "", sel);
 			if (SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM) == 1 && SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM) == 1) break;
-			error("failed to load client certificate for `%s`: %s", sel->host, ERR_reason_error_string(ERR_get_error()));
+			error(0, "failed to load client certificate for `%s`: %s", sel->host, ERR_reason_error_string(ERR_get_error()));
 			ret = 50;
 			goto fail;
 
 		default:
-			error("failed to download `%s`: %s", sel->url, *meta ? meta : data);
+			error(0, "failed to download `%s`: %s", sel->url, *meta ? meta : data);
 	}
 
 	ret = (data[0] - '0') * 10 + (data[1] - '0');
@@ -589,7 +582,7 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 
 	SSL_CTX_free(ctx);
 
-	if (redirs == 5) error("too many redirects from `%s`", sel->url);
+	if (redirs == 5) error(0, "too many redirects from `%s`", sel->url);
 	return ret;
 }
 
@@ -610,7 +603,7 @@ static void download_to_file(Selector *sel) {
 	if ((filename = bestline(buffer)) == NULL) return;
 	if (*filename != '\0') choice = filename;
 	if ((fp = fopen(choice, "wb")) == NULL) {
-		error("cannot create file `%s`: %s", filename, strerror(errno));
+		error(0, "cannot create file `%s`: %s", filename, strerror(errno));
 		free(filename);
 		return;
 	}
@@ -634,7 +627,7 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 	snprintf(template, sizeof(template), "%sgplaces.XXXXXXXX", tmpdir);
 	snprintf(filename, sizeof(filename), "%s", template);
 	if ((fd = mkstemp(filename)) == -1 || (fp = fdopen(fd, "r+w")) == NULL) {
-		error("cannot create temporary file: %s", strerror(errno));
+		error(0, "cannot create temporary file: %s", strerror(errno));
 		goto out;
 	}
 	if (!download(sel, fp, &mime, ask) || fflush(fp) == EOF) goto out;
@@ -777,7 +770,7 @@ static void navigate(Selector *to) {
 			if (mime) handler = find_mime_handler(mime);
 			magic_close(mag);
 #else
-			error("unable to detect the MIME type of %s", to->path);
+			error(0, "unable to detect the MIME type of %s", to->path);
 #endif
 			goto handle;
 		}
@@ -985,41 +978,29 @@ static const Command gemini_commands[] = {
 
 /*============================================================================*/
 static void eval(const char *input, const char *filename, int line_no) {
-	static int nested =  0;
 	const Command *cmd;
 	Selector *to;
-	char *copy, *line, *token, *var;
-
-	if (nested >= 10) {
-		error("eval() nested too deeply");
-		return;
-	} else ++nested;
+	char *copy, *line, *token, *var, *url;
 
 	copy = line = str_copy(input); /* copy input as it will be modified */
 
-	if ((token = next_token(&line)) != NULL && *token != '\0') {
+	if ((token = url = next_token(&line)) != NULL && *token != '\0') {
 		for (cmd = gemini_commands; cmd->name; ++cmd) {
 			if (!strcasecmp(cmd->name, token)) {
 				cmd->func(line);
-				goto out;
+				free(copy);
+				return;
 			}
 		}
-		if (cmd->name == NULL) {
-			if ((var = set_var(&variables, token, NULL)) != NULL) {
-				eval(var, NULL, 0);
-				goto out;
-			}
-		}
+		if ((var = set_var(&variables, token, NULL)) != NULL) url = var;
 		to = new_selector('l', token);
-		if (parse_url(NULL, to, token)) navigate(to);
-		else if (filename == NULL) error("unknown command `%s`", token);
-		else error("unknown command `%s` in file `%s` at line %d", token, filename, line_no);
+		if (parse_url(NULL, to, url)) navigate(to);
+		else if (filename == NULL) error(0, "unknown command `%s`", token);
+		else error(0, "unknown command `%s` in file `%s` at line %d", token, filename, line_no);
 		free_selector(to);
 	}
 
-out:
 	free(copy);
-	--nested;
 }
 
 
