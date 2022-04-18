@@ -391,7 +391,7 @@ static int tofu(X509 *cert, const char *host) {
 		while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
 			if (strncmp(line, host, hlen)) continue;
 			if (line[hlen] != ' ') continue;
-			trust = strncmp(&line[hlen + 1], hex, hlen) == 0 && line[hlen + 1 + mdlen * 2] == '\n';
+			trust = strncmp(&line[hlen + 1], hex, mdlen * 2) == 0 && line[hlen + 1 + mdlen * 2] == '\n';
 			goto out;
 		}
 
@@ -568,7 +568,6 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
-	SSL_CTX_set_verify_depth(ctx, 1);
 
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGINT, &sa, &old);
