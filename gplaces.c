@@ -364,24 +364,21 @@ static void execute_handler(const char *handler, const char *filename, Selector 
 
 /*============================================================================*/
 static int tofu(X509 *cert, const char *host) {
-	static char hosts[1024], buffer[1024 + 1 + EVP_MAX_MD_SIZE * 2 + 2];
+	static char hosts[1024], buffer[1024 + 1 + EVP_MAX_MD_SIZE * 2 + 2], hex[EVP_MAX_MD_SIZE * 2 + 1];
 	static unsigned char md[EVP_MAX_MD_SIZE];
 	size_t hlen;
-	const char *home;
-	char *hex, *line;
+	const char *home, *line;
 	FILE *fp;
-	BIGNUM *bn;
-	unsigned int mdlen;
+	unsigned int mdlen, i;
 	int trust = 1;
 
 	if (X509_digest(cert, EVP_sha512(), md, &mdlen) == 0) return 0;
 
-	bn = BN_bin2bn(md, mdlen, NULL);
-	if (!bn) return 0;
-
-	hex = BN_bn2hex(bn);
-	BN_free(bn);
-	if (!hex) return 0;
+	for (i = 0; i < mdlen; ++i) {
+		hex[i * 2] = "0123456789ABCDEF"[md[i] >> 4];
+		hex[i * 2 + 1] = "0123456789ABCDEF"[md[i] & 0xf];
+	}
+	hex[mdlen * 2] = '\0';
 
 	hlen = strlen(host);
 
@@ -402,7 +399,6 @@ static int tofu(X509 *cert, const char *host) {
 
 out:
 	if (fp) fclose(fp);
-	OPENSSL_free(hex);
 	return trust;
 }
 
