@@ -494,7 +494,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 			while ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
 				if (fwrite(crlf + 1, 1, received, fp) != (size_t)received) goto fail;
 				total += received;
-				if ((total > 2048 && interactive && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
+				if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
 				if (total > SIZE_MAX - cap) goto fail;
 			}
 			if (received < 0 && SSL_get_error(ssl, received) != SSL_ERROR_ZERO_RETURN) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
