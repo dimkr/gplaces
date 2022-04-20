@@ -28,6 +28,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 - ~internal~ configurable external pager for text & menus
 - support for non-interactive operation
 - about *1k lines* of *C* code
+- ~100K executable when built with -O3 and -Wl,-s on x86_64
 
 ## How to compile?
 - clone this git repo
