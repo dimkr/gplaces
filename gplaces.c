@@ -43,7 +43,9 @@
 
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
-#include <openssl/sha.h>
+#include <openssl/x509.h>
+#include <openssl/ec.h>
+#include <openssl/evp.h>
 #include <openssl/err.h>
 
 #include <curl/curl.h>
@@ -403,12 +405,54 @@ out:
 }
 
 
+static void mkcert(const char *crtpath, const char *keypath) {
+	EVP_PKEY *key = NULL;
+#if OPENSSL_VERSION_MAJOR < 3
+	EC_KEY *eckey = NULL;
+#endif
+	X509 *cert = NULL;
+	X509_NAME *name;
+	const char *curve, *digest, *cn;
+	const EVP_MD *md;
+	FILE *crtf = NULL, *keyf = NULL;
+	long days;
+	int ok = 0;
+#if OPENSSL_VERSION_MAJOR < 3
+	int assigned = 0, nid;
+#endif
+
+	if ((days = get_var_integer("DAYS", 1825)) == 0) return;
+	if ((curve = set_var(&variables, "CURVE", NULL)) == NULL || *curve == '\0') curve = SN_X9_62_prime256v1;
+	if ((digest = set_var(&variables, "DIGEST", NULL)) == NULL || *digest == '\0') digest = LN_sha256;
+
+#if OPENSSL_VERSION_MAJOR < 3
+	ok = ((((cn = set_var(&variables, "CN", NULL)) != NULL && *cn != '\0') || ((cn = getenv("USER")) != NULL && *cn != '\0')) && (md = EVP_get_digestbyname(digest)) != NULL && (cert = X509_new()) != NULL && X509_set_version(cert, 2) == 1 && X509_gmtime_adj(X509_get_notBefore(cert), 0) != NULL && X509_gmtime_adj(X509_get_notAfter(cert), 60 * 60 * 24 * days) != NULL && (name = X509_get_subject_name(cert)) != NULL && X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (const unsigned char *)cn, -1, -1, 0) == 1 && (key = EVP_PKEY_new()) != NULL && (nid = OBJ_sn2nid(curve)) != NID_undef && (eckey = EC_KEY_new_by_curve_name(nid)) != NULL && EC_KEY_generate_key(eckey) == 1 && (assigned = EVP_PKEY_assign_EC_KEY(key, eckey)) == 1 && X509_set_pubkey(cert, key) == 1 && X509_sign(cert, key, md) != 0 && (crtf = fopen(crtpath, "w")) != NULL && (keyf = fopen(keypath, "w")) != NULL && PEM_write_X509(crtf, cert) != 0 && PEM_write_PrivateKey(keyf, key, NULL, NULL, 0, NULL, NULL) != 0);
+#else
+	ok = ((((cn = set_var(&variables, "CN", NULL)) != NULL && *cn != '\0') || ((cn = getenv("USER")) != NULL && *cn != '\0')) && (md = EVP_get_digestbyname(digest)) != NULL && (cert = X509_new()) != NULL && X509_set_version(cert, X509_VERSION_3) == 1 && X509_gmtime_adj(X509_get_notBefore(cert), 0) != NULL && X509_gmtime_adj(X509_get_notAfter(cert), 60 * 60 * 24 * days) != NULL && (name = X509_get_subject_name(cert)) != NULL && X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (const unsigned char *)cn, -1, -1, 0) == 1 && (key = EVP_EC_gen(curve)) != NULL && X509_set_pubkey(cert, key) == 1 && X509_sign(cert, key, md) != 0 && (crtf = fopen(crtpath, "w")) != NULL && (keyf = fopen(keypath, "w")) != NULL && PEM_write_X509(crtf, cert) != 0 && PEM_write_PrivateKey(keyf, key, NULL, NULL, 0, NULL, NULL) != 0);
+#endif
+
+	if (keyf) {
+		fclose(keyf);
+		if (ok == 0) unlink(keypath);
+	}
+	if (crtf) {
+		fclose(crtf);
+		if (ok == 0) unlink(crtpath);
+	}
+#if OPENSSL_VERSION_MAJOR < 3
+	if (!assigned && eckey) EC_KEY_free(eckey);
+#endif
+	if (key) EVP_PKEY_free(key);
+	if (cert) X509_free(cert);
+}
+
+
 static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int ask) {
 	struct addrinfo hints, *result, *it;
 	static char crtpath[1024], keypath[1024], buffer[1024];
 	struct stat stbuf;
 	char *data = NULL, *crlf, *meta, *line, *url;
-	const char *home, *mkcert;
+	const char *home;
 	struct timeval tv = {0};
 	size_t total, prog = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
 	int timeout, fd = -1, received, ret = 40;
@@ -416,8 +460,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 	SSL *ssl = NULL;
 	X509 *cert = NULL;
 
-	timeout = get_var_integer("TIMEOUT", 15);
-	if (timeout <= 1) timeout = 15;
+	if ((timeout = get_var_integer("TIMEOUT", 15)) <= 1) timeout = 15;
 	tv.tv_sec = timeout;
 
 	memset(&hints, 0, sizeof(hints));
@@ -529,7 +572,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 			if ((home = getenv("HOME")) == NULL) goto fail;
 			snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s.crt", home, sel->host);
 			snprintf(keypath, sizeof(keypath), "%s/.gplaces_%s.key", home, sel->host);
-			if (ask && stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT && (mkcert = set_var(&variables, "mkcert", NULL)) != NULL && *mkcert != '\0') execute_handler(mkcert, "", sel);
+			if (ask && stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT) mkcert(crtpath, keypath);
 			if (SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM) == 1 && SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM) == 1) break;
 			error(0, "failed to load client certificate for `%s`: %s", sel->host, ERR_reason_error_string(ERR_get_error()));
 			ret = 50;
@@ -794,7 +837,7 @@ static void edit_variable(VariableList *vars, char *line) {
 
 	if (name != NULL) {
 		if (data) set_var(vars, name, data);
-		else puts(set_var(vars, name, NULL));
+		else if ((data = set_var(vars, name, NULL)) != NULL) puts(data);
 	} else {
 		Variable *it;
 		LIST_FOREACH(it, vars, next) printf("%s = \"%s\"\n", it->name, it->data);

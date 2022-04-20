@@ -17,8 +17,17 @@ sub									rawtext.club/~sloum/spacewalk.gmi
 sub									midnight.pub
 sub									gemini.conman.org/boston.gemini
 
-# define a generator for ~/.gplaces_%h.crt and ~/.gplaces_%h.key
-set mkcert							"openssl req -new -subj /CN=`whoami` -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -days 1825 -nodes -out ~/.gplaces_%h.crt -keyout ~/.gplaces_%h.key"
+# define the client certificate curve or "" to fall back to prime256v1
+set curve							"prime256v1"
+
+# define the client certificate digest or "" to fall back to sha256
+set digest							"sha256"
+
+# define the client certificate CN or "" to fall back to $USER
+set cn								""
+
+# define the client certificate expiration time (days) or 0 to disable certificate generation
+set days							1825
 
 # pager for long text; change to cat to disable paging
 set pager							"less -r"

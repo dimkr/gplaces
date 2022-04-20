@@ -106,8 +106,17 @@ A format string can have the following formating options:
 Specifies the initialization file to use. If unspecified, gplaces tries ~/.gplacesrc and /etc/gplacesrc.
 .SH CONFIGURATION
 .TP
-.B mkcert
-Specifies a client certificates generation command, as a format string. If unspecified or empty, automatic generation of client certificates is disabled.
+.B curve
+Specifies the elliptic curve to use when generating client certificates. If unspecified or empty, the default is prime256v1.
+.TP
+.B digest
+Specifies the message digest to use when generating client certificates. If unspecified or empty, the default is sha256.
+.TP
+.B cn
+Specifies the Common Name to use when generating client certificates. If unspecified or empty, the default is the value of the USER environment variable.
+.TP
+.B days
+Specifies the expiration of time of generated client certificates, in days. If unspecified, the default is 1825 days (5 years). If set to 0, certificate generation is disabled.
 .TP
 .B pager
 Specifies a pager used to display pages. If unspecified, the default is the value of the PAGER environment variable, if set, otherwise "less -r". If set to "cat", paging is disabled.
