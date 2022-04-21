@@ -625,7 +625,7 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	 *
 	 * If we found a certificate for one of these, stop even if loading fails.
 	 */
-	for (len = 0; len < (int)sizeof(suffix) && sel->path[len] != '\0'; ++len) suffix[len] = sel->path[len] == '/' ? '_' : sel->path[len];
+	for (len = 0; len < (int)sizeof(suffix) - 1 && sel->path[len] != '\0'; ++len) suffix[len] = sel->path[len] == '/' ? '_' : sel->path[len];
 	suffix[len] = '\0';
 	memcpy(keypath, crtpath, off);
 	for (i = sel->path[len - 1] == '/' ? len - 1 : len; i >= 0; --i) {
