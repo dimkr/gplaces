@@ -610,7 +610,7 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	SSL_CTX *ctx = NULL;
 	int status, redirs = 0, needcert = 0, ret = 0, len, i, off;
 
-	if ((home = getenv("HOME")) == NULL || (ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 0;
+	if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath) || (ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 0;
 
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
@@ -627,7 +627,6 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	 */
 	for (len = 0; len < (int)sizeof(suffix) && sel->path[len] != '\0'; ++len) suffix[len] = sel->path[len] == '/' ? '_' : sel->path[len];
 	suffix[len] = '\0';
-	off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host);
 	memcpy(keypath, crtpath, off);
 	for (i = sel->path[len - 1] == '/' ? len - 1 : len; i >= 0; --i) {
 		if (i < len && sel->path[i] != '/') continue;
