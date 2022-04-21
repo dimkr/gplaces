@@ -564,6 +564,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 		case '3':
 			if (!*meta || curl_url_set(sel->cu, CURLUPART_URL, meta, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) goto fail;
 			curl_free(sel->url); sel->url = url;
+			fprintf(stderr, "redirected to `%s`\n", sel->url);
 			break;
 
 		case '6':
