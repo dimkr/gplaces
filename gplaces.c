@@ -569,7 +569,13 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		case '6':
 			if (*meta) error(0, "`%s`: %s", sel->host, meta);
 			else error(0, "client certificate is required for `%s`", sel->host);
-			if (ask && stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT) mkcert(crtpath, keypath);
+			if (ask && stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT) {
+				snprintf(buffer, sizeof(buffer), "\33[35mGenerate client certificate for `%s`? (y/n)>\33[0m ", sel->host);
+				if ((line = bestline(buffer)) != NULL) {
+					if (*line == 'y' || *line == 'Y') mkcert(crtpath, keypath);
+					free(line);
+				}
+			}
 			if (SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM) == 1 && SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM) == 1) break;
 			error(0, "failed to load client certificate for `%s`: %s", sel->host, ERR_reason_error_string(ERR_get_error()));
 			ret = 50;
