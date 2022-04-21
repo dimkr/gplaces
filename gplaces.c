@@ -625,13 +625,12 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	 *
 	 * If we found a certificate for one of these, stop even if loading fails.
 	 */
-	len = (int)strlen(sel->path);
-	for (i = 0; i < len && i < (int)sizeof(suffix); ++i) suffix[i] = sel->path[i] == '/' ? '_' : sel->path[i];
+	for (len = 0; len < (int)sizeof(suffix) && sel->path[len] != '\0'; ++len) suffix[len] = sel->path[len] == '/' ? '_' : sel->path[len];
 	suffix[len] = '\0';
 	off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host);
 	memcpy(keypath, crtpath, off);
 	for (i = sel->path[len - 1] == '/' ? len - 1 : len; i >= 0; --i) {
-		if (i < len && suffix[i] != '_') continue;
+		if (i < len && sel->path[i] != '/') continue;
 		snprintf(&crtpath[off], sizeof(crtpath) - off, "%.*s.crt", i, suffix);
 		snprintf(&keypath[off], sizeof(keypath) - off, "%.*s.key", i, suffix);
 		if (stat(crtpath, &stbuf) == 0 && stat(keypath, &stbuf) == 0) {
