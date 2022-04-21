@@ -26,7 +26,7 @@ set digest							"sha256"
 # define the client certificate CN or "" to fall back to $USER
 set cn								""
 
-# define the client certificate expiration time (days) or 0 to disable certificate generation
+# define the client certificate expiration time (days)
 set days							1825
 
 # pager for long text; change to cat to disable paging

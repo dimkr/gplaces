@@ -421,7 +421,7 @@ static void mkcert(const char *crtpath, const char *keypath) {
 	int assigned = 0, nid;
 #endif
 
-	if ((days = get_var_integer("DAYS", 1825)) == 0) return;
+	if ((days = get_var_integer("DAYS", 1825)) <= 0) days = 1825;
 	if ((curve = set_var(&variables, "CURVE", NULL)) == NULL || *curve == '\0') curve = SN_X9_62_prime256v1;
 	if ((digest = set_var(&variables, "DIGEST", NULL)) == NULL || *digest == '\0') digest = LN_sha256;
 
@@ -603,23 +603,52 @@ static void sigint(int sig) {
 
 
 static int download(Selector *sel, FILE *fp, char **mime, int ask) {
-	static char crtpath[1024], keypath[1024];
+	static char crtpath[1024], keypath[1024], suffix[1024];
+	struct stat stbuf;
 	struct sigaction sa = {.sa_handler = sigint}, old;
 	const char *home;
 	SSL_CTX *ctx = NULL;
-	int status, redirs = 0, needcert = 0, ret = 0;
+	int status, redirs = 0, needcert = 0, ret = 0, len, i, off;
 
 	if ((home = getenv("HOME")) == NULL || (ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 0;
 
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 
-	snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s.crt", home, sel->host);
-	snprintf(keypath, sizeof(keypath), "%s/.gplaces_%s.key", home, sel->host);
-	/* other clients and some servers seem to ignore this part of the specification (v0.16.1): "A client certificate [...] has its scope bound to the same hostname as the request URL and to all paths below the path of the request URL path" */
-	SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM);
-	SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM);
+	/*
+	 * If the user requests gemini://example.com/foo/bar/baz.gmi, try to load:
+	 *
+	 *  1) The certificate for gemini://example.com/foo/bar/baz.gmi
+	 *  2) The certificate for gemini://example.com/foo/bar
+	 *  3) The certificate for gemini://example.com/foo
+	 *  4) The certificate for gemini://example.com
+	 *
+	 * If we found a certificate for one of these, stop even if loading fails.
+	 */
+	len = (int)strlen(sel->path);
+	for (i = 0; i < len && i < (int)sizeof(suffix); ++i) suffix[i] = sel->path[i] == '/' ? '_' : sel->path[i];
+	suffix[len] = '\0';
+	off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host);
+	memcpy(keypath, crtpath, off);
+	for (i = sel->path[len - 1] == '/' ? len - 1 : len; i >= 0; --i) {
+		if (i < len && suffix[i] != '_') continue;
+		snprintf(&crtpath[off], sizeof(crtpath) - off, "%.*s.crt", i, suffix);
+		snprintf(&keypath[off], sizeof(keypath) - off, "%.*s.key", i, suffix);
+		if (stat(crtpath, &stbuf) == 0 && stat(keypath, &stbuf) == 0) {
+			SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM);
+			SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM);
+			goto loaded;
+		}
+	}
 
+	/*
+	 * if we failed to find a matching certificate and a certificate is
+	 * generated, we want to associate it with the full path
+	 */
+	snprintf(&crtpath[off], sizeof(crtpath) - off, "%s.crt", suffix);
+	snprintf(&keypath[off], sizeof(keypath) - off, "%s.key", suffix);
+
+loaded:
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGINT, &sa, &old);
 

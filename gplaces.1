@@ -116,7 +116,7 @@ Specifies the message digest to use when generating client certificates. If unsp
 Specifies the Common Name to use when generating client certificates. If unspecified or empty, the default is the value of the USER environment variable.
 .TP
 .B days
-Specifies the expiration of time of generated client certificates, in days. If unspecified, the default is 1825 days (5 years). If set to 0, certificate generation is disabled.
+Specifies the expiration of time of generated client certificates, in days. If unspecified or invalid, the default is 1825 days (5 years).
 .TP
 .B pager
 Specifies a pager used to display pages. If unspecified, the default is the value of the PAGER environment variable, if set, otherwise "less -r". If set to "cat", paging is disabled.
