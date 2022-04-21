@@ -447,12 +447,11 @@ static void mkcert(const char *crtpath, const char *keypath) {
 }
 
 
-static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int ask) {
+static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, FILE *fp, char **mime, int ask) {
 	struct addrinfo hints, *result, *it;
-	static char crtpath[1024], keypath[1024], buffer[1024];
+	static char buffer[1024];
 	struct stat stbuf;
 	char *data = NULL, *crlf, *meta, *line, *url;
-	const char *home;
 	struct timeval tv = {0};
 	size_t total, prog = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
 	int timeout, fd = -1, received, ret = 40;
@@ -570,9 +569,6 @@ static int do_download(Selector *sel, SSL_CTX *ctx, FILE *fp, char **mime, int a
 		case '6':
 			if (*meta) error(0, "`%s`: %s", sel->host, meta);
 			else error(0, "client certificate is required for `%s`", sel->host);
-			if ((home = getenv("HOME")) == NULL) goto fail;
-			snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s.crt", home, sel->host);
-			snprintf(keypath, sizeof(keypath), "%s/.gplaces_%s.key", home, sel->host);
 			if (ask && stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT) mkcert(crtpath, keypath);
 			if (SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM) == 1 && SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM) == 1) break;
 			error(0, "failed to load client certificate for `%s`: %s", sel->host, ERR_reason_error_string(ERR_get_error()));
@@ -601,20 +597,28 @@ static void sigint(int sig) {
 
 
 static int download(Selector *sel, FILE *fp, char **mime, int ask) {
+	static char crtpath[1024], keypath[1024];
 	struct sigaction sa = {.sa_handler = sigint}, old;
+	const char *home;
 	SSL_CTX *ctx = NULL;
 	int status, redirs = 0, needcert = 0, ret = 0;
 
-	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 0;
+	if ((home = getenv("HOME")) == NULL || (ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 0;
 
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+
+	snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s.crt", home, sel->host);
+	snprintf(keypath, sizeof(keypath), "%s/.gplaces_%s.key", home, sel->host);
+	/* other clients and some servers seem to ignore this part of the specification (v0.16.1): "A client certificate [...] has its scope bound to the same hostname as the request URL and to all paths below the path of the request URL path" */
+	SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM);
+	SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM);
 
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGINT, &sa, &old);
 
 	do {
-		status = do_download(sel, ctx, fp, mime, ask);
+		status = do_download(sel, ctx, crtpath, keypath, fp, mime, ask);
 		if ((ret = (status >= 20 && status <= 29))) break;
 	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69 && ++needcert == 1) || (status >= 30 && status <= 39 && ++redirs < 5));
 
