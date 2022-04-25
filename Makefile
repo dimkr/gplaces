@@ -4,6 +4,7 @@ CONFDIR ?= $(PREFIX)/etc
 MANDIR = $(PREFIX)/share/man
 ICONDIR = $(PREFIX)/share/icons
 APPDIR = $(PREFIX)/share/applications
+APPDATADIR = $(PREFIX)/share/metainfo
 CC = cc
 CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-result
 CFLAGS += -DCONFDIR=\"$(CONFDIR)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
@@ -20,6 +21,7 @@ CONF = gplacesrc
 MAN = gplaces.1
 ICON = gplaces.svg
 APP = gplaces.desktop
+APPDATA = com.github.dimkr.gplaces.appdata.xml
 
 default: $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)
@@ -39,6 +41,8 @@ install: default
 	@install $(ICON) $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps/${ICON}
 	@mkdir -p $(DESTDIR)$(APPDIR)
 	@install $(APP) $(DESTDIR)$(APPDIR)/${APP}
+	@mkdir -p $(DESTDIR)$(APPDATADIR)
+	@install $(APPDATA) $(DESTDIR)$(APPDATADIR)/${APPDATA}
 
 uninstall:
 	@rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
@@ -46,3 +50,4 @@ uninstall:
 	@rm -f $(DESTDIR)$(MANDIR)/man1/${MAN}
 	@rm -f $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps/${ICON}
 	@rm -f $(DESTDIR)$(APPDIR)/${APP}
+	@rm -f $(DESTDIR)$(APPDATADIR)/${APPDATA}
