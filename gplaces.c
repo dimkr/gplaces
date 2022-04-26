@@ -1105,6 +1105,13 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 }
 
 
+static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2) {
+	(void)ansi1;
+	(void)ansi2;
+	return strcspn(buf, " ") == 0 ? "URL or command; type `help` for help" : NULL;
+}
+
+
 static void shell(int argc, char **argv) {
 	static char path[1024];
 	const char *home = NULL;
@@ -1113,6 +1120,7 @@ static void shell(int argc, char **argv) {
 
 	if (interactive) {
 		bestlineSetCompletionCallback(shell_name_completion);
+		bestlineSetHintsCallback(shell_hints);
 		if ((home = getenv("HOME")) != NULL) {
 			snprintf(path, sizeof(path), "%s/.gplaces_history", home);
 			bestlineHistoryLoad(path);
@@ -1215,9 +1223,7 @@ int main(int argc, char **argv) {
 		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"This program comes with ABSOLUTELY NO WARRANTY; for details type `help license'.\n" \
 		"This is free software, and you are welcome to redistribute it\n" \
-		"under certain conditions; type `help license' for details.\n" \
-		"\n" \
-		"Type `help` for help.\n" \
+		"under certain conditions; type `help license' for details.\n"
 	);
 
 	shell(argc, argv);
