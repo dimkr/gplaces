@@ -1123,7 +1123,6 @@ static void shell(int argc, char **argv) {
 
 	if (interactive) {
 		bestlineSetCompletionCallback(shell_name_completion);
-		bestlineSetHintsCallback(shell_hints);
 		if ((home = getenv("HOME")) != NULL) {
 			snprintf(path, sizeof(path), "%s/.gplaces_history", home);
 			bestlineHistoryLoad(path);
@@ -1133,7 +1132,9 @@ static void shell(int argc, char **argv) {
 	if (optind < argc) eval(argv[optind], NULL, 0);
 
 	for (;;) {
+		bestlineSetHintsCallback(shell_hints);
 		if ((line = base = bestline(prompt)) == NULL) break;
+		bestlineSetHintsCallback(NULL);
 		if ((to = find_selector(&menu, line)) != NULL) {
 			if (to->url && interactive) bestlineHistoryAdd(to->url);
 			else if (interactive) bestlineHistoryAdd(line);
