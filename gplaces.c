@@ -93,18 +93,15 @@ static int interactive;
 
 
 /*============================================================================*/
-static void vlogf(FILE *fp, const char *color, const char *fmt, va_list va) {
-	if (interactive) fprintf(fp, "\33[%sm", color);
-	vfprintf(fp, fmt, va);
-	if (interactive) fputs("\33[0m\n", fp);
-	else fputc('\n', fp);
-}
-
+__attribute__((format(printf, 2, 3)))
 static void error(int fatal, const char *fmt, ...) {
 	va_list va;
+	if (interactive) fwrite("\33[31m\n", 1, 6, stderr);
 	va_start(va, fmt);
-	vlogf(stderr, "31", fmt, va);
+	vfprintf(stderr, fmt, va);
 	va_end(va);
+	if (interactive) fwrite("\33[0m\n", 1, 5, stderr);
+	else fputc('\n', stderr);
 	if (fatal) exit(EXIT_FAILURE);
 }
 
@@ -454,7 +451,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	char *data = NULL, *crlf, *meta, *line, *url;
 	struct timeval tv = {0};
 	size_t total, prog = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
-	int timeout, fd = -1, received, ret = 40;
+	int timeout, fd = -1, received, ret = 40, err = 0;
 	BIO *bio = NULL;
 	SSL *ssl = NULL;
 	X509 *cert = NULL;
@@ -472,21 +469,19 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		goto fail;
 	}
 
-	for (it = result; it; it = it->ai_next) {
-		if ((fd = socket(it->ai_family, it->ai_socktype, it->ai_protocol)) == -1) continue;
-		if (connect(fd, it->ai_addr, it->ai_addrlen) == 0) break;
+	for (it = result; it && err != EINTR; it = it->ai_next) {
+		if ((fd = socket(it->ai_family, it->ai_socktype, it->ai_protocol)) == -1) { err = errno; continue; }
+		if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0 && setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == 0 && connect(fd, it->ai_addr, it->ai_addrlen) == 0) break;
+		err = errno;
 		close(fd); fd = -1;
 	}
 
 	freeaddrinfo(result);
 
 	if (fd == -1) {
-		error(0, "cannot connect to `%s`:`%s`", sel->host, sel->port);
+		error(0, "cannot connect to `%s`:`%s`: %s", sel->host, sel->port, strerror(err));
 		goto fail;
 	}
-
-	setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-	setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
 	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_NOCLOSE)) == NULL) {
 		error(0, "cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
@@ -497,19 +492,26 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	SSL_set_bio(ssl, bio, bio);
 	SSL_set_connect_state(ssl);
 
-	if (SSL_do_handshake(ssl) != 1 || (cert = SSL_get_peer_certificate(ssl)) == NULL) {
-		error(0, "cannot establish secure connection to `%s`:`%s`: %s", sel->host, sel->port, ERR_reason_error_string(ERR_get_error()));
+	if ((err = SSL_get_error(ssl, SSL_do_handshake(ssl))) != SSL_ERROR_NONE) {
+		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "cannot establish secure connection to `%s`:`%s`: cancelled", sel->host, sel->port);
+		else error(0, "cannot establish secure connection to `%s`:`%s`: error %d", sel->host, sel->port, err);
+		goto fail;
+	}
+
+	if ((cert = SSL_get_peer_certificate(ssl)) == NULL) {
+		error(0, "cannot establish secure connection to `%s`:`%s`: no peer certificate", sel->host, sel->port);
 		goto fail;
 	}
 
 	if (!tofu(cert, sel->host)) {
-		error(0, "cannot establish secure connection to `%s`:`%s`: certificate has changed", sel->host, sel->port);
+		error(0, "cannot establish secure connection to `%s`:`%s`: bad certificate", sel->host, sel->port);
 		goto fail;
 	}
 
 	snprintf(buffer, sizeof(buffer), "%s\r\n", sel->url);
-	if (SSL_write(ssl, buffer, strlen(buffer)) == 0) {
-		error(0, "cannot send request to `%s`:`%s`", sel->host, sel->port);
+	if ((err = SSL_get_error(ssl, SSL_write(ssl, buffer, strlen(buffer)))) != SSL_ERROR_NONE) {
+		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "cannot send request to `%s`:`%s`: cancelled", sel->host, sel->port);
+		else error(0, "cannot send request to `%s`:`%s`: error %d", sel->host, sel->port, err);
 		goto fail;
 	}
 
@@ -517,8 +519,10 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 
 	for (total = 0; total < cap - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
 		if ((received = SSL_read(ssl, &data[total], 1)) > 0) continue;
-		if (received == 0 || SSL_get_error(ssl, received) == SSL_ERROR_ZERO_RETURN) break;
-		error(0, "failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+		if (received == 0) break;
+		if ((err = SSL_get_error(ssl, received)) == SSL_ERROR_ZERO_RETURN) break;
+		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
+		else error(0, "failed to download `%s`: error %d", sel->url, err);
 		goto fail;
 	}
 	if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
@@ -539,8 +543,9 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 				if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
 				if (total > SIZE_MAX - cap) goto fail;
 			}
-			if (received < 0 && SSL_get_error(ssl, received) != SSL_ERROR_ZERO_RETURN) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
-				error(0, "failed to download `%s`: %s", sel->url, ERR_reason_error_string(ERR_get_error()));
+			if (received < 0 && ((err = SSL_get_error(ssl, received)) != SSL_ERROR_ZERO_RETURN)) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+				if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
+				else error(0, "failed to download `%s`: error %d", sel->url, err);
 				goto fail;
 			}
 			if (prog > 0) fputc('\n', stderr);
@@ -582,7 +587,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 			goto fail;
 
 		default:
-			error(0, "failed to download `%s`: %s", sel->url, *meta ? meta : data);
+			error(0, "cannot download `%s`: %s", sel->url, *meta ? meta : data);
 	}
 
 	ret = (data[0] - '0') * 10 + (data[1] - '0');
