@@ -694,7 +694,7 @@ static void download_to_file(Selector *sel, const char *def) {
 
 
 static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
-	static char filename[1024], template[1024];
+	static char filename[1024];
 	FILE *fp = NULL;
 	const char *tmpdir, *handler;
 	SelectorList list = LIST_HEAD_INITIALIZER(list);
@@ -702,8 +702,7 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 	int fd;
 
 	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
-	snprintf(template, sizeof(template), "%sgplaces.XXXXXXXX", tmpdir);
-	snprintf(filename, sizeof(filename), "%s", template);
+	snprintf(filename, sizeof(filename), "%sgplaces.XXXXXXXX", tmpdir);
 	if ((fd = mkstemp(filename)) == -1 || (fp = fdopen(fd, "r+w")) == NULL) {
 		error(0, "cannot create temporary file: %s", strerror(errno));
 		goto out;
@@ -715,9 +714,9 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 	} else if (!gemtext && (handler = find_mime_handler(mime)) != NULL) execute_handler(handler, filename, sel);
 
 out:
-	if (*filename) unlink(filename);
 	free(mime);
 	if (fp) fclose(fp);
+	if (fd != -1) unlink(filename);
 	return list;
 }
 
