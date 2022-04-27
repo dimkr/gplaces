@@ -464,8 +464,8 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_protocol = IPPROTO_TCP;
 
-	if (getaddrinfo(sel->host, sel->port, &hints, &result) || result == NULL) {
-		error(0, "cannot resolve hostname `%s`", sel->host);
+	if ((err = getaddrinfo(sel->host, sel->port, &hints, &result)) != 0) {
+		error(0, "cannot resolve hostname `%s`: %s", sel->host, gai_strerror(err));
 		goto fail;
 	}
 
