@@ -716,7 +716,10 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 out:
 	free(mime);
 	if (fp) fclose(fp);
-	if (fd != -1) unlink(filename);
+	if (fd != -1) {
+		if (fp == NULL) close(fd);
+		unlink(filename);
+	}
 	return list;
 }
 
@@ -810,7 +813,8 @@ static void page_gemtext(SelectorList *list) {
 
 	close(fds[0]);
 
-	if ((fp = fdopen(fds[1], "w")) != NULL) {
+	if ((fp = fdopen(fds[1], "w")) == NULL) close(fds[1]);
+	else {
 		print_gemtext(fp, list, NULL);
 		fclose(fp);
 	}
