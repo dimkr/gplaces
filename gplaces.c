@@ -445,7 +445,7 @@ static void mkcert(const char *crtpath, const char *keypath) {
 
 
 static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, FILE *fp, char **mime, int ask) {
-	struct addrinfo hints, *result, *it;
+	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
 	static char buffer[1024];
 	struct stat stbuf;
 	char *data = NULL, *crlf, *meta, *line, *url;
@@ -458,11 +458,6 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 
 	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
 	tv.tv_sec = timeout;
-
-	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_protocol = IPPROTO_TCP;
 
 	if ((err = getaddrinfo(sel->host, sel->port, &hints, &result)) != 0) {
 		error(0, "cannot resolve hostname `%s`: %s", sel->host, gai_strerror(err));
