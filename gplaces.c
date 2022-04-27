@@ -456,7 +456,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	SSL *ssl = NULL;
 	X509 *cert = NULL;
 
-	if ((timeout = get_var_integer("TIMEOUT", 15)) <= 1) timeout = 15;
+	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
 	tv.tv_sec = timeout;
 
 	memset(&hints, 0, sizeof(hints));
