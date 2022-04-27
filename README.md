@@ -29,7 +29,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 	- strict implementation, [the certificate for /foo is used for /foo{,/,/bar}](https://gitlab.com/gemini-specification/protocol/-/blob/75fdc58c6f76a8172ccd7dbf90824dd6146ed0b6/specification.gmi#L116)
 - ~internal~ configurable external pager for text & menus
 - support for non-interactive operation
-- about *1k lines* of *C* code
+- hackable, about *1k lines* of *C* code
 - ~100K executable when built with -O3 and -Wl,-s on x86_64
 
 ## How to compile?
