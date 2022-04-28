@@ -33,6 +33,10 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 - hackable, about *1k lines* of *C* code
 - ~100K executable when built with -O3 and -Wl,-s on x86_64
 
+## How to install?
+- [using Flatpak](https://flathub.org/apps/details/com.github.dimkr.gplaces): `flatpak install flathub com.github.dimkr.gplaces`
+- compile yourself
+
 ## How to compile?
 - clone this git repo
 - just type `make` or `make WITH_LIBMAGIC=0` on any Unix compatible system
