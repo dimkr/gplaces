@@ -20,7 +20,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 - VT100 compatible with ANSI escape sequences
 - no exotic external dependencies, no NIH
 	- ~GNU readline is fully optional~ bestline
-	- openssl or libressl
+	- openssl 3.x, openssl 1.x, libressl or libretls
 	- libcurl
 	- libmagic (optional)
 - SSH-style TOFU with ~/.gplaces_hosts
