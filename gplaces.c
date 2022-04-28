@@ -374,11 +374,12 @@ static int tofu(struct tls *ctx, const char *host) {
 static int tofu(X509 *cert, const char *host) {
 	static char hosts[1024], buffer[1024 + 1 + EVP_MAX_MD_SIZE * 2 + 2], hex[EVP_MAX_MD_SIZE * 2 + 1];
 	static unsigned char md[EVP_MAX_MD_SIZE];
+	unsigned int i;
 #endif
 	size_t hlen;
 	const char *home, *line;
 	FILE *fp;
-	unsigned int hexlen, i;
+	unsigned int hexlen;
 	int trust = 1;
 
 #ifdef GPLACES_USE_LIBTLS
