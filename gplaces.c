@@ -732,32 +732,18 @@ static int ndigits(int n) {
 }
 
 
-static void print_raw(FILE *fp, SelectorList *list, const char *filter) {
-	regex_t re;
-	Selector *sel;
-
-	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
-
-	SIMPLEQ_FOREACH(sel, list, next)
-		if (!filter || regexec(&re, sel->raw, 0, NULL, 0) == 0) fprintf(fp, "%s\n", sel->raw);
-
-	if (filter) regfree(&re);
-}
-
-
 static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 	regex_t re;
 	Selector *sel;
 	int length, out, rem, extra;
 	const char *p;
 
-	if (!interactive) { print_raw(fp, list, filter); return; }
-
 	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
 	length = get_terminal_width();
 
 	SIMPLEQ_FOREACH(sel, list, next) {
 		if (filter && regexec(&re, sel->raw, 0, NULL, 0) != 0) continue;
+		if (!interactive) { fprintf(fp, "%s\n", sel->raw); continue; }
 		rem = (int)strlen(sel->repr);
 		if (rem == 0) { fputc('\n', fp); continue; }
 		for (p = sel->repr; rem > 0; out += strspn(p + out, " "), rem -= out, p += out) {
