@@ -680,8 +680,12 @@ static void download_to_file(Selector *sel, const char *def) {
 		def = strrchr(sel->path, '/');
 		if (*def == '/') ++def;
 		if (!*def) def = sel->repr;
-		if ((download_dir = set_var(&variables, "DOWNLOAD_DIRECTORY", NULL)) == NULL) download_dir = ".";
-		snprintf(suggestion, sizeof(suggestion), "%s/%s", download_dir, def);
+		if (((download_dir = set_var(&variables, "DOWNLOAD_DIRECTORY", NULL)) != NULL && *download_dir != '\0') || (download_dir = getenv("XDG_DOWNLOAD_DIR")) != NULL) snprintf(suggestion, sizeof(suggestion), "%s/%s", download_dir, def);
+		else if ((download_dir = getenv("HOME")) != NULL) {
+			snprintf(suggestion, sizeof(suggestion), "%s/Downloads", download_dir);
+			if (access(suggestion, F_OK) == 0) snprintf(suggestion, sizeof(suggestion), "%s/Downloads/%s", download_dir, def);
+			else snprintf(suggestion, sizeof(suggestion), "%s/%s", download_dir, def);
+		} else snprintf(suggestion, sizeof(suggestion), "./%s", def);
 		snprintf(buffer, sizeof(buffer), "enter filename (press ENTER for `%s`): ", suggestion);
 		if ((input = bestline(buffer)) == NULL) return;
 		if (*input != '\0') filename = input;
