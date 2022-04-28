@@ -24,6 +24,12 @@
   </screenshots>
 
   <releases>
+    <release date="2022-04-28" version="1.16.1">
+      <description>
+        <p>Moved files from ~ to $XDG_{CONFIG,DATA}_HOME</p>
+      </description>
+    </release>
+
     <release date="2022-04-25" version="1.16.0">
       <description>
         <p>First release</p>

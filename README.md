@@ -16,15 +16,15 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 	- only [simple subscriptions](https://gemini.circumlunar.space/docs/companion/subscription.gmi) are supported, to avoid [XML parsing](https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=xml)
 - variables
 - ~command aliases~ use variables
-- sh-style history with ~/.gplaces_history
+- sh-style history with $XDG_DATA_HOME/gplaces_history or ~/.gplaces_history
 - VT100 compatible with ANSI escape sequences
 - no exotic external dependencies, no NIH
 	- ~GNU readline is fully optional~ bestline
 	- openssl or libressl
 	- libcurl
 	- libmagic (optional)
-- SSH-style TOFU with ~/.gplaces_hosts
-- client certificates support via ~/.gplaces_$host$path.{crt,key}
+- SSH-style TOFU with $XDG_DATA_HOME/gplaces_hosts or ~/.gplaces_hosts
+- client certificates support via $XDG_DATA_HOME/gplaces_$host$path.{crt,key} or ~/.gplaces_$host$path.{crt,key}
 	- auto-generation with user consent
 	- strict implementation, [the certificate for /foo is used for /foo{,/,/bar}](https://gitlab.com/gemini-specification/protocol/-/blob/75fdc58c6f76a8172ccd7dbf90824dd6146ed0b6/specification.gmi#L116)
 - ~internal~ configurable external pager for text & menus
@@ -54,7 +54,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|217|50|956
+C|1|218|50|967
 
 ## Help
 Just type `help` when the client is running.

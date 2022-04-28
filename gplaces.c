@@ -381,8 +381,10 @@ static int tofu(X509 *cert, const char *host) {
 
 	hlen = strlen(host);
 
-	if ((home = getenv("HOME")) == NULL) return 0;
-	snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
+	if ((home = getenv("XDG_DATA_HOME")) != NULL) snprintf(hosts, sizeof(hosts), "%s/gplaces_hosts", home);
+	else if ((home = getenv("HOME")) != NULL) snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
+	else return 0;
+
 	if ((fp = fopen(hosts, "r")) != NULL) {
 		while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
 			if (strncmp(line, host, hlen)) continue;
@@ -610,8 +612,11 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	SSL_CTX *ctx = NULL;
 	int status, redirs = 0, needcert = 0, ret = 0, len, i, off;
 
-	if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath) || (ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 0;
+	if ((home = getenv("XDG_DATA_HOME")) != NULL) {
+		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) return 0;
+	} else if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) return 0;
 
+	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 0;
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 
@@ -1109,7 +1114,10 @@ static void shell(int argc, char **argv) {
 
 	if (interactive) {
 		bestlineSetCompletionCallback(shell_name_completion);
-		if ((home = getenv("HOME")) != NULL) {
+		if ((home = getenv("XDG_DATA_HOME")) != NULL) {
+			snprintf(path, sizeof(path), "%s/gplaces_history", home);
+			bestlineHistoryLoad(path);
+		} else if ((home = getenv("HOME")) != NULL) {
 			snprintf(path, sizeof(path), "%s/.gplaces_history", home);
 			bestlineHistoryLoad(path);
 		}
@@ -1161,6 +1169,10 @@ static void load_rc_files(const char *rcfile) {
 	const char *home;
 
 	if (rcfile) { load_rc_file(rcfile); return; }
+	if ((home = getenv("XDG_CONFIG_HOME")) != NULL) {
+		snprintf(buffer, sizeof(buffer), "%s/gplacesrc", home);
+		if (load_rc_file(buffer)) return;
+	}
 	if ((home = getenv("HOME")) != NULL) {
 		snprintf(buffer, sizeof(buffer), "%s/.gplacesrc", home);
 		if (load_rc_file(buffer)) return;
@@ -1209,7 +1221,7 @@ int main(int argc, char **argv) {
 	load_rc_files(parse_arguments(argc, argv));
 
 	if (interactive) puts(
-		"gplaces - 0.16.0  Copyright (C) 2022  Dima Krasner\n" \
+		"gplaces - 0.16.1  Copyright (C) 2022  Dima Krasner\n" \
 		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"This program comes with ABSOLUTELY NO WARRANTY; for details type `help license'.\n" \
 		"This is free software, and you are welcome to redistribute it\n" \
