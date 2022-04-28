@@ -886,8 +886,7 @@ static const Help gemini_help[] = {
 	},
 	{
 		"commands",
-		"help          save          see           set           show\n" \
-		"sub"
+		"help          save          set           show          sub" \
 	},
 	{
 		"help",
@@ -915,10 +914,6 @@ static const Help gemini_help[] = {
 	{
 		"save",
 		"SAVE <item-id|url> [<path>]" \
-	},
-	{
-		"see",
-		"SEE <item-id>" \
 	},
 	{
 		"set",
@@ -1039,19 +1034,12 @@ static void cmd_set(char *line) {
 }
 
 
-static void cmd_see(char *line) {
-	Selector *to = find_selector(&menu, line);
-	if (to) puts(to->url);
-}
-
-
 static const Command gemini_commands[] = {
 	{ "show", cmd_show },
 	{ "save", cmd_save },
 	{ "help", cmd_help },
 	{ "sub", cmd_sub },
 	{ "set", cmd_set },
-	{ "see", cmd_see },
 	{ NULL, NULL }
 };
 
@@ -1100,9 +1088,14 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 
 
 static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2) {
+	static char hint[1024];
+	Selector *sel;
 	(void)ansi1;
 	(void)ansi2;
-	return strcspn(buf, " ") == 0 ? "URL or command; type `help` for help" : NULL;
+	if (strcspn(buf, " ") == 0) return "URL or command; type `help` for help";
+	else if ((sel = find_selector(&menu, buf)) == NULL) return NULL;
+	snprintf(hint, sizeof(hint), " %s", sel->url);
+	return hint;
 }
 
 
@@ -1221,7 +1214,7 @@ int main(int argc, char **argv) {
 	load_rc_files(parse_arguments(argc, argv));
 
 	if (interactive) puts(
-		"gplaces - 0.16.1  Copyright (C) 2022  Dima Krasner\n" \
+		"gplaces - 0.16.2  Copyright (C) 2022  Dima Krasner\n" \
 		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"This program comes with ABSOLUTELY NO WARRANTY; for details type `help license'.\n" \
 		"This is free software, and you are welcome to redistribute it\n" \
