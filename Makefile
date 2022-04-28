@@ -9,7 +9,14 @@ CC = cc
 CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-result
 CFLAGS += -DCONFDIR=\"$(CONFDIR)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
 LDFLAGS ?=
-LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
+LDFLAGS += $(shell pkg-config --libs libcurl)
+WITH_LIBTLS ?= $(shell pkg-config --exists libtls && echo 1 || echo 0)
+ifeq ($(WITH_LIBTLS),1)
+	CFLAGS += -DGPLACES_USE_LIBTLS $(shell pkg-config --cflags libtls libcrypto)
+	LDFLAGS += $(shell pkg-config --libs libtls libcrypto)
+else
+	LDFLAGS += $(shell pkg-config --libs libssl libcrypto)
+endif
 WITH_LIBMAGIC ?= $(shell pkg-config --exists libmagic && echo 1 || echo 0)
 ifeq ($(WITH_LIBMAGIC),1)
 	CFLAGS += -DGPLACES_USE_LIBMAGIC $(shell pkg-config --cflags libmagic)

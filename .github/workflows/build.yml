@@ -39,7 +39,7 @@ jobs:
     strategy:
       matrix:
         image: ["alpine:3.15", "alpine:edge"]
-        libssl: [openssl, libressl]
+        libssl: [openssl, libressl, libretls]
     container:
       image: ${{ matrix.image }}
     steps:

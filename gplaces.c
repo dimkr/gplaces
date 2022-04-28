@@ -41,6 +41,10 @@
 #include <regex.h>
 #include "queue.h"
 
+#ifdef GPLACES_USE_LIBTLS
+	#include <tls.h>
+#endif
+
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
 #include <openssl/x509.h>
@@ -362,22 +366,34 @@ static void execute_handler(const char *handler, const char *filename, Selector 
 
 
 /*============================================================================*/
+#ifdef GPLACES_USE_LIBTLS
+static int tofu(struct tls *ctx, const char *host) {
+	static char hosts[1024], buffer[1024 + 1 + 64 * 2 + 2];
+	const char *hex;
+#else
 static int tofu(X509 *cert, const char *host) {
 	static char hosts[1024], buffer[1024 + 1 + EVP_MAX_MD_SIZE * 2 + 2], hex[EVP_MAX_MD_SIZE * 2 + 1];
 	static unsigned char md[EVP_MAX_MD_SIZE];
+#endif
 	size_t hlen;
 	const char *home, *line;
 	FILE *fp;
-	unsigned int mdlen, i;
+	unsigned int hexlen, i;
 	int trust = 1;
 
-	if (X509_digest(cert, EVP_sha512(), md, &mdlen) == 0) return 0;
+#ifdef GPLACES_USE_LIBTLS
+	if ((hex = tls_peer_cert_hash(ctx)) == NULL) return 0;
+	hexlen = strlen(hex);
+#else
+	if (X509_digest(cert, EVP_sha512(), md, &hexlen) == 0) return 0;
 
-	for (i = 0; i < mdlen; ++i) {
+	for (i = 0; i < hexlen; ++i) {
 		hex[i * 2] = "0123456789ABCDEF"[md[i] >> 4];
 		hex[i * 2 + 1] = "0123456789ABCDEF"[md[i] & 0xf];
 	}
-	hex[mdlen * 2] = '\0';
+	hexlen *= 2;
+	hex[hexlen] = '\0';
+#endif
 
 	hlen = strlen(host);
 
@@ -387,7 +403,7 @@ static int tofu(X509 *cert, const char *host) {
 		while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
 			if (strncmp(line, host, hlen)) continue;
 			if (line[hlen] != ' ') continue;
-			trust = strncmp(&line[hlen + 1], hex, mdlen * 2) == 0 && line[hlen + 1 + mdlen * 2] == '\n';
+			trust = strncmp(&line[hlen + 1], hex, hexlen) == 0 && line[hlen + 1 + hexlen] == '\n';
 			goto out;
 		}
 
@@ -444,17 +460,27 @@ static void mkcert(const char *crtpath, const char *keypath) {
 }
 
 
+#ifdef GPLACES_USE_LIBTLS
+static int do_download(Selector *sel, struct tls_config *cfg, const char *crtpath, const char *keypath, FILE *fp, char **mime, int ask) {
+#else
 static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, FILE *fp, char **mime, int ask) {
+#endif
 	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
 	static char buffer[1024];
 	struct stat stbuf;
 	char *data = NULL, *crlf, *meta, *line, *url;
 	struct timeval tv = {0};
 	size_t total, prog = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
-	int timeout, fd = -1, received, ret = 40, err = 0;
+	int timeout, fd = -1, ret = 40, err = 0;
+#ifdef GPLACES_USE_LIBTLS
+	struct tls *tls = NULL;
+	ssize_t received;
+#else
 	BIO *bio = NULL;
 	SSL *ssl = NULL;
 	X509 *cert = NULL;
+	int received;
+#endif
 
 	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
 	tv.tv_sec = timeout;
@@ -478,6 +504,19 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		goto fail;
 	}
 
+#ifdef GPLACES_USE_LIBTLS
+	if ((tls = tls_client()) == NULL || tls_configure(tls, cfg) == -1 || tls_connect_socket(tls, fd, sel->host) == -1) {
+		error(0, "cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
+		goto fail;
+	}
+
+	if (tls_handshake(tls) == -1) {
+		error(0, "cannot establish secure connection to `%s`:`%s`: %s", sel->host, sel->port, tls_error(tls));
+		goto fail;
+	}
+
+	if (!tofu(tls, sel->host)) {
+#else
 	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_NOCLOSE)) == NULL) {
 		error(0, "cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
 		goto fail;
@@ -499,25 +538,43 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	}
 
 	if (!tofu(cert, sel->host)) {
+#endif
 		error(0, "cannot establish secure connection to `%s`:`%s`: bad certificate", sel->host, sel->port);
 		goto fail;
 	}
 
 	snprintf(buffer, sizeof(buffer), "%s\r\n", sel->url);
+#ifdef GPLACES_USE_LIBTLS
+	if (tls_write(tls, buffer, strlen(buffer)) <= 0) {
+		error(0, "cannot send request to `%s`:`%s`: %s", sel->host, sel->port, tls_error(tls));
+#else
 	if ((err = SSL_get_error(ssl, SSL_write(ssl, buffer, strlen(buffer)))) != SSL_ERROR_NONE) {
 		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "cannot send request to `%s`:`%s`: cancelled", sel->host, sel->port);
 		else error(0, "cannot send request to `%s`:`%s`: error %d", sel->host, sel->port, err);
+#endif
 		goto fail;
 	}
 
 	if ((data = malloc(cap)) == NULL) error(1, "cannot allocate download data");
 
-	for (total = 0; total < cap - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
-		if ((received = SSL_read(ssl, &data[total], 1)) > 0) continue;
+	for (total = 0; total < cap - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ) {
+#ifdef GPLACES_USE_LIBTLS
+		if ((received = tls_read(tls, &data[total], 1)) > 0) {
+#else
+		if ((received = SSL_read(ssl, &data[total], 1)) > 0) {
+#endif
+			++total;
+			continue;
+		}
 		if (received == 0) break;
+#ifdef GPLACES_USE_LIBTLS
+		if (received == TLS_WANT_POLLIN || received == TLS_WANT_POLLOUT) break;
+		error(0, "failed to download `%s`: %s", sel->url, tls_error(tls));
+#else
 		if ((err = SSL_get_error(ssl, received)) == SSL_ERROR_ZERO_RETURN) break;
 		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
 		else error(0, "failed to download `%s`: error %d", sel->url, err);
+#endif
 		goto fail;
 	}
 	if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
@@ -532,15 +589,25 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		case '2':
 			if (!*meta) goto fail;
 
+#ifdef GPLACES_USE_LIBTLS
+			while ((received = tls_read(tls, crlf + 1, cap - (crlf - data) - 1)) > 0) {
+#else
 			while ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
+#endif
 				if (fwrite(crlf + 1, 1, received, fp) != (size_t)received) goto fail;
 				total += received;
 				if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
 				if (total > SIZE_MAX - cap) goto fail;
 			}
+#ifdef GPLACES_USE_LIBTLS
+			if (received < 0) {
+				if (received == TLS_WANT_POLLIN || received == TLS_WANT_POLLOUT) break;
+				error(0, "failed to download `%s`: %s", sel->url, tls_error(tls));
+#else
 			if (received < 0 && ((err = SSL_get_error(ssl, received)) != SSL_ERROR_ZERO_RETURN)) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
 				if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
 				else error(0, "failed to download `%s`: error %d", sel->url, err);
+#endif
 				goto fail;
 			}
 			if (prog > 0) fputc('\n', stderr);
@@ -576,7 +643,11 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 					free(line);
 				}
 			}
+#ifdef GPLACES_USE_LIBTLS
+			if (tls_config_set_cert_file(cfg, crtpath) == 0 && tls_config_set_key_file(cfg, crtpath) == 0) break;
+#else
 			if (SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM) == 1 && SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM) == 1) break;
+#endif
 			error(0, "failed to load client certificate for `%s`: %s", sel->host, ERR_reason_error_string(ERR_get_error()));
 			ret = 50;
 			goto fail;
@@ -589,9 +660,16 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 
 fail:
 	free(data);
+#ifdef GPLACES_USE_LIBTLS
+	if (tls) {
+		tls_close(tls);
+		tls_free(tls);
+	}
+#else
 	if (cert) X509_free(cert);
 	if (ssl) SSL_free(ssl);
 	else if (bio) BIO_free(bio);
+#endif
 	if (fd != -1) close(fd);
 	return ret;
 }
@@ -607,13 +685,26 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	struct stat stbuf;
 	struct sigaction sa = {.sa_handler = sigint}, old;
 	const char *home;
+#ifdef GPLACES_USE_LIBTLS
+	struct tls_config *cfg = NULL;
+#else
 	SSL_CTX *ctx = NULL;
+#endif
 	int status, redirs = 0, needcert = 0, ret = 0, len, i, off;
 
+#ifdef GPLACES_USE_LIBTLS
+	if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath) || (cfg = tls_config_new()) == NULL) return 0;
+
+	tls_config_set_protocols(cfg, TLS_PROTOCOL_TLSv1_2 | TLS_PROTOCOL_TLSv1_3);
+	tls_config_insecure_noverifycert(cfg);
+	tls_config_insecure_noverifyname(cfg);
+	tls_config_insecure_noverifytime(cfg);
+#else
 	if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath) || (ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 0;
 
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+#endif
 
 	/*
 	 * If the user requests gemini://example.com/foo/bar/baz.gmi, try to load:
@@ -633,8 +724,13 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 		snprintf(&crtpath[off], sizeof(crtpath) - off, "%.*s.crt", i, suffix);
 		snprintf(&keypath[off], sizeof(keypath) - off, "%.*s.key", i, suffix);
 		if (stat(crtpath, &stbuf) == 0 && stat(keypath, &stbuf) == 0) {
+#ifdef GPLACES_USE_LIBTLS
+			tls_config_set_cert_file(cfg, crtpath);
+			tls_config_set_key_file(cfg, crtpath);
+#else
 			SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM);
 			SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM);
+#endif
 			goto loaded;
 		}
 	}
@@ -651,13 +747,21 @@ loaded:
 	sigaction(SIGINT, &sa, &old);
 
 	do {
+#ifdef GPLACES_USE_LIBTLS
+		status = do_download(sel, cfg, crtpath, keypath, fp, mime, ask);
+#else
 		status = do_download(sel, ctx, crtpath, keypath, fp, mime, ask);
+#endif
 		if ((ret = (status >= 20 && status <= 29))) break;
 	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69 && ++needcert == 1) || (status >= 30 && status <= 39 && ++redirs < 5));
 
 	sigaction(SIGINT, &old, NULL);
 
+#ifdef GPLACES_USE_LIBTLS
+	tls_config_free(cfg);
+#else
 	SSL_CTX_free(ctx);
+#endif
 
 	if (redirs == 5) error(0, "too many redirects from `%s`", sel->url);
 	return ret;
@@ -1201,8 +1305,10 @@ int main(int argc, char **argv) {
 	atexit(quit_client);
 	setlinebuf(stdout); /* if stdout is a file, flush after every line */
 
+#ifndef GPLACES_USE_LIBTLS
 	SSL_library_init();
 	SSL_load_error_strings();
+#endif
 
 	interactive = isatty(STDOUT_FILENO);
 
