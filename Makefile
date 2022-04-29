@@ -12,8 +12,8 @@ LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl)
 WITH_LIBTLS ?= $(shell pkg-config --exists libtls && echo 1 || echo 0)
 ifeq ($(WITH_LIBTLS),1)
-	CFLAGS += -DGPLACES_USE_LIBTLS $(shell pkg-config --cflags libtls libcrypto)
-	LDFLAGS += $(shell pkg-config --libs libtls libcrypto)
+	CFLAGS += -DGPLACES_USE_LIBTLS $(shell pkg-config --cflags libtls libssl libcrypto)
+	LDFLAGS += $(shell pkg-config --libs libtls libssl libcrypto)
 else
 	LDFLAGS += $(shell pkg-config --libs libssl libcrypto)
 endif
