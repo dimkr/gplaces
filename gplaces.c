@@ -1098,7 +1098,8 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 	(void)ansi2;
 	if (strcspn(buf, " ") == 0) return "URL or command; type `help` for help";
 	else if ((sel = find_selector(&menu, buf)) == NULL) return NULL;
-	snprintf(hint, sizeof(hint), " %s", sel->url);
+	if (strncmp(sel->url, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->url[9]);
+	else snprintf(hint, sizeof(hint), " %s", sel->url);
 	return hint;
 }
 
