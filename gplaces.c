@@ -1094,10 +1094,22 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2) {
 	static char hint[1024];
 	Selector *sel;
+	int first = -1, last = -1;
 	(void)ansi1;
 	(void)ansi2;
-	if (strcspn(buf, " ") == 0) return "URL or command; type `help` for help";
-	else if ((sel = find_selector(&menu, buf)) == NULL) return NULL;
+	if (strcspn(buf, " ") == 0) {
+		SIMPLEQ_FOREACH(sel, &menu, next) {
+			if (sel->type != 'l') continue;
+			if (first == -1) first = sel->index;
+			last = sel->index;
+		}
+		if (first != last) {
+			snprintf(hint, sizeof(hint), "%d-%d, URL or command", first, last);
+			return hint;
+		} else if (first != -1) return "1, URL or command";
+		else return "URL or command; type `help` for help";
+	}
+	if ((sel = find_selector(&menu, buf)) == NULL) return NULL;
 	if (strncmp(sel->url, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->url[9]);
 	else snprintf(hint, sizeof(hint), " %s", sel->url);
 	return hint;
