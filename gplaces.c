@@ -1250,7 +1250,7 @@ int main(int argc, char **argv) {
 	load_rc_files(parse_arguments(argc, argv));
 
 	if (interactive) puts(
-		"gplaces - 0.16.2  Copyright (C) 2022  Dima Krasner\n" \
+		"gplaces - "GPLACES_VERSION"  Copyright (C) 2022  Dima Krasner\n" \
 		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"This program comes with ABSOLUTELY NO WARRANTY; for details type `help license'.\n" \
 		"This is free software, and you are welcome to redistribute it\n" \
