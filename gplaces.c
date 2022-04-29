@@ -382,8 +382,10 @@ static int tofu(struct tls *ctx, const char *host) {
 
 	hlen = strlen(host);
 
-	if ((home = getenv("HOME")) == NULL) return 0;
-	snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
+	if ((home = getenv("XDG_DATA_HOME")) != NULL) snprintf(hosts, sizeof(hosts), "%s/gplaces_hosts", home);
+	else if ((home = getenv("HOME")) != NULL) snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
+	else return 0;
+
 	if ((fp = fopen(hosts, "r")) != NULL) {
 		while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
 			if (strncmp(line, host, hlen)) continue;
@@ -636,8 +638,11 @@ static int download(Selector *sel, FILE *fp, char **mime, int ask) {
 	struct tls_config *cfg = NULL;
 	int status, redirs = 0, needcert = 0, ret = 0, len, i, off;
 
-	if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath) || (cfg = tls_config_new()) == NULL) return 0;
+	if ((home = getenv("XDG_DATA_HOME")) != NULL) {
+		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) return 0;
+	} else if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) return 0;
 
+	if ((cfg = tls_config_new()) == NULL) return 0;
 	tls_config_set_protocols(cfg, TLS_PROTOCOL_TLSv1_2 | TLS_PROTOCOL_TLSv1_3);
 	tls_config_insecure_noverifycert(cfg);
 	tls_config_insecure_noverifyname(cfg);
@@ -692,19 +697,44 @@ loaded:
 }
 
 
+static const char *get_filename(Selector *sel, size_t *len) {
+	/*
+	 * skip the leading /
+	 * trim all trailing /
+	 * if the path is /, use the hostname
+	 * find the last / and skip it
+	 * if there's no /, return the path
+	 */
+	const char *p;
+	*len = strlen(&sel->path[1]);
+	while (*len > 0 && sel->path[1 + *len - 1] == '/') --*len;
+	if (*len == 0) {
+		*len = strlen(sel->host);
+		return sel->host;
+	}
+	p = memrchr(&sel->path[1], '/', *len);
+	if (p == NULL) return &sel->path[1];
+	*len -= p + 1 - &sel->path[1];
+	return p + 1;
+}
+
+
 static void download_to_file(Selector *sel, const char *def) {
 	static char suggestion[256], buffer[1024];
 	FILE *fp;
 	char *mime = NULL, *input = NULL, *download_dir;
 	const char *filename = def;
+	size_t len;
 	int ret;
 
 	if (def == NULL) {
-		def = strrchr(sel->path, '/');
-		if (*def == '/') ++def;
-		if (!*def) def = sel->repr;
-		if ((download_dir = set_var(&variables, "DOWNLOAD_DIRECTORY", NULL)) == NULL) download_dir = ".";
-		snprintf(suggestion, sizeof(suggestion), "%s/%s", download_dir, def);
+		def = get_filename(sel, &len);
+		if (((download_dir = set_var(&variables, "DOWNLOAD_DIRECTORY", NULL)) != NULL && *download_dir != '\0') || (download_dir = getenv("XDG_DOWNLOAD_DIR")) != NULL) snprintf(suggestion, sizeof(suggestion), "%s/%.*s", download_dir, (int)len, def);
+		else if ((download_dir = getenv("HOME")) != NULL) {
+			snprintf(suggestion, sizeof(suggestion), "%s/Downloads", download_dir);
+			if (access(suggestion, F_OK) == 0) snprintf(suggestion, sizeof(suggestion), "%s/Downloads/%.*s", download_dir, (int)len, def);
+			else snprintf(suggestion, sizeof(suggestion), "%s/%.*s", download_dir, (int)len, def);
+		} else snprintf(suggestion, sizeof(suggestion), "./%.*s", (int)len, def);
 		snprintf(buffer, sizeof(buffer), "enter filename (press ENTER for `%s`): ", suggestion);
 		if ((input = bestline(buffer)) == NULL) return;
 		if (*input != '\0') filename = input;
@@ -909,8 +939,7 @@ static const Help gemini_help[] = {
 	},
 	{
 		"commands",
-		"help          save          see           set           show\n" \
-		"sub"
+		"help          save          set           show          sub" \
 	},
 	{
 		"help",
@@ -938,10 +967,6 @@ static const Help gemini_help[] = {
 	{
 		"save",
 		"SAVE <item-id|url> [<path>]" \
-	},
-	{
-		"see",
-		"SEE <item-id>" \
 	},
 	{
 		"set",
@@ -1062,19 +1087,12 @@ static void cmd_set(char *line) {
 }
 
 
-static void cmd_see(char *line) {
-	Selector *to = find_selector(&menu, line);
-	if (to) puts(to->url);
-}
-
-
 static const Command gemini_commands[] = {
 	{ "show", cmd_show },
 	{ "save", cmd_save },
 	{ "help", cmd_help },
 	{ "sub", cmd_sub },
 	{ "set", cmd_set },
-	{ "see", cmd_see },
 	{ NULL, NULL }
 };
 
@@ -1123,9 +1141,27 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 
 
 static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2) {
+	static char hint[1024];
+	Selector *sel;
+	int first = -1, last = -1;
 	(void)ansi1;
 	(void)ansi2;
-	return strcspn(buf, " ") == 0 ? "URL or command; type `help` for help" : NULL;
+	if (strcspn(buf, " ") == 0) {
+		SIMPLEQ_FOREACH(sel, &menu, next) {
+			if (sel->type != 'l') continue;
+			if (first == -1) first = sel->index;
+			last = sel->index;
+		}
+		if (first != last) {
+			snprintf(hint, sizeof(hint), "%d-%d, URL or command", first, last);
+			return hint;
+		} else if (first != -1) return "1, URL or command";
+		else return "URL or command; type `help` for help";
+	}
+	if ((sel = find_selector(&menu, buf)) == NULL) return NULL;
+	if (strncmp(sel->url, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->url[9]);
+	else snprintf(hint, sizeof(hint), " %s", sel->url);
+	return hint;
 }
 
 
@@ -1137,7 +1173,10 @@ static void shell(int argc, char **argv) {
 
 	if (interactive) {
 		bestlineSetCompletionCallback(shell_name_completion);
-		if ((home = getenv("HOME")) != NULL) {
+		if ((home = getenv("XDG_DATA_HOME")) != NULL) {
+			snprintf(path, sizeof(path), "%s/gplaces_history", home);
+			bestlineHistoryLoad(path);
+		} else if ((home = getenv("HOME")) != NULL) {
 			snprintf(path, sizeof(path), "%s/.gplaces_history", home);
 			bestlineHistoryLoad(path);
 		}
@@ -1189,6 +1228,10 @@ static void load_rc_files(const char *rcfile) {
 	const char *home;
 
 	if (rcfile) { load_rc_file(rcfile); return; }
+	if ((home = getenv("XDG_CONFIG_HOME")) != NULL) {
+		snprintf(buffer, sizeof(buffer), "%s/gplacesrc", home);
+		if (load_rc_file(buffer)) return;
+	}
 	if ((home = getenv("HOME")) != NULL) {
 		snprintf(buffer, sizeof(buffer), "%s/.gplacesrc", home);
 		if (load_rc_file(buffer)) return;
@@ -1234,7 +1277,7 @@ int main(int argc, char **argv) {
 	load_rc_files(parse_arguments(argc, argv));
 
 	if (interactive) puts(
-		"gplaces - 0.16.0  Copyright (C) 2022  Dima Krasner\n" \
+		"gplaces - "GPLACES_VERSION"  Copyright (C) 2022  Dima Krasner\n" \
 		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"This program comes with ABSOLUTELY NO WARRANTY; for details type `help license'.\n" \
 		"This is free software, and you are welcome to redistribute it\n" \

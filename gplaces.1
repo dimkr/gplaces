@@ -32,18 +32,6 @@ Saves the given <item-id> from the menu or a given <url> to the disk. If no file
 .RE
 .RE
 .TP
-.B SEE
-.RS
-Syntax:
-.RS
-SEE <item-id>
-.RE
-Description:
-.RS
-Show the full Gemini URL for the menu selector id.
-.RE
-.RE
-.TP
 .B SET
 .RS
 Syntax:
@@ -103,7 +91,7 @@ A format string can have the following formating options:
 .SH OPTIONS
 .TP
 .B -r
-Specifies the initialization file to use. If unspecified, gplaces tries ~/.gplacesrc and /etc/gplacesrc.
+Specifies the initialization file to use. If unspecified, gplaces tries $XDG_CONFIG_HOME/gplacesrc, ~/.gplacesrc and /etc/gplacesrc.
 .SH CONFIGURATION
 .TP
 .B curve
@@ -123,6 +111,9 @@ Specifies a pager used to display pages. If unspecified, the default is the valu
 .TP
 .B timeout
 Specifies the download timeout. If unspecified or invalid, the default is 15 seconds.
+.TP
+.B download_directory
+Specifies the download directory. If unspecified or invalid, the default is the value of the XDG_DOWNLOAD_DIR environment variable, ~/Downloads or ~.
 .SH AUTHOR
 .P
 Dima Krasner (dima@dimakrasner.com)

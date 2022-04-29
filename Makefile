@@ -7,7 +7,11 @@ APPDIR = $(PREFIX)/share/applications
 APPDATADIR = $(PREFIX)/share/metainfo
 CC = cc
 CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-result
-CFLAGS += -DCONFDIR=\"$(CONFDIR)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
+VERSION ?= $(shell git describe --tags 2>/dev/null | sed s/^v//)
+ifeq ($(VERSION),)
+	VERSION = ?
+endif
+CFLAGS += -D_GNU_SOURCE -DCONFDIR=\"$(CONFDIR)\" -DGPLACES_VERSION=\"$(VERSION)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
 LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl)
 WITH_LIBTLS ?= $(shell pkg-config --exists libtls && echo 1 || echo 0)

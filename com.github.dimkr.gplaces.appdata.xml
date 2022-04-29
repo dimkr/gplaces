@@ -8,8 +8,15 @@
 
   <description>
     <p>
-       A simple, command-driven, terminal based Gemini client.
+       gplaces is a light Gemini client with a high power to weight ratio. In a tiny package, it features:
     </p>
+    <ul>
+       <li>A VT100-compatible shell with completion, history and hints</li>
+       <li>.gmi subscriptions</li>
+       <li>TOFU</li>
+       <li>Generation of client certificates</li>
+       <li>Slightly prettified Gemtext output</li>
+    </ul>
   </description>
 
   <launchable type="desktop-id">com.github.dimkr.gplaces.desktop</launchable>
@@ -24,7 +31,24 @@
   </screenshots>
 
   <releases>
-    <release date="2022-04-25" version="1.16.0">
+    <release date="2022-04-29" version="0.16.2">
+      <description>
+        <ul>
+          <li>Smarter choice of default download filename</li>
+          <li>Link URLs are now shown in hints</li>
+          <li>If download_dir is empty, the fallback is $XDG_DOWNLOAD_DIR, ~/Downloads or ~</li>
+          <li>The range of link IDs is now shown in a hint</li>
+        </ul>
+      </description>
+    </release>
+
+    <release date="2022-04-28" version="0.16.1">
+      <description>
+        <p>Moved files from ~ to $XDG_{CONFIG,DATA}_HOME</p>
+      </description>
+    </release>
+
+    <release date="2022-04-25" version="0.16.0">
       <description>
         <p>First release</p>
       </description>
