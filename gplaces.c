@@ -480,12 +480,10 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		goto fail;
 	}
 
-	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_NOCLOSE)) == NULL) {
+	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_NOCLOSE)) == NULL || SSL_set_tlsext_host_name(ssl, sel->host) == 0) {
 		error(0, "cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
 		goto fail;
 	}
- 
-	SSL_set_tlsext_host_name(ssl, sel->host);
 	SSL_set_bio(ssl, bio, bio);
 	SSL_set_connect_state(ssl);
 
