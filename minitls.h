@@ -35,7 +35,9 @@ struct tls {
 	int err;
 };
 
-struct tls_config {};
+struct tls_config {
+	void *dummy;
+};
 
 static inline int tls_config_set_protocols(struct tls_config *config, uint32_t protocols) {
 	unsigned int mask = SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | ((protocols & TLS_PROTOCOL_TLSv1_2) ? 0 : SSL_OP_NO_TLSv1_2) | ((protocols & TLS_PROTOCOL_TLSv1_3) ? 0 : SSL_OP_NO_TLSv1_3);
