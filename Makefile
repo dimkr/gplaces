@@ -7,7 +7,7 @@ APPDIR = $(PREFIX)/share/applications
 APPDATADIR = $(PREFIX)/share/metainfo
 CC = cc
 CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-result
-CFLAGS += -DCONFDIR=\"$(CONFDIR)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
+CFLAGS += -D_GNU_SOURCE -DCONFDIR=\"$(CONFDIR)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
 LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
 WITH_LIBMAGIC ?= $(shell pkg-config --exists libmagic && echo 1 || echo 0)

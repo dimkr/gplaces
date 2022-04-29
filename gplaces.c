@@ -669,23 +669,44 @@ loaded:
 }
 
 
+static const char *get_filename(Selector *sel, size_t *len) {
+	/*
+	 * skip the leading /
+	 * trim all trailing /
+	 * if the path is /, use the hostname
+	 * find the last / and skip it
+	 * if there's no /, return the path
+	 */
+	const char *p;
+	*len = strlen(&sel->path[1]);
+	while (*len > 0 && sel->path[1 + *len - 1] == '/') --*len;
+	if (*len == 0) {
+		*len = strlen(sel->host);
+		return sel->host;
+	}
+	p = memrchr(&sel->path[1], '/', *len);
+	if (p == NULL) return &sel->path[1];
+	*len -= p + 1 - &sel->path[1];
+	return p + 1;
+}
+
+
 static void download_to_file(Selector *sel, const char *def) {
 	static char suggestion[256], buffer[1024];
 	FILE *fp;
 	char *mime = NULL, *input = NULL, *download_dir;
 	const char *filename = def;
+	size_t len;
 	int ret;
 
 	if (def == NULL) {
-		def = strrchr(sel->path, '/');
-		if (*def == '/') ++def;
-		if (!*def) def = sel->repr;
-		if (((download_dir = set_var(&variables, "DOWNLOAD_DIRECTORY", NULL)) != NULL && *download_dir != '\0') || (download_dir = getenv("XDG_DOWNLOAD_DIR")) != NULL) snprintf(suggestion, sizeof(suggestion), "%s/%s", download_dir, def);
+		def = get_filename(sel, &len);
+		if (((download_dir = set_var(&variables, "DOWNLOAD_DIRECTORY", NULL)) != NULL && *download_dir != '\0') || (download_dir = getenv("XDG_DOWNLOAD_DIR")) != NULL) snprintf(suggestion, sizeof(suggestion), "%s/%.*s", download_dir, (int)len, def);
 		else if ((download_dir = getenv("HOME")) != NULL) {
 			snprintf(suggestion, sizeof(suggestion), "%s/Downloads", download_dir);
-			if (access(suggestion, F_OK) == 0) snprintf(suggestion, sizeof(suggestion), "%s/Downloads/%s", download_dir, def);
-			else snprintf(suggestion, sizeof(suggestion), "%s/%s", download_dir, def);
-		} else snprintf(suggestion, sizeof(suggestion), "./%s", def);
+			if (access(suggestion, F_OK) == 0) snprintf(suggestion, sizeof(suggestion), "%s/Downloads/%.*s", download_dir, (int)len, def);
+			else snprintf(suggestion, sizeof(suggestion), "%s/%.*s", download_dir, (int)len, def);
+		} else snprintf(suggestion, sizeof(suggestion), "./%.*s", (int)len, def);
 		snprintf(buffer, sizeof(buffer), "enter filename (press ENTER for `%s`): ", suggestion);
 		if ((input = bestline(buffer)) == NULL) return;
 		if (*input != '\0') filename = input;
