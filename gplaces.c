@@ -785,8 +785,8 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 						break;
 					}
 					/* fall through */
-				case '#':
 				case 'i': fprintf(fp, "%.*s\n", out, p); break;
+				case '#': fprintf(fp, "\33[4m%.*s\33[0m\n", out, p); break;
 				case '`':
 					out = rem;
 					fprintf(fp, "%s\n", p);
