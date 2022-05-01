@@ -33,6 +33,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-05-01" version="0.16.3">
+      <description>
+        <ul>
+          <li>Headings are now underlined</li>
+          <li>Increased line length limit</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-04-29" version="0.16.2">
       <description>
         <ul>
