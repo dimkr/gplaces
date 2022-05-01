@@ -20,6 +20,8 @@
 ================================================================================
 */
 
+#include <alloca.h>
+
 #include <openssl/ssl.h>
 
 #define TLS_WANT_POLLIN (-1) 
@@ -73,14 +75,7 @@ static inline int tls_config_set_key_file(struct tls_config *config, const char 
 	return SSL_CTX_use_PrivateKey_file((SSL_CTX *)config, key_file, SSL_FILETYPE_PEM) == 1 ? 0 : -1;
 }
 
-static inline struct tls *tls_client(void) {
-	return calloc(sizeof(struct tls), 1);
-}
-
-static inline int tls_close(struct tls *ctx) {
-	(void)ctx;
-	return 0;
-}
+#define tls_client() (struct tls *)alloca(sizeof(struct tls))
 
 static inline void tls_free(struct tls *ctx) {
 	X509_free(ctx->cert);

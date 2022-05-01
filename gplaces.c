@@ -621,10 +621,7 @@ static int do_download(Selector *sel, struct tls_config *cfg, const char *crtpat
 
 fail:
 	free(data);
-	if (tls) {
-		tls_close(tls);
-		tls_free(tls);
-	}
+	if (tls) tls_free(tls);
 	if (fd != -1) close(fd);
 	return ret;
 }
