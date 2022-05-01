@@ -27,6 +27,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -236,7 +237,7 @@ static int parse_url(Selector *from, Selector *sel, const char *url) {
 
 
 static SelectorList parse_gemtext(Selector *from, FILE *fp) {
-	static char buffer[1024];
+	static char buffer[LINE_MAX];
 	char *line, *url;
 	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
 	Selector *sel;
