@@ -61,7 +61,7 @@
 typedef struct Selector {
 	SIMPLEQ_ENTRY(Selector) next;
 	int index;
-	char type, *raw, *repr, *scheme, *host, *port, *path, *url;
+	char type, *raw, *repr, *scheme, *host, *port, *path, *url, *rawurl;
 	CURLU *cu;
 } Selector;
 
@@ -176,6 +176,7 @@ static void free_selector(Selector *sel) {
 	curl_free(sel->port);
 	curl_free(sel->path);
 	curl_free(sel->url);
+	free(sel->rawurl);
 	if (sel->cu) curl_url_cleanup(sel->cu);
 	free(sel);
 }
@@ -198,6 +199,9 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 	}
 
 	if (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK) return 0;
+
+	free(sel->rawurl);
+	sel->rawurl = str_copy(url);
 
 	if (!strcmp(sel->scheme, "file")) {
 		sel->host = str_copy("");
@@ -1130,8 +1134,8 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 		else return "URL or command; type `help` for help";
 	}
 	if ((sel = find_selector(&menu, buf)) == NULL) return NULL;
-	if (strncmp(sel->url, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->url[9]);
-	else snprintf(hint, sizeof(hint), " %s", sel->url);
+	if (strncmp(sel->rawurl, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[9]);
+	else snprintf(hint, sizeof(hint), " %s", sel->rawurl);
 	return hint;
 }
 
