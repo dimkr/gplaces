@@ -34,8 +34,10 @@ ICON = gplaces.svg
 APP = gplaces.desktop
 APPDATA = com.github.dimkr.gplaces.appdata.xml
 
-default: $(OBJ)
+$(BIN): $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)
+
+gplaces.o: gplaces.c minitls.h
 
 .PHONY: clean
 clean:
