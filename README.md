@@ -54,7 +54,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|218|57|994
+C|1|218|57|993
 
 ## Help
 Just type `help` when the client is running.

@@ -458,7 +458,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	char *data = NULL, *crlf, *meta, *line, *url;
 	struct timeval tv = {0};
 	size_t total, prog = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
-	int timeout, fd = -1, received, ret = 40, err = 0;
+	int timeout, fd = -1, len, received, ret = 40, err = 0;
 	BIO *bio = NULL;
 	SSL *ssl = NULL;
 	X509 *cert = NULL;
@@ -508,8 +508,8 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		goto fail;
 	}
 
-	snprintf(buffer, sizeof(buffer), "%s\r\n", sel->url);
-	if ((err = SSL_get_error(ssl, SSL_write(ssl, buffer, strlen(buffer)))) != SSL_ERROR_NONE) {
+	len = snprintf(buffer, sizeof(buffer), "%s\r\n", sel->url);
+	if ((err = SSL_get_error(ssl, SSL_write(ssl, buffer, len >= (int)sizeof(buffer) ? (int)sizeof(buffer) - 1 : len))) != SSL_ERROR_NONE) {
 		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "cannot send request to `%s`:`%s`: cancelled", sel->host, sel->port);
 		else error(0, "cannot send request to `%s`:`%s`: error %d", sel->host, sel->port, err);
 		goto fail;
@@ -849,17 +849,16 @@ static void show_gemtext(SelectorList *list, const char *filter, int page) {
 
 
 static void navigate(Selector *to) {
-	const char *handler = NULL;
+	const char *handler = NULL, *ext;
 	SelectorList new = SIMPLEQ_HEAD_INITIALIZER(new);
 	FILE *fp;
-	size_t len;
 #ifdef GPLACES_USE_LIBMAGIC
 	magic_t mag;
 	const char *mime = NULL;
 #endif
 
 	if (!strcmp(to->scheme, "file")) {
-		if ((len = strlen(to->path)) >= 4 && !strcmp(&to->path[len - 4], ".gmi")) {
+		if ((ext = strrchr(to->path, '.')) != NULL && !strcmp(ext, ".gmi")) {
 			if ((fp = fopen(to->path, "r")) == NULL) return;
 			new = parse_gemtext(to, fp);
 			fclose(fp);
