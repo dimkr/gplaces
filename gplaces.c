@@ -854,8 +854,8 @@ static void navigate(Selector *to) {
 	FILE *fp;
 #ifdef GPLACES_USE_LIBMAGIC
 	magic_t mag;
-	const char *mime = NULL;
 #endif
+	const char *mime = NULL;
 
 	if (!strcmp(to->scheme, "file")) {
 		if ((ext = strrchr(to->path, '.')) != NULL && !strcmp(ext, ".gmi")) {
@@ -864,13 +864,12 @@ static void navigate(Selector *to) {
 			fclose(fp);
 		} else {
 #ifdef GPLACES_USE_LIBMAGIC
-			if ((mag = magic_open(MAGIC_MIME_TYPE | MAGIC_NO_CHECK_COMPRESS)) == NULL) return;
+			if ((mag = magic_open(MAGIC_MIME_TYPE | MAGIC_NO_CHECK_COMPRESS | MAGIC_ERROR)) == NULL) return;
 			if (magic_load(mag, NULL) == 0) mime = magic_file(mag, to->path);
 			if (mime) handler = find_mime_handler(mime);
 			magic_close(mag);
-#else
-			error(0, "unable to detect the MIME type of %s", to->path);
 #endif
+			if (mime == NULL) error(0, "unable to detect the MIME type of %s", to->path);
 			goto handle;
 		}
 	} else if (strcmp(to->scheme, "gemini")) {
