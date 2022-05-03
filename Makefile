@@ -27,14 +27,14 @@ ICON = gplaces.svg
 APP = gplaces.desktop
 APPDATA = com.github.dimkr.gplaces.appdata.xml
 
-default: $(OBJ)
+$(BIN): $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)
 
 .PHONY: clean
 clean:
 	@rm -f $(BIN) $(OBJ)
 
-install: default
+install: $(BIN)
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin/
 	@install $(BIN) $(DESTDIR)$(PREFIX)/bin/${BIN}
 	@mkdir -p $(DESTDIR)$(CONFDIR)
