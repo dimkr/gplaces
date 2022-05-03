@@ -221,10 +221,8 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 }
 
 
-static Selector *find_selector(SelectorList *list, const char *line) {
+static Selector *find_selector(SelectorList *list, int index) {
 	Selector *sel;
-	int index;
-	if (line == NULL || (index = atoi(line)) <= 0) return NULL;
 	SIMPLEQ_FOREACH(sel, list, next) if (sel->index == index) return sel;
 	return NULL;
 }
@@ -966,10 +964,11 @@ static void cmd_show(char *line) {
 static void cmd_save(char *line) {
 	char *id, *path;
 	Selector *to;
+	int index;
 	id = next_token(&line);
 	path = next_token(&line);
-	if ((to = find_selector(&menu, id)) != NULL) download_to_file(to, path);
-	else {
+	if ((index = atoi(id)) > 0 && (to = find_selector(&menu, index)) != NULL) download_to_file(to, path);
+	else if (index <= 0) {
 		to = new_selector('l', line);
 		if (parse_url(NULL, to, id)) download_to_file(to, path);
 		free_selector(to);
@@ -1116,7 +1115,7 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2) {
 	static char hint[1024];
 	Selector *sel;
-	int first = -1, last = -1;
+	int first = -1, last = -1, index;
 	(void)ansi1;
 	(void)ansi2;
 	if (strcspn(buf, " ") == 0) {
@@ -1131,7 +1130,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 		} else if (first != -1) return "1, URL or command";
 		else return "URL or command; type `help` for help";
 	}
-	if ((sel = find_selector(&menu, buf)) == NULL) return NULL;
+	if ((index = atoi(buf)) > 0 && (sel = find_selector(&menu, index)) == NULL) return NULL;
 	if (strncmp(sel->rawurl, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[9]);
 	else snprintf(hint, sizeof(hint), " %s", sel->rawurl);
 	return hint;
@@ -1143,6 +1142,7 @@ static void shell(int argc, char **argv) {
 	const char *home = NULL;
 	char *line, *base;
 	Selector *to = NULL;
+	int index;
 
 	if (interactive) {
 		bestlineSetCompletionCallback(shell_name_completion);
@@ -1161,11 +1161,11 @@ static void shell(int argc, char **argv) {
 		bestlineSetHintsCallback(shell_hints);
 		if ((line = base = bestline(prompt)) == NULL) break;
 		bestlineSetHintsCallback(NULL);
-		if ((to = find_selector(&menu, line)) != NULL) {
+		if ((index = atoi(line)) > 0 && (to = find_selector(&menu, index)) != NULL) {
 			if (to->url && interactive) bestlineHistoryAdd(to->url);
 			else if (interactive) bestlineHistoryAdd(line);
 			navigate(to);
-		} else {
+		} else if (index <= 0) {
 			eval(line, NULL, 0);
 			if (interactive) bestlineHistoryAdd(line);
 		}
