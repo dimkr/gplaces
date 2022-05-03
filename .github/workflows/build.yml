@@ -85,6 +85,9 @@ jobs:
           make WITH_LIBMAGIC=0
   static:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain: [x86_64-any64-linux-musl, aarch64-any64-linux-musl]
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -92,7 +95,4 @@ jobs:
           submodules: recursive
           fetch-depth: 0
       - name: Build
-        run: |
-          ./static-build.sh x86_64-any64-linux-musl
-          make clean
-          ./static-build.sh aarch64-any64-linux-musl
+        run: ./static-build.sh ${{ matrix.toolchain }}
