@@ -1115,10 +1115,10 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 			last = sel->index;
 		}
 		if (first != last) {
-			snprintf(hint, sizeof(hint), "%d-%d, URL or command", first, last);
+			snprintf(hint, sizeof(hint), "%d-%d, URL, variable or command", first, last);
 			return hint;
-		} else if (first != -1) return "1, URL or command";
-		else return "URL or command; type `help` for help";
+		} else if (first != -1) return "1, URL, variable or command";
+		else return "URL, variable or command; type `help` for help";
 	}
 	if ((index = atoi(buf)) > 0) {
 		if ((sel = find_selector(&menu, index)) == NULL) return NULL;
