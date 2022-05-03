@@ -1130,7 +1130,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 		} else if (first != -1) return "1, URL or command";
 		else return "URL or command; type `help` for help";
 	}
-	if ((index = atoi(buf)) > 0 && (sel = find_selector(&menu, index)) == NULL) return NULL;
+	if ((index = atoi(buf)) <= 0 || (sel = find_selector(&menu, index)) == NULL) return NULL;
 	if (strncmp(sel->rawurl, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[9]);
 	else snprintf(hint, sizeof(hint), " %s", sel->rawurl);
 	return hint;
