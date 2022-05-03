@@ -34,7 +34,7 @@ $(BIN): $(OBJ)
 clean:
 	@rm -f $(BIN) $(OBJ)
 
-install: default
+install: $(BIN)
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin/
 	@install $(BIN) $(DESTDIR)$(PREFIX)/bin/${BIN}
 	@mkdir -p $(DESTDIR)$(CONFDIR)
