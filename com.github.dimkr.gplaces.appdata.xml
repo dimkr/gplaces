@@ -33,6 +33,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-05-03" version="0.16.5">
+      <description>
+        <ul>
+          <li>Variable values are now shown in hints</li>
+          <li>Invalid link indices are now ignored</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-05-02" version="0.16.4">
       <description>
         <ul>
