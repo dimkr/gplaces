@@ -2,9 +2,9 @@
 
 HERE=`pwd`
 
-curl -L https://github.com/dimkr/toolchains/releases/latest/download/$1.tar.gz | sudo tar -xzf - -C /
-curl -Lo papawify-xz https://github.com/dimkr/papaw/releases/latest/download/papawify-xz
-curl -Lo papaw-xz-${1%%-*} https://github.com/dimkr/papaw/releases/latest/download/papaw-xz-${1%%-*}
+curl -fL https://github.com/dimkr/toolchains/releases/latest/download/$1.tar.gz | sudo tar -xzf - -C /
+curl -fLo papawify-xz https://github.com/dimkr/papaw/releases/latest/download/papawify-xz
+curl -fLo papaw-xz-${1%%-*} https://github.com/dimkr/papaw/releases/latest/download/papaw-xz-${1%%-*}
 
 . /opt/x-tools/$1/activate
 export MAKEFLAGS=-j`nproc`
