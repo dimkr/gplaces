@@ -87,6 +87,7 @@ jobs:
           make clean
           make WITH_LIBMAGIC=0
   static:
+    needs: [debian, alpine, arch]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -99,3 +100,30 @@ jobs:
           fetch-depth: 0
       - name: Build
         run: ./static-build.sh ${{ matrix.toolchain }}
+      - name: Upload
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v3
+        with:
+          name: gplaces-${{ matrix.toolchain }}-${{ github.ref }}
+          path: gplaces
+  release:
+    needs: static
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download x86_64 executable
+      uses: actions/download-artifact@v3
+      with:
+        name: gplaces-x86_64-any64-linux-musl-${{ github.ref }}
+        path: gplaces-x86_64
+    - name: Download AArch64 executable
+      uses: actions/download-artifact@v3
+      with:
+        name: gplaces-aarch64-any64-linux-musl-${{ github.ref }}
+        path: gplaces-aarch64
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          gplaces-x86_64
+          gplaces-aarch64
