@@ -33,6 +33,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-05-04" version="0.16.6">
+      <description>
+        <ul>
+          <li>Consistent line wrapping across English and non-English text</li>
+          <li>More useful default settings</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-05-03" version="0.16.5">
       <description>
         <ul>
