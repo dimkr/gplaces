@@ -28,6 +28,8 @@
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
+#include <wchar.h>
+#include <locale.h>
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -764,44 +766,67 @@ static int ndigits(int n) {
 
 
 static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
+	mbstate_t ps;
 	regex_t re;
+	size_t size;
+	wchar_t wchar;
 	Selector *sel;
-	int length, out, rem, extra;
 	const char *p;
+	int width, w, wchars, out, extra, i;
 
 	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
-	length = get_terminal_width();
+	width = get_terminal_width();
 
 	SIMPLEQ_FOREACH(sel, list, next) {
 		if (filter && regexec(&re, sel->raw, 0, NULL, 0) != 0) continue;
 		if (!interactive) { fprintf(fp, "%s\n", sel->raw); continue; }
-		rem = (int)strlen(sel->repr);
-		if (rem == 0) { fputc('\n', fp); continue; }
-		for (p = sel->repr; rem > 0; out += strspn(p + out, " "), rem -= out, p += out) {
-			out = rem <= length ? rem : length;
+		size = strlen(sel->repr);
+		if (size == 0) { fputc('\n', fp); continue; }
+
+		for (i = 0; i < (int)size; i += out, i += strspn(&sel->repr[i], " ")) {
+			extra = 0;
+			switch (sel->type) {
+				case 'l': if (i == 0) extra = 3 + ndigits(sel->index); break;
+				case '`': goto print;
+				case '>':
+				case '*': extra = 2; break;
+			}
+
+			for (wchars = 0, out = 0; out < (int)size - i && wchars < width - extra; ) {
+				p = &sel->repr[i + out];
+				memset(&ps, 0, sizeof(ps));
+				if (mbsrtowcs(&wchar, &p, 1, &ps) == (size_t)-1) {
+					/* best-effort, we assume 1 character == 1 byte */
+					out += 1;
+					wchars += 1;
+				} else {
+					w = wcwidth(wchar);
+					if (wchars + w > width - extra) break;
+					out += (p - &sel->repr[i + out]);
+					wchars += w;
+				}
+			}
+
+print:
 			switch (sel->type) {
 				case 'l':
-					if (p == sel->repr) {
-						extra = 3 + ndigits(sel->index);
-						if (out + extra > length) out -= extra;
-						fprintf(fp, "\33[4;36m[%d]\33[0;39m %.*s\n", sel->index, out, p);
+					if (i == 0) {
+						fprintf(fp, "\33[4;36m[%d]\33[0;39m %.*s\n", sel->index, out, &sel->repr[i]);
 						break;
 					}
 					/* fall through */
-				case 'i': fprintf(fp, "%.*s\n", out, p); break;
-				case '#': fprintf(fp, "\33[4m%.*s\33[0m\n", out, p); break;
+				case 'i': fprintf(fp, "%.*s\n", out, &sel->repr[i]); break;
+				case '#': fprintf(fp, "\33[4m%.*s\33[0m\n", out, &sel->repr[i]); break;
 				case '`':
-					out = rem;
-					fprintf(fp, "%s\n", p);
+					out = size;
+					fprintf(fp, "%s\n", &sel->repr[i]);
 					break;
 				case '>':
-					if (out + 2 > length) out -= 2;
-					fprintf(fp, "%c %.*s\n", sel->type, out, p);
+					fprintf(fp, "%c %.*s\n", sel->type, out, &sel->repr[i]);
 					break;
 				default:
-					if (out + 2 > length) out -= 2;
-					if (p == sel->repr) fprintf(fp, "%c %.*s\n", sel->type, out, p);
-					else fprintf(fp, "  %.*s\n", out, p);
+					if (i == 0) fprintf(fp, "%c %.*s\n", sel->type, out, &sel->repr[i]);
+					else fprintf(fp, "  %.*s\n", out, &sel->repr[i]);
 			}
 		}
 	}
@@ -1237,6 +1262,7 @@ static void quit_client() {
 
 
 int main(int argc, char **argv) {
+	setlocale(LC_ALL, "");
 	atexit(quit_client);
 	setlinebuf(stdout); /* if stdout is a file, flush after every line */
 
