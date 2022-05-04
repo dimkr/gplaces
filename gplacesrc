@@ -11,11 +11,14 @@ set home							gemini.circumlunar.space
 set capcom							gemini.circumlunar.space/capcom
 set spacewalk						rawtext.club/~sloum/spacewalk.gmi
 set gmisub							calcuode.com/gmisub-aggregate.gmi
+set station							station.martinrue.com
+set geddit							geddit.glv.one
+set antenna							warmedal.se/~antenna/
 
 # subscribe to some pages
 sub									rawtext.club/~sloum/spacewalk.gmi
 sub									midnight.pub
-sub									gemini.conman.org/boston.gemini
+sub									warmedal.se/~antenna/
 
 # define the client certificate curve or "" to fall back to prime256v1
 set curve							"prime256v1"
