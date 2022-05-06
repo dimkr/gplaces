@@ -57,6 +57,10 @@
 	#include <magic.h>
 #endif
 
+#ifdef GPLACES_USE_FRIBIDI
+	#include <fribidi.h>
+#endif
+
 #include "bestline/bestline.h"
 
 /*============================================================================*/
@@ -766,66 +770,73 @@ static int ndigits(int n) {
 
 
 static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
+#ifdef GPLACES_USE_FRIBIDI
+	static char repr[LINE_MAX];
+	static wchar_t wline[LINE_MAX], vis[LINE_MAX];
+	FriBidiParType type = FRIBIDI_TYPE_ON;
+#endif
 	mbstate_t ps;
 	regex_t re;
-	size_t size;
-	wchar_t wchar;
+	size_t size, wlen;
 	Selector *sel;
 	const char *p;
-	int width, w, wchars, out, extra, i;
+	int width, w, wwidth, wchars, out, extra, wi;
 
 	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
 	width = get_terminal_width();
 
 	SIMPLEQ_FOREACH(sel, list, next) {
 		if (filter && regexec(&re, sel->raw, 0, NULL, 0) != 0) continue;
-		if (!interactive) { fprintf(fp, "%s\n", sel->raw); continue; }
+		//if (!interactive) { fprintf(fp, "%s\n", sel->raw); continue; }
 		size = strlen(sel->repr);
 		if (size == 0) { fputc('\n', fp); continue; }
 
-		for (i = 0; i < (int)size; i += out, i += strspn(&sel->repr[i], " ")) {
+		memset(&ps, 0, sizeof(ps));
+		p = sel->repr;
+		wlen = mbsrtowcs(wline, &p, LINE_MAX, &ps);
+
+#ifdef GPLACES_USE_FRIBIDI
+		fribidi_log2vis((FriBidiChar *)wline, wlen, &type, (FriBidiChar *)vis, NULL, NULL, NULL);
+		vis[wlen] = L'\0';
+#endif
+
+		for (wi = 0; wi < (int)wlen; wi += wwidth, wi += wcsspn(&vis[wi], L" ")) {
 			extra = 0;
 			switch (sel->type) {
-				case 'l': if (i == 0) extra = 3 + ndigits(sel->index); break;
-				case '`': goto print;
+				case 'l': if (wi == 0) extra = 3 + ndigits(sel->index); break;
 				case '>':
 				case '*': extra = 2; break;
 			}
 
-			for (wchars = 0, out = 0; out < (int)size - i && wchars < width - extra; ) {
-				p = &sel->repr[i + out];
-				memset(&ps, 0, sizeof(ps));
-				if (mbsrtowcs(&wchar, &p, 1, &ps) == (size_t)-1 || (w = wcwidth(wchar)) < 0) {
-					/* best-effort, we assume 1 character == 1 byte */
-					out += 1;
-					wchars += 1;
-				} else {
-					if (wchars + w > width - extra) break;
-					out += (p - &sel->repr[i + out]);
-					wchars += w;
+			memset(&ps, 0, sizeof(ps));
+			for (out = 0, wchars = 0, wwidth = 0; vis[wi + wchars] != L'\0' && wwidth < width - extra; ++wchars) {
+				if ((w = wcwidth(vis[wi + wchars])) < 0) ++wwidth;
+				else {
+					if (wwidth + w > width - extra) break;
+					out += wcrtomb(&repr[out], vis[wi + wchars], &ps);
+					wwidth += w;
 				}
 			}
 
-print:
 			switch (sel->type) {
 				case 'l':
-					if (i == 0) {
-						fprintf(fp, "\33[4;36m[%d]\33[0;39m %.*s\n", sel->index, out, &sel->repr[i]);
+					if (wi == 0) {
+						fprintf(fp, "\33[4;36m[%d]\33[0;39m %.*s\n", sel->index, out, repr);
 						break;
 					}
 					/* fall through */
-				case 'i': fprintf(fp, "%.*s\n", out, &sel->repr[i]); break;
-				case '#': fprintf(fp, "\33[4m%.*s\33[0m\n", out, &sel->repr[i]); break;
+				case 'i': fprintf(fp, "%.*s\n", out, repr); break;
+				case '#': fprintf(fp, "\33[4m%.*s\33[0m\n", out, repr); break;
 				case '`':
-					out = size;
-					fprintf(fp, "%s\n", &sel->repr[i]);
+					wchars = wlen;
+					fprintf(fp, "%s\n", sel->repr);
 					break;
 				case '>':
-					fprintf(fp, "%c %.*s\n", sel->type, out, &sel->repr[i]);
+					fprintf(fp, "%c %.*s\n", sel->type, out, repr);
 					break;
 				default:
-					if (i == 0) fprintf(fp, "%c %.*s\n", sel->type, out, &sel->repr[i]);
-					else fprintf(fp, "  %.*s\n", out, &sel->repr[i]);
+					if (wi == 0) fprintf(fp, "%c %.*s\n", sel->type, out, repr);
+					else fprintf(fp, "  %.*s\n", out, repr);
 			}
 		}
 	}

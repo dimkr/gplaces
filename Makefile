@@ -19,6 +19,11 @@ ifeq ($(WITH_LIBMAGIC),1)
 	CFLAGS += -DGPLACES_USE_LIBMAGIC $(shell pkg-config --cflags libmagic)
 	LDFLAGS += $(shell pkg-config --libs libmagic)
 endif
+WITH_FRIBIDI ?= $(shell pkg-config --exists fribidi && echo 1 || echo 0)
+ifeq ($(WITH_FRIBIDI),1)
+	CFLAGS += -DGPLACES_USE_FRIBIDI $(shell pkg-config --cflags fribidi)
+	LDFLAGS += $(shell pkg-config --libs fribidi)
+endif
 OBJ = bestline/bestline.o gplaces.o
 BIN = gplaces
 CONF = gplacesrc
