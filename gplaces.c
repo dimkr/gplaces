@@ -795,7 +795,7 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 			for (wchars = 0, out = 0; out < (int)size - i && wchars < width - extra; ) {
 				p = &sel->repr[i + out];
 				memset(&ps, 0, sizeof(ps));
-				if (mbsrtowcs(&wchar, &p, 1, &ps) == (size_t)-1 || (w = wcwidth(wchar)) <= 0) {
+				if (mbsrtowcs(&wchar, &p, 1, &ps) == (size_t)-1 || (w = wcwidth(wchar)) < 0) {
 					/* best-effort, we assume 1 character == 1 byte */
 					out += 1;
 					wchars += 1;
