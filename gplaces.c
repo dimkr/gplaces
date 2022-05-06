@@ -780,6 +780,7 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 	size_t size, wlen;
 	Selector *sel;
 	const char *p;
+	const wchar_t *wp;
 	int width, w, wwidth, wchars, out, extra, wi;
 
 	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
@@ -800,7 +801,7 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 		vis[wlen] = L'\0';
 #endif
 
-		for (wi = 0; wi < (int)wlen; wi += wwidth, wi += wcsspn(&vis[wi], L" ")) {
+		for (wi = 0, wp = vis; wi < (int)wlen; wi += wchars, wi += wcsspn(&vis[wi], L" "), wp = &vis[wi]) {
 			extra = 0;
 			switch (sel->type) {
 				case 'l': if (wi == 0) extra = 3 + ndigits(sel->index); break;
@@ -809,14 +810,14 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 			}
 
 			memset(&ps, 0, sizeof(ps));
-			for (out = 0, wchars = 0, wwidth = 0; vis[wi + wchars] != L'\0' && wwidth < width - extra; ++wchars) {
-				if ((w = wcwidth(vis[wi + wchars])) < 0) ++wwidth;
-				else {
-					if (wwidth + w > width - extra) break;
-					out += wcrtomb(&repr[out], vis[wi + wchars], &ps);
-					wwidth += w;
-				}
+			for (wchars = 0, wwidth = 0; wi + wwidth < (int)wlen && wwidth < width - extra; ++wchars) {
+				if ((w = wcwidth(vis[wi + wchars])) < 0) w = 1;
+				else if (wwidth + w > width - extra) break;
+				wwidth += w;
 			}
+
+			memset(&ps, 0, sizeof(ps));
+			out = wcsnrtombs(repr, &wp, wchars, LINE_MAX, &ps);
 
 			switch (sel->type) {
 				case 'l':
