@@ -796,12 +796,7 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 		p = sel->repr;
 		wlen = mbsrtowcs(wline, &p, LINE_MAX, &ps);
 
-#ifdef GPLACES_USE_FRIBIDI
-		fribidi_log2vis((FriBidiChar *)wline, wlen, &type, (FriBidiChar *)vis, NULL, NULL, NULL);
-		vis[wlen] = L'\0';
-#endif
-
-		for (wi = 0, wp = vis; wi < (int)wlen; wi += wchars, wi += wcsspn(&vis[wi], L" "), wp = &vis[wi]) {
+		for (wi = 0, wp = vis; wi < (int)wlen; wi += wchars, wi += wcsspn(&wline[wi], L" "), wp = vis) {
 			extra = 0;
 			switch (sel->type) {
 				case 'l': if (wi == 0) extra = 3 + ndigits(sel->index); break;
@@ -811,10 +806,15 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 
 			memset(&ps, 0, sizeof(ps));
 			for (wchars = 0, wwidth = 0; wi + wwidth < (int)wlen && wwidth < width - extra; ++wchars) {
-				if ((w = wcwidth(vis[wi + wchars])) < 0) w = 1;
+				if ((w = wcwidth(wline[wi + wchars])) < 0) w = 1;
 				else if (wwidth + w > width - extra) break;
 				wwidth += w;
 			}
+
+#ifdef GPLACES_USE_FRIBIDIx
+			fribidi_log2vis((FriBidiChar *)&wline[wi], wchars, &type, (FriBidiChar *)vis, NULL, NULL, NULL);
+			vis[wchars] = L'\0';
+#endif
 
 			memset(&ps, 0, sizeof(ps));
 			out = wcsnrtombs(repr, &wp, wchars, LINE_MAX, &ps);
