@@ -36,17 +36,17 @@ clean:
 
 install: $(BIN)
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin/
-	@install $(BIN) $(DESTDIR)$(PREFIX)/bin/${BIN}
+	@install -m 755 $(BIN) $(DESTDIR)$(PREFIX)/bin/${BIN}
 	@mkdir -p $(DESTDIR)$(CONFDIR)
-	@install $(CONF) $(DESTDIR)$(CONFDIR)/${CONF}
+	@install -m 644 $(CONF) $(DESTDIR)$(CONFDIR)/${CONF}
 	@mkdir -p $(DESTDIR)$(MANDIR)/man1
-	@install $(MAN) $(DESTDIR)$(MANDIR)/man1/${MAN}
+	@install -m 644 $(MAN) $(DESTDIR)$(MANDIR)/man1/${MAN}
 	@mkdir -p $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps
-	@install $(ICON) $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps/${ICON}
+	@install -m 644 $(ICON) $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps/${ICON}
 	@mkdir -p $(DESTDIR)$(APPDIR)
-	@install $(APP) $(DESTDIR)$(APPDIR)/${APP}
+	@install -m 644 $(APP) $(DESTDIR)$(APPDIR)/${APP}
 	@mkdir -p $(DESTDIR)$(APPDATADIR)
-	@install $(APPDATA) $(DESTDIR)$(APPDATADIR)/${APPDATA}
+	@install -m 644 $(APPDATA) $(DESTDIR)$(APPDATADIR)/${APPDATA}
 
 uninstall:
 	@rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
