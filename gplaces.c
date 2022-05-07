@@ -692,7 +692,7 @@ static void download_to_file(Selector *sel, const char *def) {
 	const char *filename = def;
 	SSL *ssl = NULL;
 	size_t len, total = 0, prog = 0;
-	int received, err;
+	int received;
 
 	if (def == NULL) {
 		def = get_filename(sel, &len);
@@ -736,7 +736,7 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 	char *mime = NULL;
 	SSL *ssl = NULL;
 	size_t total = 0, prog = 0;
-	int fd, received, err, parse;
+	int fd, received, parse;
 
 	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
 	snprintf(filename, sizeof(filename), "%sgplaces.XXXXXXXX", tmpdir);
