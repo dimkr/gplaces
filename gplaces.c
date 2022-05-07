@@ -717,7 +717,7 @@ static void download_to_file(Selector *sel, const char *def) {
 }
 
 
-static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
+static SelectorList download_to_temp(Selector *sel, int ask, int gemtext, int preview) {
 	static char buffer[2048], filename[1024];
 	FILE *fp = NULL;
 	const char *tmpdir, *handler = NULL;
@@ -734,15 +734,15 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 		goto out;
 	}
 	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
-	if (!(parse = strncmp(mime, "text/gemini", 11) == 0) && !gemtext && (handler = find_mime_handler(mime)) == NULL) goto out;
+	if (!(parse = strncmp(mime, "text/gemini", 11) == 0) && (gemtext || (handler = find_mime_handler(mime)) == NULL)) goto out;
 	while ((received = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
 		if (fwrite(buffer, 1, received, fp) != (size_t)received) goto out;
 		total += received;
-		if (!parse && total > 2048 && total - prog > total / 20) { fputc('.', stderr); prog = total; }
-		else if (parse && interactive) fprintf(stderr, "\33[2m%.*s\33[0m", received, buffer);
+		if (!preview && total > 2048 && total - prog > total / 20) { fputc('.', stderr); prog = total; }
+		else if (preview && interactive) fprintf(stderr, "\33[2m%.*s\33[0m", received, buffer);
 		if (total > SIZE_MAX - sizeof(buffer)) goto out;
 	}
-	if ((parse && total) || prog > 0) fputc('\n', stderr);
+	if ((preview && total > 0) || prog > 0) fputc('\n', stderr);
 	if ((received < 0 && ssl_error(sel, ssl, received)) || fflush(fp) == EOF) goto out;
 	if (parse) {
 		if (fseek(fp, 0, SEEK_SET) == -1) goto out;
@@ -895,7 +895,7 @@ static void navigate(Selector *to) {
 	} else if (strcmp(to->scheme, "gemini")) {
 		handler = find_mime_handler(to->scheme);
 		goto handle;
-	} else new = download_to_temp(to, interactive, 0);
+	} else new = download_to_temp(to, interactive, 0, 1);
 
 	if (SIMPLEQ_EMPTY(&new)) return;
 	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + 9);
@@ -1026,7 +1026,7 @@ static void cmd_sub(char *line) {
 		strftime(ts, sizeof(ts), "%Y-%m-%d", tm);
 
 		SIMPLEQ_FOREACH(sel, &subscriptions, next) {
-			list = download_to_temp(sel, 0, 1);
+			list = download_to_temp(sel, 0, 1, 0);
 			if (SIMPLEQ_EMPTY(&list)) continue;
 
 			copy = new_selector('l', sel->raw);
