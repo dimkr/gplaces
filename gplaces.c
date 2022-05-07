@@ -451,6 +451,14 @@ static void mkcert(const char *crtpath, const char *keypath) {
 }
 
 
+static int ssl_error(Selector *sel, SSL *ssl, int err) {
+	if ((err = SSL_get_error(ssl, err)) == SSL_ERROR_ZERO_RETURN) return 0; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+	if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
+	else error(0, "failed to download `%s`: error %d", sel->url, err);
+	return 1;
+}
+
+
 static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, SSL **body, char **mime, int ask) {
 	static char buffer[1024], data[2 + 1 + 1024 + 2 + 1]; /* 99 meta\r\n\0 */
 	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
@@ -518,9 +526,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	for (total = 0; total < sizeof(data) - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
 		if ((received = SSL_read(ssl, &data[total], 1)) > 0) continue;
 		if (received == 0) break;
-		if ((err = SSL_get_error(ssl, received)) == SSL_ERROR_ZERO_RETURN) break;
-		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
-		else error(0, "failed to download `%s`: error %d", sel->url, err);
+		if (!ssl_error(sel, ssl, received)) break;
 		goto fail;
 	}
 	if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
@@ -711,11 +717,7 @@ static void download_to_file(Selector *sel, const char *def) {
 				if (total > SIZE_MAX - sizeof(body)) goto fail;
 			}
 			if (prog > 0) fputc('\n', stderr);
-			if (received < 0 && ((err = SSL_get_error(ssl, received)) != SSL_ERROR_ZERO_RETURN)) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
-				if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
-				else error(0, "failed to download `%s`: error %d", sel->url, err);
-				goto fail;
-			}
+			if (received < 0 && ssl_error(sel, ssl, received)) goto fail;
 		}
 fail:
 		if (ssl) SSL_free(ssl);
@@ -752,12 +754,7 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 		if (total > SIZE_MAX - sizeof(buffer)) goto out;
 	}
 	if ((parse && total) || prog > 0) fputc('\n', stderr);
-	if (received < 0 && ((err = SSL_get_error(ssl, received)) != SSL_ERROR_ZERO_RETURN)) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
-		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
-		else error(0, "failed to download `%s`: error %d", sel->url, err);
-		goto out;
-	}
-	if (fflush(fp) == EOF) goto out;
+	if ((received < 0 && ssl_error(sel, ssl, received)) || fflush(fp) == EOF) goto out;
 	if (parse) {
 		if (fseek(fp, 0, SEEK_SET) == -1) goto out;
 		list = parse_gemtext(sel, fp);
