@@ -451,13 +451,13 @@ static void mkcert(const char *crtpath, const char *keypath) {
 }
 
 
-static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, FILE *fp, char **mime, int ask) {
+static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, SSL **body, char **mime, int ask) {
 	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
 	static char buffer[1024];
 	struct stat stbuf;
 	char *data = NULL, *crlf, *meta, *line, *url;
 	struct timeval tv = {0};
-	size_t total, prog = 0, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
+	size_t total, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
 	int timeout, fd = -1, len, received, ret = 40, err = 0;
 	BIO *bio = NULL;
 	SSL *ssl = NULL;
@@ -485,7 +485,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		goto fail;
 	}
 
-	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_NOCLOSE)) == NULL || SSL_set_tlsext_host_name(ssl, sel->host) == 0) {
+	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_CLOSE)) == NULL || SSL_set_tlsext_host_name(ssl, sel->host) == 0) {
 		error(0, "cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
 		goto fail;
 	}
@@ -536,20 +536,8 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	switch (data[0]) {
 		case '2':
 			if (!*meta) goto fail;
-
-			while ((received = SSL_read(ssl, crlf + 1, cap - (crlf - data) - 1)) > 0) {
-				if (fwrite(crlf + 1, 1, received, fp) != (size_t)received) goto fail;
-				total += received;
-				if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
-				if (total > SIZE_MAX - cap) goto fail;
-			}
-			if (received < 0 && ((err = SSL_get_error(ssl, received)) != SSL_ERROR_ZERO_RETURN)) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
-				if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
-				else error(0, "failed to download `%s`: error %d", sel->url, err);
-				goto fail;
-			}
-			if (prog > 0) fputc('\n', stderr);
-
+			*body = ssl;
+			ssl = NULL; bio = NULL; fd = -1;
 			*mime = str_copy(meta);
 			break;
 
@@ -597,7 +585,7 @@ fail:
 	if (cert) X509_free(cert);
 	if (ssl) SSL_free(ssl);
 	else if (bio) BIO_free(bio);
-	if (fd != -1) close(fd);
+	else if (fd != -1) close(fd);
 	return ret;
 }
 
@@ -607,19 +595,20 @@ static void sigint(int sig) {
 }
 
 
-static int download(Selector *sel, FILE *fp, char **mime, int ask) {
+static SSL *download(Selector *sel, char **mime, int ask) {
 	static char crtpath[1024], keypath[1024], suffix[1024];
 	struct stat stbuf;
 	struct sigaction sa = {.sa_handler = sigint}, old;
 	const char *home;
 	SSL_CTX *ctx = NULL;
+	SSL *ssl = NULL;
 	int status, redirs = 0, needcert = 0, ret = 0, len, i, off;
 
 	if ((home = getenv("XDG_DATA_HOME")) != NULL) {
-		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) return 0;
-	} else if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) return 0;
+		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) return NULL;
+	} else if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) return NULL;
 
-	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return 0;
+	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return NULL;
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 
@@ -659,7 +648,7 @@ loaded:
 	sigaction(SIGINT, &sa, &old);
 
 	do {
-		status = do_download(sel, ctx, crtpath, keypath, fp, mime, ask);
+		status = do_download(sel, ctx, crtpath, keypath, &ssl, mime, ask);
 		if ((ret = (status >= 20 && status <= 29))) break;
 	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69 && ++needcert == 1) || (status >= 30 && status <= 39 && ++redirs < 5));
 
@@ -668,7 +657,7 @@ loaded:
 	SSL_CTX_free(ctx);
 
 	if (redirs == 5) error(0, "too many redirects from `%s`", sel->url);
-	return ret;
+	return ssl;
 }
 
 
@@ -695,12 +684,13 @@ static const char *get_filename(Selector *sel, size_t *len) {
 
 
 static void download_to_file(Selector *sel, const char *def) {
-	static char suggestion[256], buffer[1024];
+	static char suggestion[256], buffer[1024], body[1024];
 	FILE *fp;
 	char *mime = NULL, *input = NULL, *download_dir;
 	const char *filename = def;
-	size_t len;
-	int ret;
+	SSL *ssl = NULL;
+	size_t len, total = 0, prog = 0;
+	int received, err;
 
 	if (def == NULL) {
 		def = get_filename(sel, &len);
@@ -717,22 +707,38 @@ static void download_to_file(Selector *sel, const char *def) {
 	}
 	if ((fp = fopen(filename, "wb")) == NULL) error(0, "cannot create file `%s`: %s", filename, strerror(errno));
 	else {
-		ret = download(sel, fp, &mime, 1);
+		if ((ssl = download(sel, &mime, 1)) != NULL) {
+			while ((received = SSL_read(ssl, body, sizeof(body))) > 0) {
+				if (fwrite(body, 1, received, fp) != (size_t)received) goto fail;
+				total += received;
+				if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
+				if (total > SIZE_MAX - sizeof(body)) goto fail;
+			}
+			if (received < 0 && ((err = SSL_get_error(ssl, received)) != SSL_ERROR_ZERO_RETURN)) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+				if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
+				else error(0, "failed to download `%s`: error %d", sel->url, err);
+				goto fail;
+			}
+			if (prog > 0) fputc('\n', stderr);
+		}
+fail:
+		if (ssl) SSL_free(ssl);
 		fclose(fp);
 		free(mime);
-		if (!ret) unlink(filename);
+		if (ssl == NULL) unlink(filename);
 	}
 	free(input);
 }
 
 
 static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
-	static char filename[1024];
+	static char filename[1024], buffer[1024];
 	FILE *fp = NULL;
 	const char *tmpdir, *handler;
 	SelectorList list = LIST_HEAD_INITIALIZER(list);
 	char *mime = NULL;
-	int fd;
+	SSL *ssl = NULL;
+	int fd, received, err;
 
 	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
 	snprintf(filename, sizeof(filename), "%sgplaces.XXXXXXXX", tmpdir);
@@ -740,13 +746,23 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 		error(0, "cannot create temporary file: %s", strerror(errno));
 		goto out;
 	}
-	if (!download(sel, fp, &mime, ask) || fflush(fp) == EOF) goto out;
+	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
+	while ((received = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
+		if (fwrite(buffer, 1, received, fp) != (size_t)received) goto out;
+		if (received < 0 && ((err = SSL_get_error(ssl, received)) != SSL_ERROR_ZERO_RETURN)) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+			if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
+			else error(0, "failed to download `%s`: error %d", sel->url, err);
+			goto out;
+		}
+	}
+	if (fflush(fp) == EOF) goto out;
 	if (!strncmp(mime, "text/gemini", 11)) {
 		if (fseek(fp, 0, SEEK_SET) == -1) goto out;
 		list = parse_gemtext(sel, fp);
 	} else if (!gemtext && (handler = find_mime_handler(mime)) != NULL) execute_handler(handler, filename, sel);
 
 out:
+	if (ssl != NULL) SSL_free(ssl);
 	free(mime);
 	if (fp) fclose(fp);
 	if (fd != -1) {
