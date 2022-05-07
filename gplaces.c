@@ -452,7 +452,7 @@ static void mkcert(const char *crtpath, const char *keypath) {
 
 
 static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, SSL **body, char **mime, int ask) {
-	static char buffer[1024], data[2 + 1 + 1024 + 2 + 2048 + 1]; /* 99 meta\r\n\body0 */
+	static char buffer[1024], data[2 + 1 + 1024 + 2 + 1]; /* 99 meta\r\n\0 */
 	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
 	struct stat stbuf;
 	char *crlf, *meta = &data[3], *line, *url;
@@ -680,7 +680,7 @@ static const char *get_filename(Selector *sel, size_t *len) {
 
 
 static void download_to_file(Selector *sel, const char *def) {
-	static char suggestion[256], buffer[1024], body[1024];
+	static char buffer[2048], suggestion[256], body[1024];
 	FILE *fp;
 	char *mime = NULL, *input = NULL, *download_dir;
 	const char *filename = def;
@@ -727,7 +727,7 @@ fail:
 
 
 static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
-	static char filename[1024], buffer[1024];
+	static char buffer[2048], filename[1024];
 	FILE *fp = NULL;
 	const char *tmpdir, *handler = NULL;
 	SelectorList list = LIST_HEAD_INITIALIZER(list);
