@@ -455,7 +455,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	static char buffer[1024], data[2 + 1 + 1024 + 2 + 2048 + 1]; /* 99 meta\r\n\body0 */
 	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
 	struct stat stbuf;
-	char *crlf, *meta, *line, *url;
+	char *crlf, *meta = &data[3], *line, *url;
 	struct timeval tv = {0};
 	size_t total;
 	int timeout, fd = -1, len, received, ret = 40, err = 0;
@@ -528,7 +528,6 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 
 	crlf = &data[total - 2];
 	*crlf = '\0';
-	meta = &data[3];
 	if (meta >= crlf) meta = "";
 
 	switch (data[0]) {
@@ -734,6 +733,7 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 	SelectorList list = LIST_HEAD_INITIALIZER(list);
 	char *mime = NULL;
 	SSL *ssl = NULL;
+	size_t total = 0, prog = 0;
 	int fd, received, err, parse;
 
 	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
@@ -746,13 +746,18 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 	parse = strncmp(mime, "text/gemini", 11) == 0;
 	while ((received = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
 		if (fwrite(buffer, 1, received, fp) != (size_t)received) goto out;
-		if (received < 0 && ((err = SSL_get_error(ssl, received)) != SSL_ERROR_ZERO_RETURN)) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
-			if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
-			else error(0, "failed to download `%s`: error %d", sel->url, err);
-			goto out;
-		}
-		if (parse) fprintf(stdout, "\33[2m%.*s\33[0m", received, buffer);
+		total += received;
+		if (!parse && total > 2048 && total - prog > total / 20) { fputc('.', stderr); prog = total; }
+		else if (parse && interactive) fprintf(stdout, "\33[2m%.*s\33[0m", received, buffer);
+		if (total > SIZE_MAX - sizeof(buffer)) goto out;
+		if (parse && interactive) fprintf(stderr, "\33[2m%.*s\33[0m", received, buffer);
 	}
+	if (received < 0 && ((err = SSL_get_error(ssl, received)) != SSL_ERROR_ZERO_RETURN)) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
+		else error(0, "failed to download `%s`: error %d", sel->url, err);
+		goto out;
+	}
+	if (prog > 0) fputc('\n', stderr);
 	if (fflush(fp) == EOF) goto out;
 	if (parse) {
 		if (fseek(fp, 0, SEEK_SET) == -1) goto out;
