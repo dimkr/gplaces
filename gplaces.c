@@ -465,8 +465,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	struct stat stbuf;
 	char *crlf, *meta = &data[3], *line, *url;
 	struct timeval tv = {0};
-	size_t total;
-	int timeout, fd = -1, len, received, ret = 40, err = 0;
+	int timeout, fd = -1, len, total, received, ret = 40, err = 0;
 	BIO *bio = NULL;
 	SSL *ssl = NULL;
 	X509 *cert = NULL;
@@ -523,10 +522,9 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		goto fail;
 	}
 
-	for (total = 0; total < sizeof(data) - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
+	for (total = 0; total < (int)sizeof(data) - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
 		if ((received = SSL_read(ssl, &data[total], 1)) > 0) continue;
-		if (received == 0) break;
-		if (!ssl_error(sel, ssl, received)) break;
+		if (received == 0 || !ssl_error(sel, ssl, received)) break;
 		goto fail;
 	}
 	if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
