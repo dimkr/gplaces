@@ -729,7 +729,7 @@ fail:
 static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 	static char filename[1024], buffer[1024];
 	FILE *fp = NULL;
-	const char *tmpdir, *handler;
+	const char *tmpdir, *handler = NULL;
 	SelectorList list = LIST_HEAD_INITIALIZER(list);
 	char *mime = NULL;
 	SSL *ssl = NULL;
@@ -743,7 +743,7 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 		goto out;
 	}
 	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
-	parse = strncmp(mime, "text/gemini", 11) == 0;
+	if (!(parse = strncmp(mime, "text/gemini", 11) == 0) && !gemtext && (handler = find_mime_handler(mime)) == NULL) goto out;
 	while ((received = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
 		if (fwrite(buffer, 1, received, fp) != (size_t)received) goto out;
 		total += received;
@@ -762,7 +762,7 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 	if (parse) {
 		if (fseek(fp, 0, SEEK_SET) == -1) goto out;
 		list = parse_gemtext(sel, fp);
-	} else if (!gemtext && (handler = find_mime_handler(mime)) != NULL) execute_handler(handler, filename, sel);
+	} else if (handler != NULL) execute_handler(handler, filename, sel);
 
 out:
 	if (ssl != NULL) SSL_free(ssl);
