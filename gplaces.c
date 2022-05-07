@@ -738,7 +738,7 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 	SelectorList list = LIST_HEAD_INITIALIZER(list);
 	char *mime = NULL;
 	SSL *ssl = NULL;
-	int fd, received, err;
+	int fd, received, err, parse;
 
 	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
 	snprintf(filename, sizeof(filename), "%sgplaces.XXXXXXXX", tmpdir);
@@ -747,6 +747,7 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 		goto out;
 	}
 	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
+	parse = strncmp(mime, "text/gemini", 11) == 0;
 	while ((received = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
 		if (fwrite(buffer, 1, received, fp) != (size_t)received) goto out;
 		if (received < 0 && ((err = SSL_get_error(ssl, received)) != SSL_ERROR_ZERO_RETURN)) { /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
@@ -754,9 +755,10 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 			else error(0, "failed to download `%s`: error %d", sel->url, err);
 			goto out;
 		}
+		if (parse) fprintf(stdout, "\33[2m%.*s\33[0m", received, buffer);
 	}
 	if (fflush(fp) == EOF) goto out;
-	if (!strncmp(mime, "text/gemini", 11)) {
+	if (parse) {
 		if (fseek(fp, 0, SEEK_SET) == -1) goto out;
 		list = parse_gemtext(sel, fp);
 	} else if (!gemtext && (handler = find_mime_handler(mime)) != NULL) execute_handler(handler, filename, sel);
