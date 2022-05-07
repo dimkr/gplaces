@@ -452,12 +452,12 @@ static void mkcert(const char *crtpath, const char *keypath) {
 
 
 static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, SSL **body, char **mime, int ask) {
+	static char buffer[1024], data[2 + 1 + 1024 + 2 + 2048 + 1]; /* 99 meta\r\n\body0 */
 	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
-	static char buffer[1024];
 	struct stat stbuf;
-	char *data = NULL, *crlf, *meta, *line, *url;
+	char *crlf, *meta, *line, *url;
 	struct timeval tv = {0};
-	size_t total, cap = 2 + 1 + 1024 + 2 + 2048 + 1; /* 99 meta\r\n\body0 */
+	size_t total;
 	int timeout, fd = -1, len, received, ret = 40, err = 0;
 	BIO *bio = NULL;
 	SSL *ssl = NULL;
@@ -515,9 +515,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		goto fail;
 	}
 
-	if ((data = malloc(cap)) == NULL) error(1, "cannot allocate download data");
-
-	for (total = 0; total < cap - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
+	for (total = 0; total < sizeof(data) - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
 		if ((received = SSL_read(ssl, &data[total], 1)) > 0) continue;
 		if (received == 0) break;
 		if ((err = SSL_get_error(ssl, received)) == SSL_ERROR_ZERO_RETURN) break;
@@ -538,7 +536,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 			if (!*meta) goto fail;
 			*body = ssl;
 			ssl = NULL; bio = NULL; fd = -1;
-			*mime = str_copy(meta);
+			*mime = meta;
 			break;
 
 		case '1':
@@ -581,7 +579,6 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	ret = (data[0] - '0') * 10 + (data[1] - '0');
 
 fail:
-	free(data);
 	if (cert) X509_free(cert);
 	if (ssl) SSL_free(ssl);
 	else if (bio) BIO_free(bio);
@@ -724,7 +721,6 @@ static void download_to_file(Selector *sel, const char *def) {
 fail:
 		if (ssl) SSL_free(ssl);
 		fclose(fp);
-		free(mime);
 		if (ssl == NULL) unlink(filename);
 	}
 	free(input);
@@ -765,7 +761,6 @@ static SelectorList download_to_temp(Selector *sel, int ask, int gemtext) {
 
 out:
 	if (ssl != NULL) SSL_free(ssl);
-	free(mime);
 	if (fp) fclose(fp);
 	if (fd != -1) {
 		if (fp == NULL) close(fd);
