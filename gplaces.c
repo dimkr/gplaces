@@ -540,7 +540,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 
 		case '1':
 			if (!ask || !*meta) goto fail;
-			snprintf(buffer, sizeof(buffer), "\33[35m%s>\33[0m ", meta);
+			snprintf(buffer, sizeof(buffer), "\33[35m%.*s>\33[0m ", get_terminal_width() - 2, meta);
 			if (data[1] == '1') bestlineMaskModeEnable();
 			if ((line = bestline(buffer)) == NULL) goto fail;
 			if (data[1] != '1' && interactive) bestlineHistoryAdd(line);
