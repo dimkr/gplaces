@@ -33,6 +33,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-05-07" version="0.16.7">
+      <description>
+        <ul>
+          <li>Proper handling of zero-width characters</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-05-04" version="0.16.6">
       <description>
         <ul>
