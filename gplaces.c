@@ -792,18 +792,13 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 				case '*': extra = 2; break;
 			}
 
-			for (wchars = 0, out = 0; out < (int)size - i && wchars < width - extra; ) {
-				p = &sel->repr[i + out];
-				memset(&ps, 0, sizeof(ps));
+			memset(&ps, 0, sizeof(ps));
+			for (wchars = 0, out = 0, p = &sel->repr[i]; out < (int)size - i && wchars < width - extra; out += (p - &sel->repr[i + out]), p = &sel->repr[i + out], wchars += w) {
 				if (mbsrtowcs(&wchar, &p, 1, &ps) == (size_t)-1 || (w = wcwidth(wchar)) < 0) {
 					/* best-effort, we assume 1 character == 1 byte */
-					out += 1;
-					wchars += 1;
-				} else {
-					if (wchars + w > width - extra) break;
-					out += (p - &sel->repr[i + out]);
-					wchars += w;
-				}
+					p = &sel->repr[i + out + 1];
+					w = 1;
+				} else if (wchars + w > width - extra) break;
 			}
 
 print:
