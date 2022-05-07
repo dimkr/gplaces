@@ -598,7 +598,6 @@ static void sigint(int sig) {
 static SSL *download(Selector *sel, char **mime, int ask) {
 	static char crtpath[1024], keypath[1024], suffix[1024];
 	struct stat stbuf;
-	struct sigaction sa = {.sa_handler = sigint}, old;
 	const char *home;
 	SSL_CTX *ctx = NULL;
 	SSL *ssl = NULL;
@@ -644,15 +643,10 @@ static SSL *download(Selector *sel, char **mime, int ask) {
 	snprintf(&keypath[off], sizeof(keypath) - off, "%s.key", suffix);
 
 loaded:
-	sigemptyset(&sa.sa_mask);
-	sigaction(SIGINT, &sa, &old);
-
 	do {
 		status = do_download(sel, ctx, crtpath, keypath, &ssl, mime, ask);
 		if ((ret = (status >= 20 && status <= 29))) break;
 	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69 && ++needcert == 1) || (status >= 30 && status <= 39 && ++redirs < 5));
-
-	sigaction(SIGINT, &old, NULL);
 
 	SSL_CTX_free(ctx);
 
@@ -1265,9 +1259,13 @@ static void quit_client() {
 
 
 int main(int argc, char **argv) {
+	struct sigaction sa = {.sa_handler = sigint};
+
 	setlocale(LC_ALL, "");
 	atexit(quit_client);
 	setlinebuf(stdout); /* if stdout is a file, flush after every line */
+	sigemptyset(&sa.sa_mask);
+	sigaction(SIGINT, &sa, NULL);
 
 	SSL_library_init();
 	SSL_load_error_strings();
