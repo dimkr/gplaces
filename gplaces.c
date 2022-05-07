@@ -689,8 +689,8 @@ static void download_to_file(Selector *sel, const char *def) {
 	char *mime = NULL, *input = NULL, *download_dir;
 	const char *filename = def;
 	SSL *ssl = NULL;
-	size_t len, total = 0, prog = 0;
-	int received;
+	size_t len, total, prog = 0;
+	int ok = 0, received;
 
 	if (def == NULL) {
 		def = get_filename(sel, &len);
@@ -708,19 +708,16 @@ static void download_to_file(Selector *sel, const char *def) {
 	if ((fp = fopen(filename, "wb")) == NULL) error(0, "cannot create file `%s`: %s", filename, strerror(errno));
 	else {
 		if ((ssl = download(sel, &mime, 1)) != NULL) {
-			while ((received = SSL_read(ssl, body, sizeof(body))) > 0) {
-				if (fwrite(body, 1, received, fp) != (size_t)received) goto fail;
-				total += received;
+			for (total = 0; total < SIZE_MAX - sizeof(body) && (received = SSL_read(ssl, body, sizeof(body))) > 0 && fwrite(body, 1, received, fp) == (size_t)received; total += received) {
 				if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
-				if (total > SIZE_MAX - sizeof(body)) goto fail;
 			}
+			ok = (received == 0 || (received < 0 && !ssl_error(sel, ssl, received)));
+			SSL_free(ssl);
 			if (prog > 0) fputc('\n', stderr);
-			if (received < 0 && ssl_error(sel, ssl, received)) goto fail;
 		}
-fail:
-		if (ssl) SSL_free(ssl);
+
 		fclose(fp);
-		if (ssl == NULL) unlink(filename);
+		if (!ok) unlink(filename);
 	}
 	free(input);
 }
