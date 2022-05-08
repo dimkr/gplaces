@@ -187,6 +187,7 @@ static void free_selector(Selector *sel) {
 static void free_selectors(SelectorList *list) {
 	Selector *sel, *tmp;
 	SIMPLEQ_FOREACH_SAFE(sel, list, next, tmp) free_selector(sel);
+	SIMPLEQ_INIT(list);
 }
 
 
@@ -327,8 +328,8 @@ static void reap(const char *command, pid_t pid) {
 	int status;
 
 	while ((ret = waitpid(pid, &status, 0)) < 0 && errno == EINTR);
-	if (command && ret == pid && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
-	else if (command && ret == pid && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
+	if (ret == pid && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
+	else if (ret == pid && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
 }
 
 
@@ -443,46 +444,6 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 	width = get_terminal_width();
 	SIMPLEQ_FOREACH(sel, list, next) print_gemtext_line(fp, sel, filter ? &re : NULL, width);
 	if (filter) regfree(&re);
-}
-
-
-/*============================================================================*/
-static pid_t start_pager(FILE **fp) {
-	int fds[2];
-	pid_t pid;
-	const char *pager;
-
-	if ((pager = set_var(&variables, "PAGER", NULL)) == NULL && (pager = getenv("PAGER")) == NULL) pager = "less -r";
-	if (!strcmp(pager, "cat")) return -1;
-
-	if (pipe(fds) < 0) return -1;
-	if ((pid = fork()) == 0) {
-		close(fds[1]);
-		dup2(fds[0], STDIN_FILENO);
-		close(fds[0]);
-		execl("/bin/sh", "sh", "-c", pager, (char *)NULL);
-		exit(EXIT_FAILURE);
-	} else if (pid < 0) return -1;
-
-	close(fds[0]);
-
-	if ((*fp = fdopen(fds[1], "w")) == NULL) close(fds[1]);
-	else setlinebuf(*fp);
-	return pid;
-}
-
-
-static void page_gemtext(SelectorList *list) {
-	FILE *fp;
-	pid_t pid;
-
-	if ((pid = start_pager(&fp)) != -1) {
-		if (fp != NULL) {
-			print_gemtext(fp, list, NULL);
-			fclose(fp);
-		}
-		reap(NULL, pid);
-	}
 }
 
 
@@ -851,11 +812,8 @@ static void save_and_handle(Selector *sel, SSL *ssl, const char *mime) {
 		error(0, "cannot create temporary file: %s", strerror(errno));
 		goto out;
 	}
-	while ((received = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
-		if (fwrite(buffer, 1, received, fp) != (size_t)received) goto out;
-		total += received;
-		if (total > 2048 && total - prog > total / 20) { fputc('.', stderr); prog = total; }
-		if (total > SIZE_MAX - sizeof(buffer)) goto out;
+	for (total = 0; total < SIZE_MAX - sizeof(buffer) && (received = SSL_read(ssl, buffer, sizeof(buffer))) > 0 && fwrite(buffer, 1, received, fp) == (size_t)received; total += received) {
+		if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
 	}
 	if (prog > 0) fputc('\n', stderr);
 	if ((received < 0 && ssl_error(sel, ssl, received)) || fflush(fp) == EOF) goto out;
@@ -872,29 +830,27 @@ out:
 
 static SelectorList download_gemtext(Selector *sel, int ask, int handle, int print) {
 	static char buffer[2048];
-	FILE *fp = NULL, *pagerin = NULL;
+	FILE *fp = NULL;
 	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
 	Selector *it;
 	char *mime, *p = NULL, *start, *end;
 	SSL *ssl = NULL;
 	size_t length = 0, parsed = 0, total = 0, prog = 0;
-	pid_t pager = -1;
-	int received, pre = 0, index = 1, width;
+	int received, pre = 0, index = 1, width, ok = 0;
 
 	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
 	if (strncmp(mime, "text/gemini", 11) != 0) {
 		if (handle) save_and_handle(sel, ssl, mime);
 		goto out;
 	}
-	if ((fp = open_memstream(&p, &length)) == NULL || (print && (pager = start_pager(&pagerin)) == -1)) goto out;
+	if ((fp = open_memstream(&p, &length)) == NULL) goto out;
 	width = get_terminal_width();
 	while ((received = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
 		if (fwrite(buffer, 1, received, fp) != (size_t)received || fflush(fp) == EOF) goto out;
 		for (start = p + parsed, it = NULL; start < p + length && (end = strchr(start, '\n')) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
 			*end = '\0';
 			if (parse_gemtext_line(sel, start, &pre, &index, &it) && it) {
-				if (pagerin != NULL) print_gemtext_line(pagerin, it, NULL, width);
-				else if (print) print_gemtext_line(stdout, it, NULL, width);
+				if (print) print_gemtext_line(stdout, it, NULL, width);
 				SIMPLEQ_INSERT_TAIL(&list, it, next);
 			}
 		}
@@ -903,29 +859,53 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 		if (total > SIZE_MAX - sizeof(buffer)) goto out;
 	}
 	if (prog > 0) fputc('\n', stderr);
-	if (received < 0 && ssl_error(sel, ssl, received)) goto out;
+	if (!(ok = (received == 0 || !ssl_error(sel, ssl, received)))) goto out;
 	if (fclose(fp) == EOF) { fp = NULL; goto out; }
 	fp = NULL;
 	if (parsed < length && parse_gemtext_line(sel, p + parsed, &pre, &index, &it) && it) {
-		if (pagerin != NULL) print_gemtext_line(pagerin, it, NULL, width);
-		else if (print) print_gemtext_line(stdout, it, NULL, width);
+		if (print) print_gemtext_line(stdout, it, NULL, width);
 		SIMPLEQ_INSERT_TAIL(&list, it, next);
 	}
 
 out:
-	if (pagerin != NULL) fclose(pagerin);
-	if (pager != -1) {
-		reap(NULL, pager);
-		if (pagerin != NULL) SIMPLEQ_FOREACH(it, &list, next) print_gemtext_line(stdout, it, NULL, width);
-	}
 	if (fp != NULL) fclose(fp);
 	if (p != NULL) free(p);
 	if (ssl != NULL) SSL_free(ssl);
+	if (!ok) free_selectors(&list);
 	return list;
 }
 
 
-/*============================================================================*/
+static void page_gemtext(SelectorList *list) {
+	int fds[2];
+	FILE *fp;
+	pid_t pid;
+	const char *pager;
+
+	if ((pager = set_var(&variables, "PAGER", NULL)) == NULL && (pager = getenv("PAGER")) == NULL) pager = "less -r";
+	if (!strcmp(pager, "cat")) return;
+
+	if (pipe(fds) < 0) return;
+	if ((pid = fork()) == 0) {
+		close(fds[1]);
+		dup2(fds[0], STDIN_FILENO);
+		close(fds[0]);
+		execl("/bin/sh", "sh", "-c", pager, (char *)NULL);
+		exit(EXIT_FAILURE);
+	} else if (pid < 0) return;
+
+	close(fds[0]);
+
+	if ((fp = fdopen(fds[1], "w")) == NULL) close(fds[1]);
+	else {
+		print_gemtext(fp, list, NULL);
+		fclose(fp);
+	}
+
+	reap(pager, pid);
+}
+
+
 static void navigate(Selector *to) {
 	const char *handler = NULL, *ext;
 	SelectorList new = SIMPLEQ_HEAD_INITIALIZER(new);
@@ -959,6 +939,7 @@ static void navigate(Selector *to) {
 	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + 9);
 	free_selectors(&menu);
 	menu = new;
+	if (interactive) page_gemtext(&menu);
 	return;
 
 handle:
