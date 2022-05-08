@@ -240,46 +240,51 @@ static int parse_url(Selector *from, Selector *sel, const char *url) {
 }
 
 
-static SelectorList parse_gemtext(Selector *from, FILE *fp) {
-	static char buffer[LINE_MAX];
-	char *line, *url;
-	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
-	Selector *sel;
-	int pre = 0, i, index = 1;
+static int parse_gemtext_line(Selector *from, char *line, int *pre, int *index, Selector **sel) {
+	char *url;
 
-	for (i = 0; i < 512 && (line = fgets(buffer, sizeof(buffer), fp)) != NULL; ++i) {
-		if (strncmp(line, "```", 3) == 0) {
-			pre = !pre;
-			continue;
-		}
-
-		line[strcspn(line, "\r\n")] = '\0';
-
-		if (pre)
-			sel = new_selector('`', line);
-		else if (line[0] == '=' && line[1] == '>') {
-			sel = new_selector('l', line);
-			url = line + 2 + strspn(line + 2, " \t");
-			line = url + strcspn(url, " \t");
-			if (*line != '\0') {
-				*line = '\0';
-				line += 1 + strspn(line + 1, " \t");
-			}
-			if (!parse_url(from, sel, url)) { free_selector(sel); continue; }
-			if (*line) sel->repr = str_copy(line);
-			else sel->repr = str_copy(url);
-			sel->index = index++;
-		} else if (*line == '#')
-			sel = new_selector('#', line);
-		else if (*line == '>' || (line[0] == '*' && line[1] == ' ')) {
-			sel = new_selector(*line, line);
-			sel->repr = str_copy(line + 1 + strspn(line + 1, " \t"));
-		} else sel = new_selector('i', line);
-
-		SIMPLEQ_INSERT_TAIL(&list, sel, next);
+	if (strncmp(line, "```", 3) == 0) {
+		*pre = !*pre;
+		return 1;
 	}
 
-	if (i == 512) error(0, "gemtext is truncated to 512 lines");
+	line[strcspn(line, "\r\n")] = '\0';
+
+	if (*pre)
+		*sel = new_selector('`', line);
+	else if (line[0] == '=' && line[1] == '>') {
+		*sel = new_selector('l', line);
+		url = line + 2 + strspn(line + 2, " \t");
+		line = url + strcspn(url, " \t");
+		if (*line != '\0') {
+			*line = '\0';
+			line += 1 + strspn(line + 1, " \t");
+		}
+		if (!parse_url(from, *sel, url)) { free_selector(*sel); *sel = NULL; return 1; }
+		if (*line) (*sel)->repr = str_copy(line);
+		else (*sel)->repr = str_copy(url);
+		(*sel)->index = (*index)++;
+	} else if (*line == '#')
+		*sel = new_selector('#', line);
+	else if (*line == '>' || (line[0] == '*' && line[1] == ' ')) {
+		*sel = new_selector(*line, line);
+		(*sel)->repr = str_copy(line + 1 + strspn(line + 1, " \t"));
+	} else *sel = new_selector('i', line);
+
+	return 1;
+}
+
+
+static SelectorList parse_gemtext(Selector *from, FILE *fp) {
+	static char buffer[LINE_MAX];
+	char *line;
+	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
+	Selector *sel;
+	int pre = 0, index = 1;
+
+	for (sel = NULL; (line = fgets(buffer, sizeof(buffer), fp)) != NULL; sel = NULL) {
+		if (parse_gemtext_line(from, line, &pre, &index, &sel) && sel) SIMPLEQ_INSERT_TAIL(&list, sel, next);
+	}
 
 	return list;
 }
@@ -322,8 +327,8 @@ static void reap(const char *command, pid_t pid) {
 	int status;
 
 	while ((ret = waitpid(pid, &status, 0)) < 0 && errno == EINTR);
-	if (ret == pid && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
-	else if (ret == pid && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
+	if (command && ret == pid && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
+	else if (command && ret == pid && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
 }
 
 
@@ -363,6 +368,121 @@ static void execute_handler(const char *handler, const char *filename, Selector 
 		exit(EXIT_FAILURE);
 	} else if (pid > 0) reap(command, pid);
 	else error(0, "could not execute `%s`", command);
+}
+
+
+/*============================================================================*/
+static int ndigits(int n) {
+	int digits = 0;
+	for ( ; n > 0; n /= 10, ++digits);
+	return digits;
+}
+
+
+static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, int width) {
+	mbstate_t ps;
+	size_t size;
+	wchar_t wchar;
+	const char *p;
+	int w, wchars, out, extra, i;
+
+	if (filter && regexec(filter, sel->raw, 0, NULL, 0) != 0) return;
+	if (!interactive) { fprintf(fp, "%s\n", sel->raw); return; }
+	size = strlen(sel->repr);
+	if (size == 0) { fputc('\n', fp); return; }
+
+	for (i = 0; i < (int)size; i += out, i += strspn(&sel->repr[i], " ")) {
+		extra = 0;
+		switch (sel->type) {
+			case 'l': if (i == 0) extra = 3 + ndigits(sel->index); break;
+			case '`': goto print;
+			case '>':
+			case '*': extra = 2; break;
+		}
+
+		memset(&ps, 0, sizeof(ps));
+		for (wchars = 0, out = 0, p = &sel->repr[i]; out < (int)size - i && wchars < width - extra; out += (p - &sel->repr[i + out]), p = &sel->repr[i + out], wchars += w) {
+			if (mbsrtowcs(&wchar, &p, 1, &ps) == (size_t)-1 || (w = wcwidth(wchar)) < 0) {
+				/* best-effort, we assume 1 character == 1 byte */
+				p = &sel->repr[i + out + 1];
+				w = 1;
+			} else if (wchars + w > width - extra) break;
+		}
+
+print:
+		switch (sel->type) {
+			case 'l':
+				if (i == 0) {
+					fprintf(fp, "\33[4;36m[%d]\33[0;39m %.*s\n", sel->index, out, &sel->repr[i]);
+					break;
+				}
+				/* fall through */
+			case 'i': fprintf(fp, "%.*s\n", out, &sel->repr[i]); break;
+			case '#': fprintf(fp, "\33[4m%.*s\33[0m\n", out, &sel->repr[i]); break;
+			case '`':
+				out = size;
+				fprintf(fp, "%s\n", &sel->repr[i]);
+				break;
+			case '>':
+				fprintf(fp, "%c %.*s\n", sel->type, out, &sel->repr[i]);
+				break;
+			default:
+				if (i == 0) fprintf(fp, "%c %.*s\n", sel->type, out, &sel->repr[i]);
+				else fprintf(fp, "  %.*s\n", out, &sel->repr[i]);
+		}
+	}
+}
+
+
+static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
+	regex_t re;
+	Selector *sel;
+	int width;
+
+	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
+	width = get_terminal_width();
+	SIMPLEQ_FOREACH(sel, list, next) print_gemtext_line(fp, sel, filter ? &re : NULL, width);
+	if (filter) regfree(&re);
+}
+
+
+/*============================================================================*/
+static pid_t start_pager(FILE **fp) {
+	int fds[2];
+	pid_t pid;
+	const char *pager;
+
+	if ((pager = set_var(&variables, "PAGER", NULL)) == NULL && (pager = getenv("PAGER")) == NULL) pager = "less -r";
+	if (!strcmp(pager, "cat")) return -1;
+
+	if (pipe(fds) < 0) return -1;
+	if ((pid = fork()) == 0) {
+		close(fds[1]);
+		dup2(fds[0], STDIN_FILENO);
+		close(fds[0]);
+		execl("/bin/sh", "sh", "-c", pager, (char *)NULL);
+		exit(EXIT_FAILURE);
+	} else if (pid < 0) return -1;
+
+	close(fds[0]);
+
+	if ((*fp = fdopen(fds[1], "w")) == NULL) close(fds[1]);
+	else setlinebuf(*fp);
+	return pid;
+}
+
+
+static void page_gemtext(SelectorList *list) {
+	FILE *fp;
+	pid_t pid;
+
+	if ((pid = start_pager(&fp)) != -1) {
+		if (fp != NULL) {
+			print_gemtext(fp, list, NULL);
+			fclose(fp);
+		}
+		reap(NULL, pid);
+	}
 }
 
 
@@ -717,157 +837,95 @@ static void download_to_file(Selector *sel, const char *def) {
 }
 
 
-static SelectorList download_to_temp(Selector *sel, int ask, int gemtext, int preview) {
+static void save_and_handle(Selector *sel, SSL *ssl, const char *mime) {
 	static char buffer[2048], filename[1024];
 	FILE *fp = NULL;
 	const char *tmpdir, *handler = NULL;
-	SelectorList list = LIST_HEAD_INITIALIZER(list);
-	char *mime = NULL;
-	SSL *ssl = NULL;
 	size_t total = 0, prog = 0;
-	int fd, received, parse;
+	int fd = -1, received;
 
+	if ((handler = find_mime_handler(mime)) == NULL) goto out;
 	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
 	snprintf(filename, sizeof(filename), "%sgplaces.XXXXXXXX", tmpdir);
-	if ((fd = mkstemp(filename)) == -1 || (fp = fdopen(fd, "r+w")) == NULL) {
+	if ((fd = mkstemp(filename)) == -1 || (fp = fdopen(fd, "w")) == NULL) {
 		error(0, "cannot create temporary file: %s", strerror(errno));
 		goto out;
 	}
-	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
-	if (!(parse = strncmp(mime, "text/gemini", 11) == 0) && (gemtext || (handler = find_mime_handler(mime)) == NULL)) goto out;
 	while ((received = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
 		if (fwrite(buffer, 1, received, fp) != (size_t)received) goto out;
 		total += received;
-		if (!preview && total > 2048 && total - prog > total / 20) { fputc('.', stderr); prog = total; }
-		else if (preview && interactive) fprintf(stderr, "\33[2m%.*s\33[0m", received, buffer);
+		if (total > 2048 && total - prog > total / 20) { fputc('.', stderr); prog = total; }
 		if (total > SIZE_MAX - sizeof(buffer)) goto out;
 	}
-	if ((preview && total > 0) || prog > 0) fputc('\n', stderr);
+	if (prog > 0) fputc('\n', stderr);
 	if ((received < 0 && ssl_error(sel, ssl, received)) || fflush(fp) == EOF) goto out;
-	if (parse) {
-		if (fseek(fp, 0, SEEK_SET) == -1) goto out;
-		list = parse_gemtext(sel, fp);
-	} else if (handler != NULL) execute_handler(handler, filename, sel);
+	execute_handler(handler, filename, sel);
 
 out:
-	if (ssl != NULL) SSL_free(ssl);
 	if (fp) fclose(fp);
 	if (fd != -1) {
 		if (fp == NULL) close(fd);
 		unlink(filename);
 	}
+}
+
+
+static SelectorList download_gemtext(Selector *sel, int ask, int handle, int print) {
+	static char buffer[2048];
+	FILE *fp = NULL, *pagerin = NULL;
+	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
+	Selector *it;
+	char *mime, *p = NULL, *start, *end;
+	SSL *ssl = NULL;
+	size_t length = 0, parsed = 0, total = 0, prog = 0;
+	pid_t pager = -1;
+	int received, pre = 0, index = 1, width;
+
+	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
+	if (strncmp(mime, "text/gemini", 11) != 0) {
+		if (handle) save_and_handle(sel, ssl, mime);
+		goto out;
+	}
+	if ((fp = open_memstream(&p, &length)) == NULL || (print && (pager = start_pager(&pagerin)) == -1)) goto out;
+	width = get_terminal_width();
+	while ((received = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
+		if (fwrite(buffer, 1, received, fp) != (size_t)received || fflush(fp) == EOF) goto out;
+		for (start = p + parsed, it = NULL; start < p + length && (end = strchr(start, '\n')) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
+			*end = '\0';
+			if (parse_gemtext_line(sel, start, &pre, &index, &it) && it) {
+				if (pagerin != NULL) print_gemtext_line(pagerin, it, NULL, width);
+				else if (print) print_gemtext_line(stdout, it, NULL, width);
+				SIMPLEQ_INSERT_TAIL(&list, it, next);
+			}
+		}
+		total += received;
+		if (!print && total > 2048 && total - prog > total / 20) { fputc('.', stderr); prog = total; }
+		if (total > SIZE_MAX - sizeof(buffer)) goto out;
+	}
+	if (prog > 0) fputc('\n', stderr);
+	if (received < 0 && ssl_error(sel, ssl, received)) goto out;
+	if (fclose(fp) == EOF) { fp = NULL; goto out; }
+	fp = NULL;
+	if (parsed < length && parse_gemtext_line(sel, p + parsed, &pre, &index, &it) && it) {
+		if (pagerin != NULL) print_gemtext_line(pagerin, it, NULL, width);
+		else if (print) print_gemtext_line(stdout, it, NULL, width);
+		SIMPLEQ_INSERT_TAIL(&list, it, next);
+	}
+
+out:
+	if (pagerin != NULL) fclose(pagerin);
+	if (pager != -1) {
+		reap(NULL, pager);
+		if (pagerin != NULL) SIMPLEQ_FOREACH(it, &list, next) print_gemtext_line(stdout, it, NULL, width);
+	}
+	if (fp != NULL) fclose(fp);
+	if (p != NULL) free(p);
+	if (ssl != NULL) SSL_free(ssl);
 	return list;
 }
 
 
 /*============================================================================*/
-static int ndigits(int n) {
-	int digits = 0;
-	for ( ; n > 0; n /= 10, ++digits);
-	return digits;
-}
-
-
-static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
-	mbstate_t ps;
-	regex_t re;
-	size_t size;
-	wchar_t wchar;
-	Selector *sel;
-	const char *p;
-	int width, w, wchars, out, extra, i;
-
-	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
-	width = get_terminal_width();
-
-	SIMPLEQ_FOREACH(sel, list, next) {
-		if (filter && regexec(&re, sel->raw, 0, NULL, 0) != 0) continue;
-		if (!interactive) { fprintf(fp, "%s\n", sel->raw); continue; }
-		size = strlen(sel->repr);
-		if (size == 0) { fputc('\n', fp); continue; }
-
-		for (i = 0; i < (int)size; i += out, i += strspn(&sel->repr[i], " ")) {
-			extra = 0;
-			switch (sel->type) {
-				case 'l': if (i == 0) extra = 3 + ndigits(sel->index); break;
-				case '`': goto print;
-				case '>':
-				case '*': extra = 2; break;
-			}
-
-			memset(&ps, 0, sizeof(ps));
-			for (wchars = 0, out = 0, p = &sel->repr[i]; out < (int)size - i && wchars < width - extra; out += (p - &sel->repr[i + out]), p = &sel->repr[i + out], wchars += w) {
-				if (mbsrtowcs(&wchar, &p, 1, &ps) == (size_t)-1 || (w = wcwidth(wchar)) < 0) {
-					/* best-effort, we assume 1 character == 1 byte */
-					p = &sel->repr[i + out + 1];
-					w = 1;
-				} else if (wchars + w > width - extra) break;
-			}
-
-print:
-			switch (sel->type) {
-				case 'l':
-					if (i == 0) {
-						fprintf(fp, "\33[4;36m[%d]\33[0;39m %.*s\n", sel->index, out, &sel->repr[i]);
-						break;
-					}
-					/* fall through */
-				case 'i': fprintf(fp, "%.*s\n", out, &sel->repr[i]); break;
-				case '#': fprintf(fp, "\33[4m%.*s\33[0m\n", out, &sel->repr[i]); break;
-				case '`':
-					out = size;
-					fprintf(fp, "%s\n", &sel->repr[i]);
-					break;
-				case '>':
-					fprintf(fp, "%c %.*s\n", sel->type, out, &sel->repr[i]);
-					break;
-				default:
-					if (i == 0) fprintf(fp, "%c %.*s\n", sel->type, out, &sel->repr[i]);
-					else fprintf(fp, "  %.*s\n", out, &sel->repr[i]);
-			}
-		}
-	}
-
-	if (filter) regfree(&re);
-}
-
-
-static void page_gemtext(SelectorList *list) {
-	int fds[2];
-	FILE *fp;
-	pid_t pid;
-	const char *pager;
-
-	if ((pager = set_var(&variables, "PAGER", NULL)) == NULL && (pager = getenv("PAGER")) == NULL) pager = "less -r";
-	if (!strcmp(pager, "cat")) return;
-
-	if (pipe(fds) < 0) return;
-	if ((pid = fork()) == 0) {
-		close(fds[1]);
-		dup2(fds[0], STDIN_FILENO);
-		close(fds[0]);
-		execl("/bin/sh", "sh", "-c", pager, (char *)NULL);
-		exit(EXIT_FAILURE);
-	} else if (pid < 0) return;
-
-	close(fds[0]);
-
-	if ((fp = fdopen(fds[1], "w")) == NULL) close(fds[1]);
-	else {
-		print_gemtext(fp, list, NULL);
-		fclose(fp);
-	}
-
-	reap(pager, pid);
-}
-
-
-static void show_gemtext(SelectorList *list, const char *filter, int page) {
-	if (page && !filter && interactive) page_gemtext(list);
-	print_gemtext(stdout, list, filter);
-}
-
-
 static void navigate(Selector *to) {
 	const char *handler = NULL, *ext;
 	SelectorList new = SIMPLEQ_HEAD_INITIALIZER(new);
@@ -895,13 +953,12 @@ static void navigate(Selector *to) {
 	} else if (strcmp(to->scheme, "gemini")) {
 		handler = find_mime_handler(to->scheme);
 		goto handle;
-	} else new = download_to_temp(to, interactive, 0, 1);
+	} else new = download_gemtext(to, interactive, 1, 1);
 
 	if (SIMPLEQ_EMPTY(&new)) return;
 	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + 9);
 	free_selectors(&menu);
 	menu = new;
-	show_gemtext(&new, NULL, 1);
 	return;
 
 handle:
@@ -965,7 +1022,9 @@ static const Help gemini_help[] = {
 
 /*============================================================================*/
 static void cmd_show(char *line) {
-	show_gemtext(&menu, next_token(&line), 1);
+	const char *filter;
+	if ((filter = next_token(&line)) == NULL) page_gemtext(&menu);
+	print_gemtext(stdout, &menu, filter);
 }
 
 
@@ -1026,7 +1085,7 @@ static void cmd_sub(char *line) {
 		strftime(ts, sizeof(ts), "%Y-%m-%d", tm);
 
 		SIMPLEQ_FOREACH(sel, &subscriptions, next) {
-			list = download_to_temp(sel, 0, 1, 0);
+			list = download_gemtext(sel, 0, 0, 0);
 			if (SIMPLEQ_EMPTY(&list)) continue;
 
 			copy = new_selector('l', sel->raw);
@@ -1057,7 +1116,7 @@ static void cmd_sub(char *line) {
 		if (SIMPLEQ_EMPTY(&feed)) return;
 		free_selectors(&menu);
 		menu = feed;
-		show_gemtext(&feed, NULL, 0);
+		print_gemtext(stdout, &feed, NULL);
 	}
 }
 
@@ -1266,6 +1325,7 @@ int main(int argc, char **argv) {
 	setlinebuf(stdout); /* if stdout is a file, flush after every line */
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGINT, &sa, NULL);
+	signal(SIGPIPE, SIG_IGN);
 
 	SSL_library_init();
 	SSL_load_error_strings();
