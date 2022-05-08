@@ -187,7 +187,6 @@ static void free_selector(Selector *sel) {
 static void free_selectors(SelectorList *list) {
 	Selector *sel, *tmp;
 	SIMPLEQ_FOREACH_SAFE(sel, list, next, tmp) free_selector(sel);
-	SIMPLEQ_INIT(list);
 }
 
 
@@ -471,18 +470,15 @@ static int tofu(X509 *cert, const char *host) {
 	else if ((home = getenv("HOME")) != NULL) snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
 	else return 0;
 
-	if ((fp = fopen(hosts, "r")) != NULL) {
-		while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
-			if (strncmp(line, host, hlen)) continue;
-			if (line[hlen] != ' ') continue;
-			trust = strncmp(&line[hlen + 1], hex, mdlen * 2) == 0 && line[hlen + 1 + mdlen * 2] == '\n';
-			goto out;
-		}
-
-		fclose(fp); fp = NULL;
+	if ((fp = fopen(hosts, "r")) == NULL) return 1;
+	while ((line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
+		if (strncmp(line, host, hlen) || line[hlen] != ' ') continue;
+		trust = strncmp(&line[hlen + 1], hex, mdlen * 2) == 0 && line[hlen + 1 + mdlen * 2] == '\n';
+		goto out;
 	}
+	fclose(fp); fp = NULL;
 
-	if (trust) trust = (fp = fopen(hosts, "a")) != NULL && fprintf(fp, "%s %s\n", host, hex) > 0;
+	trust = (fp = fopen(hosts, "a")) != NULL && fprintf(fp, "%s %s\n", host, hex) > 0;
 
 out:
 	if (fp) fclose(fp);
@@ -537,6 +533,18 @@ static int ssl_error(Selector *sel, SSL *ssl, int err) {
 	if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
 	else error(0, "failed to download `%s`: error %d", sel->url, err);
 	return 1;
+}
+
+
+static int save_body(Selector *sel, SSL *ssl, FILE *fp) {
+	static char buffer[2048];
+	size_t total;
+	int received, prog = 0;
+	for (total = 0; total < SIZE_MAX - sizeof(buffer) && (received = SSL_read(ssl, buffer, sizeof(buffer))) > 0 && fwrite(buffer, 1, received, fp) == (size_t)received; total += received) {
+		if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
+	}
+	if (prog > 0) fputc('\n', stderr);
+	return received == 0 || !ssl_error(sel, ssl, received);
 }
 
 
@@ -603,12 +611,8 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		goto fail;
 	}
 
-	for (total = 0; total < (int)sizeof(data) - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')); ++total) {
-		if ((received = SSL_read(ssl, &data[total], 1)) > 0) continue;
-		if (received == 0 || !ssl_error(sel, ssl, received)) break;
-		goto fail;
-	}
-	if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n') goto fail;
+	for (total = 0; total < (int)sizeof(data) - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')) && (received = SSL_read(ssl, &data[total], 1)) > 0; ++total);
+	if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n' || (received < 0 && ssl_error(sel, ssl, received))) goto fail;
 	data[total] = '\0';
 
 	crlf = &data[total - 2];
@@ -759,13 +763,13 @@ static const char *get_filename(Selector *sel, size_t *len) {
 
 
 static void download_to_file(Selector *sel, const char *def) {
-	static char buffer[2048], suggestion[256], body[1024];
+	static char suggestion[256], buffer[1024];
 	FILE *fp;
 	char *mime = NULL, *input = NULL, *download_dir;
 	const char *filename = def;
 	SSL *ssl = NULL;
-	size_t len, total, prog = 0;
-	int ok = 0, received;
+	size_t len;
+	int ret = 0;
 
 	if (def == NULL) {
 		def = get_filename(sel, &len);
@@ -783,44 +787,30 @@ static void download_to_file(Selector *sel, const char *def) {
 	if ((fp = fopen(filename, "wb")) == NULL) error(0, "cannot create file `%s`: %s", filename, strerror(errno));
 	else {
 		if ((ssl = download(sel, &mime, 1)) != NULL) {
-			for (total = 0; total < SIZE_MAX - sizeof(body) && (received = SSL_read(ssl, body, sizeof(body))) > 0 && fwrite(body, 1, received, fp) == (size_t)received; total += received) {
-				if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
-			}
-			ok = (received == 0 || (received < 0 && !ssl_error(sel, ssl, received)));
+			ret = save_body(sel, ssl, fp);
 			SSL_free(ssl);
-			if (prog > 0) fputc('\n', stderr);
 		}
 
 		fclose(fp);
-		if (!ok) unlink(filename);
+		if (!ret) unlink(filename);
 	}
 	free(input);
 }
 
 
 static void save_and_handle(Selector *sel, SSL *ssl, const char *mime) {
-	static char buffer[2048], filename[1024];
+	static char filename[1024];
 	FILE *fp = NULL;
 	const char *tmpdir, *handler = NULL;
-	size_t total = 0, prog = 0;
-	int fd = -1, received;
+	int fd = -1;
 
-	if ((handler = find_mime_handler(mime)) == NULL) goto out;
+	if ((handler = find_mime_handler(mime)) == NULL) return;
 	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
 	snprintf(filename, sizeof(filename), "%sgplaces.XXXXXXXX", tmpdir);
-	if ((fd = mkstemp(filename)) == -1 || (fp = fdopen(fd, "w")) == NULL) {
-		error(0, "cannot create temporary file: %s", strerror(errno));
-		goto out;
-	}
-	for (total = 0; total < SIZE_MAX - sizeof(buffer) && (received = SSL_read(ssl, buffer, sizeof(buffer))) > 0 && fwrite(buffer, 1, received, fp) == (size_t)received; total += received) {
-		if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
-	}
-	if (prog > 0) fputc('\n', stderr);
-	if ((received < 0 && ssl_error(sel, ssl, received)) || fflush(fp) == EOF) goto out;
-	execute_handler(handler, filename, sel);
+	if ((fd = mkstemp(filename)) == -1 || (fp = fdopen(fd, "w")) == NULL) error(0, "cannot create temporary file: %s", strerror(errno));
+	else if (save_body(sel, ssl, fp) && fflush(fp) == 0) execute_handler(handler, filename, sel);
 
-out:
-	if (fp) fclose(fp);
+	if (fp != NULL) fclose(fp);
 	if (fd != -1) {
 		if (fp == NULL) close(fd);
 		unlink(filename);
@@ -856,12 +846,10 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 		}
 		total += received;
 		if (!print && total > 2048 && total - prog > total / 20) { fputc('.', stderr); prog = total; }
-		if (total > SIZE_MAX - sizeof(buffer)) goto out;
+		if (total > SIZE_MAX - sizeof(buffer)) break;
 	}
 	if (prog > 0) fputc('\n', stderr);
-	if (!(ok = (received == 0 || !ssl_error(sel, ssl, received)))) goto out;
-	if (fclose(fp) == EOF) { fp = NULL; goto out; }
-	fp = NULL;
+	if (!(ok = (received == 0 || (received < 0 && !ssl_error(sel, ssl, received))))) goto out;
 	if (parsed < length && parse_gemtext_line(sel, p + parsed, &pre, &index, &it) && it) {
 		if (print) print_gemtext_line(stdout, it, NULL, width);
 		SIMPLEQ_INSERT_TAIL(&list, it, next);
@@ -871,7 +859,7 @@ out:
 	if (fp != NULL) fclose(fp);
 	if (p != NULL) free(p);
 	if (ssl != NULL) SSL_free(ssl);
-	if (!ok) free_selectors(&list);
+	if (!ok) { free_selectors(&list); SIMPLEQ_INIT(&list); }
 	return list;
 }
 
@@ -923,8 +911,7 @@ static void navigate(Selector *to) {
 		} else {
 #ifdef GPLACES_USE_LIBMAGIC
 			if ((mag = magic_open(MAGIC_MIME_TYPE | MAGIC_NO_CHECK_COMPRESS | MAGIC_ERROR)) == NULL) return;
-			if (magic_load(mag, NULL) == 0) mime = magic_file(mag, to->path);
-			if (mime) handler = find_mime_handler(mime);
+			if (magic_load(mag, NULL) == 0 && (mime = magic_file(mag, to->path)) != NULL) handler = find_mime_handler(mime);
 			magic_close(mag);
 #endif
 			if (mime == NULL) error(0, "unable to detect the MIME type of %s", to->path);
@@ -1280,9 +1267,7 @@ static const char *parse_arguments(int argc, char **argv) {
 				break;
 
 			default:
-				fprintf(stderr,
-					"usage: gplaces [-r rc-file] [url]\n"
-				);
+				fprintf(stderr, "usage: gplaces [-r rc-file] [url]\n");
 				exit(EXIT_SUCCESS);
 		}
 	}
