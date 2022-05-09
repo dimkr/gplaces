@@ -834,7 +834,7 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 	if ((p = malloc(cap)) == NULL) error(1, "cannot allocate buffer");
 	while ((received = SSL_read(ssl, &p[length], 2048)) > 0) {
 		length += received;
-		for (start = p + parsed, it = NULL; start < p + length && (end = strchr(start, '\n')) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
+		for (start = p + parsed, it = NULL; start < p + length && (end = memchr(start, '\n', length - parsed)) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
 			*end = '\0';
 			if (parse_gemtext_line(sel, start, &pre, &index, &it) && it) {
 				if (print) print_gemtext_line(stdout, it, NULL, width);
