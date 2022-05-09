@@ -391,7 +391,7 @@ static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, i
 	size = strlen(sel->repr);
 	if (size == 0) { fputc('\n', fp); return; }
 
-	for (i = 0; i < (int)size; i += out, i += strspn(&sel->repr[i], " ")) {
+	for (i = 0, out = (int)size; i < (int)size; i += out, i += strspn(&sel->repr[i], " "), out = (int)size) {
 		extra = 0;
 		switch (sel->type) {
 			case 'l': if (i == 0) extra = 3 + ndigits(sel->index); break;
@@ -420,7 +420,6 @@ print:
 			case 'i': fprintf(fp, "%.*s\n", out, &sel->repr[i]); break;
 			case '#': fprintf(fp, "\33[4m%.*s\33[0m\n", out, &sel->repr[i]); break;
 			case '`':
-				out = size;
 				fprintf(fp, "%s\n", &sel->repr[i]);
 				break;
 			case '>':
@@ -686,7 +685,7 @@ static SSL *download(Selector *sel, char **mime, int ask) {
 	const char *home;
 	SSL_CTX *ctx = NULL;
 	SSL *ssl = NULL;
-	int status, redirs = 0, needcert = 0, ret = 0, len, i, off;
+	int status, redirs = 0, needcert = 0, len, i, off;
 
 	if ((home = getenv("XDG_DATA_HOME")) != NULL) {
 		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) return NULL;
@@ -730,7 +729,7 @@ static SSL *download(Selector *sel, char **mime, int ask) {
 loaded:
 	do {
 		status = do_download(sel, ctx, crtpath, keypath, &ssl, mime, ask);
-		if ((ret = (status >= 20 && status <= 29))) break;
+		if (status >= 20 && status <= 29) break;
 	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69 && ++needcert == 1) || (status >= 30 && status <= 39 && ++redirs < 5));
 
 	SSL_CTX_free(ctx);
@@ -819,13 +818,11 @@ static void save_and_handle(Selector *sel, SSL *ssl, const char *mime) {
 
 
 static SelectorList download_gemtext(Selector *sel, int ask, int handle, int print) {
-	static char buffer[2048];
-	FILE *fp = NULL;
 	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
 	Selector *it;
 	char *mime, *p = NULL, *start, *end;
 	SSL *ssl = NULL;
-	size_t length = 0, parsed = 0, total = 0, prog = 0;
+	size_t cap = 4096, parsed = 0, length = 0, prog = 0;
 	int received, pre = 0, index = 1, width, ok = 0;
 
 	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
@@ -833,10 +830,10 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 		if (handle) save_and_handle(sel, ssl, mime);
 		goto out;
 	}
-	if ((fp = open_memstream(&p, &length)) == NULL) goto out;
 	width = get_terminal_width();
-	while ((received = SSL_read(ssl, buffer, sizeof(buffer))) > 0) {
-		if (fwrite(buffer, 1, received, fp) != (size_t)received || fflush(fp) == EOF) goto out;
+	if ((p = malloc(cap)) == NULL) error(1, "cannot allocate buffer");
+	while ((received = SSL_read(ssl, &p[length], 2048)) > 0) {
+		length += received;
 		for (start = p + parsed, it = NULL; start < p + length && (end = strchr(start, '\n')) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
 			*end = '\0';
 			if (parse_gemtext_line(sel, start, &pre, &index, &it) && it) {
@@ -844,9 +841,12 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 				SIMPLEQ_INSERT_TAIL(&list, it, next);
 			}
 		}
-		total += received;
-		if (!print && total > 2048 && total - prog > total / 20) { fputc('.', stderr); prog = total; }
-		if (total > SIZE_MAX - sizeof(buffer)) break;
+		if (!print && length > 2048 && length - prog > length / 20) { fputc('.', stderr); prog = length; }
+		if (length > SIZE_MAX - 4096) break;
+		if (cap - length < 2048) {
+			cap += 4096;
+			if ((p = realloc(p, cap)) == NULL) error(1, "cannot allocate buffer");
+		}
 	}
 	if (prog > 0) fputc('\n', stderr);
 	if (!(ok = (received == 0 || (received < 0 && !ssl_error(sel, ssl, received))))) goto out;
@@ -856,8 +856,7 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 	}
 
 out:
-	if (fp != NULL) fclose(fp);
-	if (p != NULL) free(p);
+	free(p);
 	if (ssl != NULL) SSL_free(ssl);
 	if (!ok) { free_selectors(&list); SIMPLEQ_INIT(&list); }
 	return list;
