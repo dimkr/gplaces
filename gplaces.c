@@ -833,15 +833,14 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 	}
 	width = get_terminal_width();
 	while ((received = SSL_read(ssl, &buffer[length], sizeof(buffer) - length)) > 0) {
-		length += received;
-		for (parsed = 0, start = buffer, it = NULL; start < buffer + length && (end = memchr(start, '\n', length - parsed)) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
+		for (parsed = 0, start = buffer, it = NULL; start < buffer + length + received && (end = memchr(start, '\n', length + received - parsed)) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
 			*end = '\0';
 			if (parse_gemtext_line(sel, start, &pre, &index, &it) && it) {
 				if (print) print_gemtext_line(stdout, it, NULL, width);
 				SIMPLEQ_INSERT_TAIL(&list, it, next);
 			}
 		}
-		length -= parsed;
+		length += received - parsed;
 		memmove(buffer, &buffer[parsed], length);
 		buffer[length] = '\0';
 		total += received;
