@@ -818,11 +818,12 @@ static void save_and_handle(Selector *sel, SSL *ssl, const char *mime) {
 
 
 static SelectorList download_gemtext(Selector *sel, int ask, int handle, int print) {
+	static char buffer[LINE_MAX];
 	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
 	Selector *it;
 	char *mime, *p = NULL, *start, *end;
 	SSL *ssl = NULL;
-	size_t cap = 4096, parsed = 0, length = 0, prog = 0;
+	size_t parsed, length = 0, total = 0, prog = 0;
 	int received, pre = 0, index = 1, width, ok = 0;
 
 	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
@@ -831,26 +832,25 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 		goto out;
 	}
 	width = get_terminal_width();
-	if ((p = malloc(cap)) == NULL) error(1, "cannot allocate buffer");
-	while ((received = SSL_read(ssl, &p[length], 2048)) > 0) {
+	while ((received = SSL_read(ssl, &buffer[length], sizeof(buffer) - length)) > 0) {
 		length += received;
-		for (start = p + parsed, it = NULL; start < p + length && (end = memchr(start, '\n', length - parsed)) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
+		for (parsed = 0, start = buffer, it = NULL; start < buffer + length && (end = memchr(start, '\n', length - parsed)) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
 			*end = '\0';
 			if (parse_gemtext_line(sel, start, &pre, &index, &it) && it) {
 				if (print) print_gemtext_line(stdout, it, NULL, width);
 				SIMPLEQ_INSERT_TAIL(&list, it, next);
 			}
 		}
-		if (!print && length > 2048 && length - prog > length / 20) { fputc('.', stderr); prog = length; }
-		if (length > SIZE_MAX - 4096) break;
-		if (cap - length < 2048) {
-			cap += 4096;
-			if ((p = realloc(p, cap)) == NULL) error(1, "cannot allocate buffer");
-		}
+		length -= parsed;
+		memmove(buffer, &buffer[parsed], length);
+		buffer[length] = '\0';
+		total += received;
+		if (!print && total > 2048 && total - prog > total / 20) { fputc('.', stderr); prog = total; }
+		if (total > SIZE_MAX - sizeof(buffer)) break;
 	}
 	if (prog > 0) fputc('\n', stderr);
 	if (!(ok = (received == 0 || (received < 0 && !ssl_error(sel, ssl, received))))) goto out;
-	if (parsed < length && parse_gemtext_line(sel, p + parsed, &pre, &index, &it) && it) {
+	if (length > 0 && parse_gemtext_line(sel, buffer, &pre, &index, &it) && it) {
 		if (print) print_gemtext_line(stdout, it, NULL, width);
 		SIMPLEQ_INSERT_TAIL(&list, it, next);
 	}
