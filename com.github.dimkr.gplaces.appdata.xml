@@ -33,6 +33,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-05-09" version="0.16.8">
+      <description>
+        <ul>
+          <li>Page contents are now streamed during download</li>
+          <li>Files without a matching handler are no longer downloaded</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-05-07" version="0.16.7">
       <description>
         <ul>
