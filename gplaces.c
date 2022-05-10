@@ -833,15 +833,18 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 	}
 	width = get_terminal_width();
 	while ((received = SSL_read(ssl, &buffer[length], sizeof(buffer) - length)) > 0) {
-		/* if a line exceeds LINE_MAX, terminate it with \n and continue to the next line */
-		for (parsed = 0, start = buffer, buffer[length + received - 1] = length + received == sizeof(buffer) ? '\n' : buffer[length + received - 1], it = NULL; start < buffer + length + received && (end = memchr(start, '\n', length + received - parsed)) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
+		for (length += received, parsed = 0, start = buffer, it = NULL; start < buffer + length; parsed += end - start + 1, start = end + 1) {
+			if ((end = memchr(start, '\n', length - parsed)) == NULL) {
+				if (parsed > 0 || length < sizeof(buffer)) break; /* if we still don't have the end of the line, receive more */
+				end = &buffer[sizeof(buffer) - 1]; /* if the buffer is full and we haven't found a \n, terminate the line */
+			}
 			*end = '\0';
 			if (parse_gemtext_line(sel, start, &pre, &index, &it) && it) {
 				if (print) print_gemtext_line(stdout, it, NULL, width);
 				SIMPLEQ_INSERT_TAIL(&list, it, next);
 			}
 		}
-		length += received - parsed;
+		length -= parsed;
 		memmove(buffer, &buffer[parsed], length);
 		buffer[length] = '\0';
 		total += received;
