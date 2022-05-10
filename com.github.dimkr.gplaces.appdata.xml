@@ -17,6 +17,9 @@
        <li>Generation of client certificates</li>
        <li>Slightly prettified Gemtext output</li>
     </ul>
+    <p>
+       gplaces should be fairly straightforward to use for anyone used to the command-line and man pages.
+    </p>
   </description>
 
   <launchable type="desktop-id">com.github.dimkr.gplaces.desktop</launchable>

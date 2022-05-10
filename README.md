@@ -8,7 +8,7 @@ The gplaces logo is an artist's impression of a Gemini VII capsule with the red 
 
 gplaces is originally a Gemini port of the [delve](https://github.com/kieselsteini/delve) Gopher client by Sebastian Steinhauer.
 
-## Overview
+## Features
 - configurable MIME type handlers
 - "powerful" shell
 - ~bookmarks~ use aliases
@@ -44,6 +44,50 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 	- currently tested on
 		- Linux
 - type `make install` to install it on the system (defaults to /usr/local)
+
+## How to use?
+
+    > gemini.circumlunar.space
+
+to show a Gemini page, type its URL, press `ENTER` and gplaces will stream the page contents to the terminal.
+
+to abort the download, press `CTRL+c`.
+
+when the download is finished, gplaces will display the downloaded page using less(1), the same tool man(1) uses to display man pages.
+
+    `less -r` has exited with exit status 0
+    gemini.circumlunar.space/> 
+
+use the arrow keys to scroll, `/` to search and `q` to exit less and return to the gplaces prompt.
+
+    (reverse-i-search `g') gemini.circumlunar.space
+
+in addition, gplaces adds the page URL to the history: use the `Up` and `Down` keys to navigate through the history, or `CTRL+r` to search through it. these are only three examples of key bindings from shells like bash(1) which work in gplaces, too.
+
+    > save gemini.circumlunar.space/docs/specification.gmi
+    enter filename (press ENTER for `/home/user/Downloads/specification.gmi`):
+
+to download a file instead of dispaying it, type `save`, followed by its URL, then press `ENTER`.
+
+    gemini.circumlunar.space/> 2 docs/
+
+gplaces associates a number with each link in the last viewed page. type the number of a link to show its URL, then press `ENTER` to follow it.
+
+    gemini.circumlunar.space/docs/> save 2
+    enter filename (press ENTER for `/home/user/Downloads/specification.gmi`):
+
+this number can be used to download the link, too.
+
+    gemini.circumlunar.space/docs/> search
+    Search query> gplaces
+
+the gplaces configuration file allows you to define short aliases for URLs you visit often. for example, the default configuration file defines the `home` alias for the Gemini project homepage and the `search` alias for a Gemini search engine. type `search` and press `ENTER` to search geminispace.
+
+to show a feed of new posts, type `sub`. the list of URLs gplaces is "subscribed" to is defined in the configuration file.
+
+to exit gplaces, press `CTRL+d`.
+
+additional documentation and more details are available in `man gplaces`.
 
 ## How to contribute?
 - send me pull-requests and I'll review and merge them :)
