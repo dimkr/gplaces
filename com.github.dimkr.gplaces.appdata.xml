@@ -33,6 +33,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-05-10" version="0.16.9">
+      <description>
+        <ul>
+          <li>Whole .gmi pages are no longer kept in memory during download</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-05-09" version="0.16.8">
       <description>
         <ul>
