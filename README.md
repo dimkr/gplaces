@@ -22,6 +22,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 	- ~GNU readline is fully optional~ bestline
 	- openssl or libressl
 	- libcurl
+	- libidn2 or libidn (optional)
 	- libmagic (optional)
 - SSH-style TOFU with $XDG_DATA_HOME/gplaces_hosts or ~/.gplaces_hosts
 - client certificates support via $XDG_DATA_HOME/gplaces_$host$path.{crt,key} or ~/.gplaces_$host$path.{crt,key}
@@ -39,7 +40,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 
 ## How to compile?
 - clone this git repo
-- just type `make` or `make WITH_LIBMAGIC=0` on any Unix compatible system
+- just type `make` or `make WITH_LIBIDN2=0 WITH_LIBIDN=0 WITH_LIBMAGIC=0` on any Unix compatible system
 	- currently tested on
 		- Linux
 - type `make install` to install it on the system (defaults to /usr/local)
@@ -54,7 +55,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|224|58|1035
+C|1|226|58|1057
 
 ## Help
 Just type `help` when the client is running.

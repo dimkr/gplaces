@@ -14,6 +14,17 @@ endif
 CFLAGS += -D_GNU_SOURCE -DCONFDIR=\"$(CONFDIR)\" -DGPLACES_VERSION=\"$(VERSION)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
 LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
+WITH_LIBIDN2 ?= $(shell pkg-config --exists libidn2 && echo 1 || echo 0)
+ifeq ($(WITH_LIBIDN2),1)
+	CFLAGS += -DGPLACES_USE_LIBIDN2 $(shell pkg-config --cflags libidn2)
+	LDFLAGS += $(shell pkg-config --libs libidn2)
+else
+	WITH_LIBIDN ?= $(shell pkg-config --exists libidn && echo 1 || echo 0)
+	ifeq ($(WITH_LIBIDN),1)
+		CFLAGS += -DGPLACES_USE_LIBIDN $(shell pkg-config --cflags libidn)
+		LDFLAGS += $(shell pkg-config --libs libidn)
+	endif
+endif
 WITH_LIBMAGIC ?= $(shell pkg-config --exists libmagic && echo 1 || echo 0)
 ifeq ($(WITH_LIBMAGIC),1)
 	CFLAGS += -DGPLACES_USE_LIBMAGIC $(shell pkg-config --cflags libmagic)

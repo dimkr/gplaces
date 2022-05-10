@@ -53,6 +53,12 @@
 
 #include <curl/curl.h>
 
+#ifdef GPLACES_USE_LIBIDN2
+	#include <idn2.h>
+#elif defined(GPLACES_USE_LIBIDN)
+	#include <idna.h>
+#endif
+
 #ifdef GPLACES_USE_LIBMAGIC
 	#include <magic.h>
 #endif
@@ -192,6 +198,10 @@ static void free_selectors(SelectorList *list) {
 
 static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 	static char buffer[1024];
+#if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
+	char *host;
+#endif
+	int file;
 
 	/* TODO: why does curl_url_set() return CURLE_OUT_OF_MEMORY if the scheme is missing, but only inside the Flatpak sandbox? */
 	if (curl_url_set(sel->cu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) {
@@ -200,18 +210,32 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 		if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
 	}
 
-	if (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK) return 0;
+	if (curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK) return 0;
+
+	file = (strcmp(sel->scheme, "file") == 0);
+#if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
+	#ifdef GPLACES_USE_LIBIDN2
+	if (!file && (idn2_to_ascii_8z(sel->host, &host, IDN2_NONTRANSITIONAL) == IDN2_OK || idn2_to_ascii_8z(sel->host, &host, IDN2_TRANSITIONAL) == IDN2_OK)) {
+	#elif defined(GPLACES_USE_LIBIDN)
+	if (!file && (idna_to_ascii_8z(sel->host, &host, 0) == IDNA_SUCCESS || idna_to_ascii_8z(sel->host, &host, 0) == IDNA_SUCCESS)) {
+	#endif
+		if (curl_url_set(sel->cu, CURLUPART_HOST, host, 0) != CURLUE_OK) { free(host); return 0; }
+		free(host);
+		curl_free(sel->host); sel->host = NULL;
+		if (curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK) return 0;
+	}
+#endif
+
+	if (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK) return 0;
 
 	free(sel->rawurl);
 	sel->rawurl = str_copy(url);
 
-	if (!strcmp(sel->scheme, "file")) {
+	if (file) {
 		sel->host = str_copy("");
 		sel->port = str_copy("");
 		return 1;
 	}
-
-	if (curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK) return 0;
 
 	switch (curl_url_get(sel->cu, CURLUPART_PORT, &sel->port, 0)) {
 		case CURLUE_OK: break;
