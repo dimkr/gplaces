@@ -33,6 +33,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-05-10" version="0.16.10">
+      <description>
+        <ul>
+          <li>Fix for a parsing regression in 0.16.9</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-05-10" version="0.16.9">
       <description>
         <ul>
