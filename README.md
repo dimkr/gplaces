@@ -30,6 +30,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 - ~internal~ configurable external pager for text & menus
 - support for non-interactive operation
 - UTF-8 line wrapping of lists and quotes
+- experimental Spartan support
 - hackable, about *1k lines* of *C* code
 - ~100K executable when built with -O3 and -Wl,-s on x86_64
 
@@ -54,7 +55,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|224|59|1031
+C|1|260|59|1159
 
 ## Help
 Just type `help` when the client is running.

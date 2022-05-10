@@ -63,7 +63,7 @@
 typedef struct Selector {
 	SIMPLEQ_ENTRY(Selector) next;
 	int index;
-	char type, *raw, *repr, *scheme, *host, *port, *path, *url, *rawurl;
+	char type, *raw, *repr, *scheme, *host, *port, *path, *query, *url, *rawurl;
 	CURLU *cu;
 } Selector;
 
@@ -85,6 +85,12 @@ typedef struct Help {
 	const char *name;
 	const char *text;
 } Help;
+
+typedef struct Protocol {
+	int (*read)(void *, void *, int);
+	int (*error)(Selector *, void *, int);
+	void (*close)(void *);
+} Protocol;
 
 
 /*============================================================================*/
@@ -177,6 +183,7 @@ static void free_selector(Selector *sel) {
 	curl_free(sel->host);
 	curl_free(sel->port);
 	curl_free(sel->path);
+	curl_free(sel->query);
 	curl_free(sel->url);
 	free(sel->rawurl);
 	if (sel->cu) curl_url_cleanup(sel->cu);
@@ -202,6 +209,12 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 
 	if (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK) return 0;
 
+	switch (curl_url_get(sel->cu, CURLUPART_QUERY, &sel->query, CURLU_URLDECODE)) {
+	case CURLE_OK:
+	case CURLUE_NO_QUERY: break;
+	default: return 1;
+	}
+
 	free(sel->rawurl);
 	sel->rawurl = str_copy(url);
 
@@ -215,7 +228,7 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 
 	switch (curl_url_get(sel->cu, CURLUPART_PORT, &sel->port, 0)) {
 		case CURLUE_OK: break;
-		case CURLUE_NO_PORT: sel->port = str_copy("1965"); break;
+		case CURLUE_NO_PORT: sel->port = strncmp(sel->url, "spartan://", 10) == 0 ? str_copy("300") : str_copy("1965"); break;
 		default: free_selector(sel); return 0;
 	}
 
@@ -252,7 +265,7 @@ static int parse_gemtext_line(Selector *from, char *line, int *pre, int *index, 
 
 	if (*pre)
 		*sel = new_selector('`', line);
-	else if (line[0] == '=' && line[1] == '>') {
+	else if (line[0] == '=' && (line[1] == '>' || line[1] == ':')) {
 		*sel = new_selector('l', line);
 		url = line + 2 + strspn(line + 2, " \t");
 		line = url + strcspn(url, " \t");
@@ -527,27 +540,160 @@ static void mkcert(const char *crtpath, const char *keypath) {
 }
 
 
-static int ssl_error(Selector *sel, SSL *ssl, int err) {
-	if ((err = SSL_get_error(ssl, err)) == SSL_ERROR_ZERO_RETURN) return 0; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+static int spartan_read(void *c, void *buffer, int length) {
+	return (int)recv((int)(intptr_t)c, buffer, (size_t)length, 0);
+}
+
+
+static int spartan_error(Selector *sel, void *c, int err) {
+	(void)c;
+	(void)err;
+	if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "failed to download `%s`: cancelled", sel->url);
+	else error(0, "failed to download `%s`: %s", sel->url, strerror(errno));
+	return 1;
+}
+
+
+static void spartan_close(void *c) {
+	close((int)(intptr_t)c);
+}
+
+
+static int gemini_read(void *c, void *buffer, int length) {
+	return SSL_read((SSL *)c, buffer, length);
+}
+
+
+static int gemini_error(Selector *sel, void *c, int err) {
+	if ((err = SSL_get_error((SSL *)c, err)) == SSL_ERROR_ZERO_RETURN) return 0; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
 	if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
 	else error(0, "failed to download `%s`: error %d", sel->url, err);
 	return 1;
 }
 
 
-static int save_body(Selector *sel, SSL *ssl, FILE *fp) {
-	static char buffer[2048];
-	size_t total;
-	int received, prog = 0;
-	for (total = 0; total < SIZE_MAX - sizeof(buffer) && (received = SSL_read(ssl, buffer, sizeof(buffer))) > 0 && fwrite(buffer, 1, received, fp) == (size_t)received; total += received) {
-		if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
-	}
-	if (prog > 0) fputc('\n', stderr);
-	return received == 0 || !ssl_error(sel, ssl, received);
+static void gemini_close(void *c) {
+	SSL_free((SSL *)c);
 }
 
 
-static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, SSL **body, char **mime, int ask) {
+static int save_body(Selector *sel, void *c, const Protocol *proto, FILE *fp) {
+	static char buffer[2048];
+	size_t total;
+	int received, prog = 0;
+	for (total = 0; total < SIZE_MAX - sizeof(buffer) && (received = proto->read(c, buffer, sizeof(buffer))) > 0 && fwrite(buffer, 1, received, fp) == (size_t)received; total += received) {
+		if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
+	}
+	if (prog > 0) fputc('\n', stderr);
+	return received == 0 || !proto->error(sel, c, received);
+}
+
+
+static ssize_t sendall(int sockfd, const void *buf, size_t len, int flags) {
+	ssize_t sent, total;
+	for (total = 0; total < (ssize_t)len && (sent = send(sockfd, (char *)buf + total, len - total, flags)) > 0; total += sent);
+	return sent <= 0 ? sent : total;
+}
+
+
+static int do_spartan_download(Selector *sel, int *body, char **mime, int ask) {
+	static char buffer[1024], data[1 + 1 + 1024 + 2 + 1]; /* 9 meta\r\n\0 */
+	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
+	char *crlf, *meta = &data[2], *url, *input = sel->query;
+	struct timeval tv = {0};
+	size_t inputlen = 0;
+	int timeout, fd = -1, len, total, received, ret = 40, err = 0;
+
+	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
+	tv.tv_sec = timeout;
+
+	if ((err = getaddrinfo(sel->host, sel->port, &hints, &result)) != 0) {
+		error(0, "cannot resolve hostname `%s`: %s", sel->host, gai_strerror(err));
+		goto fail;
+	}
+
+	for (it = result; it && err != EINTR; it = it->ai_next) {
+		if ((fd = socket(it->ai_family, it->ai_socktype, it->ai_protocol)) == -1) { err = errno; continue; }
+		if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0 && setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == 0 && connect(fd, it->ai_addr, it->ai_addrlen) == 0) break;
+		err = errno;
+		close(fd); fd = -1;
+	}
+
+	freeaddrinfo(result);
+
+	if (fd == -1) {
+		error(0, "cannot connect to `%s`:`%s`: %s", sel->host, sel->port, strerror(err));
+		goto fail;
+	}
+
+	if (sel->raw[1] == ':') {
+		if (!ask) goto fail;
+		if ((input = bestline("\33[35mData>\33[0m ")) == NULL) goto fail;
+		if (interactive) bestlineHistoryAdd(data);
+	}
+	if (input) inputlen = strlen(input);
+
+	len = snprintf(buffer, sizeof(buffer), "%s %s %zu\r\n", sel->host, sel->path, inputlen);
+	if (sendall(fd, buffer, len, MSG_NOSIGNAL) != len) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", sel->host, sel->port);
+		else error(0, "cannot send request to `%s`:`%s`: %s", sel->host, sel->port, strerror(errno));
+		goto fail;
+	}
+
+	if (inputlen > 0 && sendall(fd, input, inputlen, MSG_NOSIGNAL) != (ssize_t)inputlen) {
+		error(0, "cannot send request to `%s`:`%s`: %s", sel->host, sel->port, strerror(errno));
+		goto fail;
+	}
+
+	for (total = 0; total < (int)sizeof(data) - 1 && (total < 5 || (data[total - 2] != '\r' && data[total - 1] != '\n')) && (received = recv(fd, &data[total], 1, 0)) > 0; ++total);
+	if (total < 5 || data[0] < '2' || data[0] > '5' || (total > 1 && data[1] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n' || received < 0) goto fail;
+	data[total] = '\0';
+
+	crlf = &data[total - 2];
+	*crlf = '\0';
+	if (meta >= crlf) meta = "";
+
+	switch (data[0]) {
+		case '2':
+			if (!*meta) goto fail;
+			*body = fd;
+			fd = -1;
+			*mime = meta;
+			break;
+
+		case '3':
+			if (!*meta || curl_url_set(sel->cu, CURLUPART_PATH, meta, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) goto fail;
+			curl_free(sel->url); sel->url = url;
+			fprintf(stderr, "redirected to `%s`\n", sel->url);
+			break;
+
+		default:
+			error(0, "cannot download `%s`: %s", sel->url, *meta ? meta : data);
+	}
+
+	ret = data[0] - '0';
+
+fail:
+	if (input != sel->query) free(input);
+	if (fd != -1) close(fd);
+	return ret;
+}
+
+
+static void *spartan_download(Selector *sel, char **mime, int ask) {
+	int fd = -1, status, redirs = 0;
+
+	do {
+		status = do_spartan_download(sel, &fd, mime, ask);
+		if (status == 2) break;
+	} while (status == 3 && ++redirs < 5);
+
+	if (redirs == 5) error(0, "too many redirects from `%s`", sel->url);
+	return fd == -1 ? NULL : (void *)(intptr_t)fd;
+}
+
+
+static int do_gemini_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, SSL **body, char **mime, int ask) {
 	static char buffer[1024], data[2 + 1 + 1024 + 2 + 1]; /* 99 meta\r\n\0 */
 	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
 	struct stat stbuf;
@@ -611,7 +757,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	}
 
 	for (total = 0; total < (int)sizeof(data) - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')) && (received = SSL_read(ssl, &data[total], 1)) > 0; ++total);
-	if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n' || (received < 0 && ssl_error(sel, ssl, received))) goto fail;
+	if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n' || (received < 0 && gemini_error(sel, ssl, received))) goto fail;
 	data[total] = '\0';
 
 	crlf = &data[total - 2];
@@ -633,7 +779,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 			if ((line = bestline(buffer)) == NULL) goto fail;
 			if (data[1] != '1' && interactive) bestlineHistoryAdd(line);
 			if (data[1] == '1') bestlineMaskModeDisable();
-			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) { free(line); goto fail; }
+			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME | CURLU_URLENCODE) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) { free(line); goto fail; }
 			curl_free(sel->url); sel->url = url;
 			free(line);
 			break;
@@ -679,7 +825,7 @@ static void sigint(int sig) {
 }
 
 
-static SSL *download(Selector *sel, char **mime, int ask) {
+static void *gemini_download(Selector *sel, char **mime, int ask) {
 	static char crtpath[1024], keypath[1024], suffix[1024];
 	struct stat stbuf;
 	const char *home;
@@ -728,7 +874,7 @@ static SSL *download(Selector *sel, char **mime, int ask) {
 
 loaded:
 	do {
-		status = do_download(sel, ctx, crtpath, keypath, &ssl, mime, ask);
+		status = do_gemini_download(sel, ctx, crtpath, keypath, &ssl, mime, ask);
 		if (status >= 20 && status <= 29) break;
 	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69 && ++needcert == 1) || (status >= 30 && status <= 39 && ++redirs < 5));
 
@@ -736,6 +882,21 @@ loaded:
 
 	if (redirs == 5) error(0, "too many redirects from `%s`", sel->url);
 	return ssl;
+}
+
+
+static void *download(Selector *sel, char **mime, int ask, const Protocol **proto) {
+	static const Protocol spartan = {spartan_read, spartan_error, spartan_close};
+	static const Protocol gemini = {gemini_read, gemini_error, gemini_close};
+	void *c;
+	if (strcmp(sel->scheme, "gemini") == 0) {
+		c = gemini_download(sel, mime, ask);
+		*proto = &gemini;
+	} else {
+		c = (void *)(intptr_t)spartan_download(sel, mime, ask);
+		*proto = &spartan;
+	}
+	return c;
 }
 
 
@@ -766,7 +927,8 @@ static void download_to_file(Selector *sel, const char *def) {
 	FILE *fp;
 	char *mime = NULL, *input = NULL, *download_dir;
 	const char *filename = def;
-	SSL *ssl = NULL;
+	void *c;
+	const Protocol *proto;
 	size_t len;
 	int ret = 0;
 
@@ -785,9 +947,9 @@ static void download_to_file(Selector *sel, const char *def) {
 	}
 	if ((fp = fopen(filename, "wb")) == NULL) error(0, "cannot create file `%s`: %s", filename, strerror(errno));
 	else {
-		if ((ssl = download(sel, &mime, 1)) != NULL) {
-			ret = save_body(sel, ssl, fp);
-			SSL_free(ssl);
+		if ((c = download(sel, &mime, 1, &proto)) != NULL) {
+			ret = save_body(sel, c, proto, fp);
+			proto->close(c);
 		}
 
 		fclose(fp);
@@ -797,7 +959,7 @@ static void download_to_file(Selector *sel, const char *def) {
 }
 
 
-static void save_and_handle(Selector *sel, SSL *ssl, const char *mime) {
+static void save_and_handle(Selector *sel, void *c, const Protocol *proto, const char *mime) {
 	static char filename[1024];
 	FILE *fp = NULL;
 	const char *tmpdir, *handler = NULL;
@@ -807,7 +969,7 @@ static void save_and_handle(Selector *sel, SSL *ssl, const char *mime) {
 	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
 	snprintf(filename, sizeof(filename), "%sgplaces.XXXXXXXX", tmpdir);
 	if ((fd = mkstemp(filename)) == -1 || (fp = fdopen(fd, "w")) == NULL) error(0, "cannot create temporary file: %s", strerror(errno));
-	else if (save_body(sel, ssl, fp) && fflush(fp) == 0) execute_handler(handler, filename, sel);
+	else if (save_body(sel, c, proto, fp) && fflush(fp) == 0) execute_handler(handler, filename, sel);
 
 	if (fp != NULL) fclose(fp);
 	if (fd != -1) {
@@ -822,17 +984,18 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
 	Selector *it;
 	char *mime, *p = NULL, *start, *end;
-	SSL *ssl = NULL;
+	void *c = NULL;
+	const Protocol *proto;
 	size_t parsed, length = 0, total = 0, prog = 0;
 	int received, pre = 0, index = 1, width, ok = 0;
 
-	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
+	if ((c = download(sel, &mime, ask, &proto)) == NULL) goto out;
 	if (strncmp(mime, "text/gemini", 11) != 0) {
-		if (handle) save_and_handle(sel, ssl, mime);
+		if (handle) save_and_handle(sel, c, proto, mime);
 		goto out;
 	}
 	width = get_terminal_width();
-	while ((received = SSL_read(ssl, &buffer[length], sizeof(buffer) - length)) > 0) {
+	while ((received = proto->read(c, &buffer[length], sizeof(buffer) - length)) > 0) {
 		/* if a line exceeds LINE_MAX, terminate it with \n and continue to the next line */
 		for (parsed = 0, start = buffer, buffer[length + received - 1] = length + received == sizeof(buffer) ? '\n' : buffer[length + received - 1], it = NULL; start < buffer + length + received && (end = memchr(start, '\n', length + received - parsed)) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
 			*end = '\0';
@@ -849,7 +1012,7 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 		if (total > SIZE_MAX - sizeof(buffer)) break;
 	}
 	if (prog > 0) fputc('\n', stderr);
-	if (!(ok = (received == 0 || (received < 0 && !ssl_error(sel, ssl, received))))) goto out;
+	if (!(ok = (received == 0 || (received < 0 && !proto->error(sel, c, received))))) goto out;
 	if (length > 0 && parse_gemtext_line(sel, buffer, &pre, &index, &it) && it) {
 		if (print) print_gemtext_line(stdout, it, NULL, width);
 		SIMPLEQ_INSERT_TAIL(&list, it, next);
@@ -857,7 +1020,7 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 
 out:
 	free(p);
-	if (ssl != NULL) SSL_free(ssl);
+	if (c != NULL) proto->close(c);
 	if (!ok) { free_selectors(&list); SIMPLEQ_INIT(&list); }
 	return list;
 }
@@ -916,13 +1079,13 @@ static void navigate(Selector *to) {
 			if (mime == NULL) error(0, "unable to detect the MIME type of %s", to->path);
 			goto handle;
 		}
-	} else if (strcmp(to->scheme, "gemini")) {
+	} else if (strcmp(to->scheme, "gemini") && strcmp(to->scheme, "spartan")) {
 		handler = find_mime_handler(to->scheme);
 		goto handle;
 	} else new = download_gemtext(to, interactive, 1, 1);
 
 	if (SIMPLEQ_EMPTY(&new)) return;
-	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + 9);
+	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + (strncmp(to->url, "gemini://", 9) == 0 ? 9 : 10));
 	free_selectors(&menu);
 	menu = new;
 	if (interactive) page_gemtext(&menu);
@@ -1171,9 +1334,11 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 	if ((index = atoi(buf)) > 0) {
 		if ((sel = find_selector(&menu, index)) == NULL) return NULL;
 		if (strncmp(sel->rawurl, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[9]);
+		else if (strncmp(sel->rawurl, "spartan://", 10) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[10]);
 		else snprintf(hint, sizeof(hint), " %s", sel->rawurl);
 	} else if ((val = set_var(&variables, buf, NULL)) != NULL) {
 		if (strncmp(val, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &val[9]);
+		else if (strncmp(val, "spartan://", 10) == 0) snprintf(hint, sizeof(hint), " %s", &val[10]);
 		else snprintf(hint, sizeof(hint), " %s", val);
 	} else return NULL;
 	return hint;
