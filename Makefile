@@ -48,8 +48,9 @@ install: $(BIN)
 
 uninstall:
 	@rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
-	@rm -f $(DESTDIR)$(CONFDIR)/$(CONF)
-	@rm -f $(DESTDIR)$(MANDIR)/man1/${MAN}
-	@rm -f $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps/${ICON}
-	@rm -f $(DESTDIR)$(APPDIR)/${APP}
-	@rm -f $(DESTDIR)$(APPDATADIR)/${APPDATA}
+	@rm -f $(DESTDIR)$(CONFDIR)/gplacesrc
+	@rm -rf $(DESTDIR)$(PREFIX)/share/doc/gplaces
+	@rm -f $(DESTDIR)$(PREFIX)/share/man1/gplaces.1
+	@rm -f $(DESTDIR)$(PREFIX)/share/hicolor/scalable/apps/gplaces.svg
+	@rm -f $(DESTDIR)$(PREFIX)/share/applications/gplaces.desktop
+	@rm -f $(DESTDIR)$(PREFIX)/share/metainfo/com.github.dimkr.gplaces.appdata.xml
