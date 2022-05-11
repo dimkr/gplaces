@@ -346,12 +346,12 @@ static const char *find_mime_handler(const char *mime) {
 }
 
 
-static void reap(const char *command, pid_t pid) {
+static void reap(const char *command, pid_t pid, int silent) {
 	pid_t ret;
 	int status;
 
 	while ((ret = waitpid(pid, &status, 0)) < 0 && errno == EINTR);
-	if (ret == pid && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
+	if (!silent && ret == pid && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
 	else if (ret == pid && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
 }
 
@@ -390,7 +390,7 @@ static void execute_handler(const char *handler, const char *filename, Selector 
 			execl("/bin/sh", "sh", "-c", command, (char *)NULL);
 		}
 		exit(EXIT_FAILURE);
-	} else if (pid > 0) reap(command, pid);
+	} else if (pid > 0) reap(command, pid, 0);
 	else error(0, "could not execute `%s`", command);
 }
 
@@ -916,7 +916,7 @@ static void page_gemtext(SelectorList *list) {
 		fclose(fp);
 	}
 
-	reap(pager, pid);
+	reap(pager, pid, 1);
 }
 
 
