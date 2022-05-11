@@ -101,4 +101,4 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|226|57|1024
+C|1|227|57|1025
