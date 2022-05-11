@@ -85,11 +85,11 @@ this number can be used to download the link, too.
 
 the gplaces configuration file allows you to define short aliases for URLs you visit often. for example, the default configuration file defines the `home` alias for the Gemini project homepage and the `search` alias for a Gemini search engine. type `search` and press `ENTER` to search geminispace.
 
-to show a feed of new posts, type `sub`. the list of URLs gplaces is "subscribed" to is defined in the configuration file.
+to show a feed of new posts, type `sub`, then press `ENTER`. the list of URLs gplaces is "subscribed" to is defined in the configuration file.
 
 to exit gplaces, press `CTRL+d`.
 
-additional documentation and more details are available in `man gplaces`.
+additional documentation and more details are available in `man gplaces`. type `help` and press `ENTER` to see short descriptions of available commands.
 
 ## How to contribute?
 - send me pull-requests and I'll review and merge them :)
@@ -102,6 +102,3 @@ additional documentation and more details are available in `man gplaces`.
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
 C|1|226|57|1038
-
-## Help
-Just type `help` when the client is running.
