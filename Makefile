@@ -1,17 +1,13 @@
 # see LICENSE for copyright and license details
 PREFIX = /usr/local
 CONFDIR ?= $(PREFIX)/etc
-MANDIR = $(PREFIX)/share/man
-ICONDIR = $(PREFIX)/share/icons
-APPDIR = $(PREFIX)/share/applications
-APPDATADIR = $(PREFIX)/share/metainfo
 CC = cc
 CFLAGS ?= -O2 -Wall -Wextra -Wno-unused-result
 VERSION ?= $(shell git describe --tags 2>/dev/null | sed s/^v//)
 ifeq ($(VERSION),)
 	VERSION = ?
 endif
-CFLAGS += -D_GNU_SOURCE -DCONFDIR=\"$(CONFDIR)\" -DGPLACES_VERSION=\"$(VERSION)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
+CFLAGS += -D_GNU_SOURCE  -DPREFIX=\"$(PREFIX)\" -DCONFDIR=\"$(CONFDIR)\" -DGPLACES_VERSION=\"$(VERSION)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
 LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
 WITH_LIBIDN2 ?= $(shell pkg-config --exists libidn2 && echo 1 || echo 0)
@@ -32,11 +28,6 @@ ifeq ($(WITH_LIBMAGIC),1)
 endif
 OBJ = bestline/bestline.o gplaces.o
 BIN = gplaces
-CONF = gplacesrc
-MAN = gplaces.1
-ICON = gplaces.svg
-APP = gplaces.desktop
-APPDATA = com.github.dimkr.gplaces.appdata.xml
 
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)
@@ -46,18 +37,14 @@ clean:
 	@rm -f $(BIN) $(OBJ)
 
 install: $(BIN)
-	@mkdir -p $(DESTDIR)$(PREFIX)/bin/
-	@install -m 755 $(BIN) $(DESTDIR)$(PREFIX)/bin/${BIN}
-	@mkdir -p $(DESTDIR)$(CONFDIR)
-	@install -m 644 $(CONF) $(DESTDIR)$(CONFDIR)/${CONF}
-	@mkdir -p $(DESTDIR)$(MANDIR)/man1
-	@install -m 644 $(MAN) $(DESTDIR)$(MANDIR)/man1/${MAN}
-	@mkdir -p $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps
-	@install -m 644 $(ICON) $(DESTDIR)$(ICONDIR)/hicolor/scalable/apps/${ICON}
-	@mkdir -p $(DESTDIR)$(APPDIR)
-	@install -m 644 $(APP) $(DESTDIR)$(APPDIR)/${APP}
-	@mkdir -p $(DESTDIR)$(APPDATADIR)
-	@install -m 644 $(APPDATA) $(DESTDIR)$(APPDATADIR)/${APPDATA}
+	@install -D -m 755 $(BIN) $(DESTDIR)$(PREFIX)/bin/${BIN}
+	@install -D -m 644 gplacesrc $(DESTDIR)$(CONFDIR)/gplacesrc
+	@install -D -m 644 README.md $(DESTDIR)$(PREFIX)/share/doc/gplaces/README.md
+	@install -m 644 LICENSE $(DESTDIR)$(PREFIX)/share/doc/gplaces/LICENSE
+	@install -D -m 644 gplaces.1 $(DESTDIR)$(PREFIX)/share/man1/gplaces.1
+	@install -D -m 644 gplaces.svg $(DESTDIR)$(PREFIX)/share/hicolor/scalable/apps/gplaces.svg
+	@install -D -m 644 gplaces.desktop $(DESTDIR)$(PREFIX)/share/applications/gplaces.desktop
+	@install -D -m 644 com.github.dimkr.gplaces.appdata.xml $(DESTDIR)$(PREFIX)/share/metainfo/com.github.dimkr.gplaces.appdata.xml
 
 uninstall:
 	@rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)

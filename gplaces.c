@@ -976,25 +976,6 @@ static const Help gemini_help[] = {
 		"HELP [<topic>]" \
 	},
 	{
-		"license",
-		"gplaces - a simple terminal Gemini client\n" \
-		"Copyright (C) 2022  Dima Krasner\n" \
-		"Copyright (C) 2019  Sebastian Steinhauer\n" \
-		"\n" \
-		"This program is free software: you can redistribute it and/or modify\n" \
-		"it under the terms of the GNU General Public License as published by\n" \
-		"the Free Software Foundation, either version 3 of the License, or\n" \
-		"(at your option) any later version.\n" \
-		"\n" \
-		"This program is distributed in the hope that it will be useful,\n" \
-		"but WITHOUT ANY WARRANTY; without even the implied warranty of\n" \
-		"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n" \
-		"GNU General Public License for more details.\n" \
-		"\n" \
-		"You should have received a copy of the GNU General Public License\n" \
-		"along with this program.  If not, see <https://www.gnu.org/licenses/>." \
-	},
-	{
 		"save",
 		"SAVE <item-id|url> [<path>]" \
 	},
@@ -1329,9 +1310,8 @@ int main(int argc, char **argv) {
 	if (interactive) puts(
 		"gplaces - "GPLACES_VERSION"  Copyright (C) 2022  Dima Krasner\n" \
 		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
-		"This program comes with ABSOLUTELY NO WARRANTY; for details type `help license'.\n" \
-		"This is free software, and you are welcome to redistribute it\n" \
-		"under certain conditions; type `help license' for details.\n"
+		"This program is free software and comes with ABSOLUTELY NO WARRANTY;\n" \
+		"see "PREFIX"/share/doc/gplaces/LICENSE for details.\n"
 	);
 
 	shell(argc, argv);

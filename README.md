@@ -99,7 +99,7 @@ additional documentation and more details are available in `man gplaces`.
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|226|58|1057
+C|1|226|57|1038
 
 ## Help
 Just type `help` when the client is running.
