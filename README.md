@@ -69,7 +69,7 @@ gplaces does not display non-Gemtext files: instead, it downloads them to tempor
     > save gemini.circumlunar.space/docs/specification.gmi
     enter filename (press ENTER for `/home/user/Downloads/specification.gmi`):
 
-to download a file instead of dispaying it or saving it to a temporary file, type `save`, followed by its URL, then press `ENTER`.
+to download a file instead of displaying it or saving it to a temporary file, type `save`, followed by its URL, then press `ENTER`.
 
     gemini.circumlunar.space/> 2 docs/
 
