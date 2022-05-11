@@ -10,7 +10,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 
 ## Features
 - configurable MIME type handlers
-- "powerful" shell
+- "powerful" shell with tab completion
 - ~bookmarks~ use aliases
 - subscriptions
 	- only [simple subscriptions](https://gemini.circumlunar.space/docs/companion/subscription.gmi) are supported, to avoid [XML parsing](https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=xml)
