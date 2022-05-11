@@ -210,14 +210,13 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 		if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
 	}
 
-	if (curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK) return 0;
+	if (curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || (!(file = (strcmp(sel->scheme, "file") == 0)) && curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK)) return 0;
 
-	file = (strcmp(sel->scheme, "file") == 0);
 #if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
 	#ifdef GPLACES_USE_LIBIDN2
 	if (!file && (idn2_to_ascii_8z(sel->host, &host, IDN2_NONTRANSITIONAL) == IDN2_OK || idn2_to_ascii_8z(sel->host, &host, IDN2_TRANSITIONAL) == IDN2_OK)) {
 	#elif defined(GPLACES_USE_LIBIDN)
-	if (!file && (idna_to_ascii_8z(sel->host, &host, 0) == IDNA_SUCCESS || idna_to_ascii_8z(sel->host, &host, 0) == IDNA_SUCCESS)) {
+	if (!file && idna_to_ascii_8z(sel->host, &host, 0) == IDNA_SUCCESS) {
 	#endif
 		if (curl_url_set(sel->cu, CURLUPART_HOST, host, 0) != CURLUE_OK) { free(host); return 0; }
 		free(host);
