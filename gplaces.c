@@ -963,19 +963,6 @@ handle:
 /*============================================================================*/
 static const Help gemini_help[] = {
 	{
-		"authors",
-		"Dima Krasner <dima@dimakrasner.com>\n" \
-		"Sebastian Steinhauer <s.steinhauer@yahoo.de>" \
-	},
-	{
-		"commands",
-		"help          save          set           show          sub" \
-	},
-	{
-		"help",
-		"HELP [<topic>]" \
-	},
-	{
 		"save",
 		"SAVE <item-id|url> [<path>]" \
 	},
@@ -1027,13 +1014,13 @@ static void cmd_help(char *line) {
 		for (help = gemini_help; help->name; ++help) {
 			if (!strcasecmp(help->name, topic)) {
 				if (help->text) puts(help->text);
-				else printf("sorry topic `%s` has no text yet :(\n", topic);
 				return;
 			}
 		}
+		return;
 	}
 
-	puts("available topics, type `help <topic>` to get more information");
+	puts("available commands, type `help <command>` to get more information");
 	for (i = 1, help = gemini_help; help->name; ++help, ++i) {
 		printf("%-13s ", help->name);
 		if (i % 5 == 0) puts("");

@@ -41,6 +41,7 @@ install: $(BIN)
 	@install -D -m 644 gplacesrc $(DESTDIR)$(CONFDIR)/gplacesrc
 	@install -D -m 644 README.md $(DESTDIR)$(PREFIX)/share/doc/gplaces/README.md
 	@install -m 644 LICENSE $(DESTDIR)$(PREFIX)/share/doc/gplaces/LICENSE
+	@install -m 644 AUTHORS $(DESTDIR)$(PREFIX)/share/doc/gplaces/AUTHORS
 	@install -D -m 644 gplaces.1 $(DESTDIR)$(PREFIX)/share/man1/gplaces.1
 	@install -D -m 644 gplaces.svg $(DESTDIR)$(PREFIX)/share/hicolor/scalable/apps/gplaces.svg
 	@install -D -m 644 gplaces.desktop $(DESTDIR)$(PREFIX)/share/applications/gplaces.desktop
