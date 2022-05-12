@@ -36,6 +36,16 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-05-12" version="0.16.12">
+      <description>
+        <ul>
+          <li>Fix for breakge of file:// handling</li>
+          <li>Fix for use-after-free when parsing large blocks of preformatted text</li>
+          <li>The pager exit code is no longer logged when it's 0</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-05-11" version="0.16.11">
       <description>
         <ul>
