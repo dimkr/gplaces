@@ -263,14 +263,14 @@ static int parse_url(Selector *from, Selector *sel, const char *url) {
 }
 
 
-static int parse_gemtext_line(Selector *from, char *line, int *pre, int *index, Selector **sel) {
+static void parse_gemtext_line(Selector *from, char *line, int *pre, int *index, Selector **sel, SelectorList *list) {
 	char *url;
 
 	*sel = NULL;
 
 	if (strncmp(line, "```", 3) == 0) {
 		*pre = !*pre;
-		return 1;
+		return;
 	}
 
 	line[strcspn(line, "\r\n")] = '\0';
@@ -285,7 +285,7 @@ static int parse_gemtext_line(Selector *from, char *line, int *pre, int *index, 
 			*line = '\0';
 			line += 1 + strspn(line + 1, " \t");
 		}
-		if (!parse_url(from, *sel, url)) { free_selector(*sel); *sel = NULL; return 1; }
+		if (!parse_url(from, *sel, url)) { free_selector(*sel); *sel = NULL; return; }
 		if (*line) (*sel)->repr = str_copy(line);
 		else (*sel)->repr = str_copy(url);
 		(*sel)->index = (*index)++;
@@ -296,7 +296,7 @@ static int parse_gemtext_line(Selector *from, char *line, int *pre, int *index, 
 		(*sel)->repr = str_copy(line + 1 + strspn(line + 1, " \t"));
 	} else *sel = new_selector('i', line);
 
-	return 1;
+	SIMPLEQ_INSERT_TAIL(list, *sel, next);
 }
 
 
@@ -308,7 +308,7 @@ static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 	int pre = 0, index = 1;
 
 	for (sel = NULL; (line = fgets(buffer, sizeof(buffer), fp)) != NULL; sel = NULL) {
-		if (parse_gemtext_line(from, line, &pre, &index, &sel) && sel) SIMPLEQ_INSERT_TAIL(&list, sel, next);
+		parse_gemtext_line(from, line, &pre, &index, &sel, &list);
 	}
 
 	return list;
@@ -864,10 +864,8 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 				end = &buffer[sizeof(buffer) - 1]; /* if the buffer is full and we haven't found a \n, terminate the line */
 			}
 			*end = '\0';
-			if (parse_gemtext_line(sel, start, &pre, &index, &it) && it) {
-				if (print) print_gemtext_line(stdout, it, NULL, width);
-				SIMPLEQ_INSERT_TAIL(&list, it, next);
-			}
+			parse_gemtext_line(sel, start, &pre, &index, &it, &list);
+			if (print && it) print_gemtext_line(stdout, it, NULL, width);
 		}
 		length -= parsed;
 		memmove(buffer, &buffer[parsed], length);
@@ -878,9 +876,9 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 	}
 	if (prog > 0) fputc('\n', stderr);
 	if (!(ok = (received == 0 || (received < 0 && !ssl_error(sel, ssl, received))))) goto out;
-	if (length > 0 && parse_gemtext_line(sel, buffer, &pre, &index, &it) && it) {
-		if (print) print_gemtext_line(stdout, it, NULL, width);
-		SIMPLEQ_INSERT_TAIL(&list, it, next);
+	if (length > 0) {
+		parse_gemtext_line(sel, buffer, &pre, &index, &it, &list);
+		if (print && it) print_gemtext_line(stdout, it, NULL, width);
 	}
 
 out:
