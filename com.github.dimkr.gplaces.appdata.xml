@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-05-13" version="0.16.13">
+      <description>
+        <ul>
+          <li>Shell completion using link indices</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-05-12" version="0.16.12">
       <description>
         <ul>
