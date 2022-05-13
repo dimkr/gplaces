@@ -995,7 +995,7 @@ static void cmd_save(char *line) {
 	long index;
 	id = next_token(&line);
 	path = next_token(&line);
-	if ((index = strtol(id, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, index)) != NULL) download_to_file(to, path);
+	if ((index = strtol(id, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) download_to_file(to, path);
 	else if (index == LONG_MIN || index == LONG_MAX || *end != '\0') {
 		to = new_selector('l', line);
 		if (parse_url(NULL, to, id)) download_to_file(to, path);
