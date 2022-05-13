@@ -990,13 +990,13 @@ static void cmd_show(char *line) {
 
 
 static void cmd_save(char *line) {
-	char *id, *path;
+	char *id, *path, *end;
 	Selector *to;
-	int index;
+	long index;
 	id = next_token(&line);
 	path = next_token(&line);
-	if ((index = atoi(id)) > 0 && (to = find_selector(&menu, index)) != NULL) download_to_file(to, path);
-	else if (index <= 0) {
+	if ((index = strtol(id, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, index)) != NULL) download_to_file(to, path);
+	else if (index == LONG_MIN || index == LONG_MAX || *end != '\0') {
 		to = new_selector('l', line);
 		if (parse_url(NULL, to, id)) download_to_file(to, path);
 		free_selector(to);
@@ -1132,6 +1132,11 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	static int len;
 	const Command *cmd;
 	const Variable *var;
+	Selector *sel;
+	long index;
+	char *end;
+
+	if ((index = strtol(text, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (sel = find_selector(&menu, (int)index)) != NULL) bestlineAddCompletion(lc,sel->url);
 
 	len = strlen(text);
 
@@ -1147,7 +1152,9 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 	static char hint[1024];
 	Selector *sel;
 	const char *val;
-	int first = -1, last = -1, index;
+	char *end;
+	long index;
+	int first = -1, last = -1;
 	(void)ansi1;
 	(void)ansi2;
 	if (strcspn(buf, " ") == 0) {
@@ -1162,8 +1169,8 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 		} else if (first != -1) return "1, URL, variable or command";
 		else return "URL, variable or command; type `help` for help";
 	}
-	if ((index = atoi(buf)) > 0) {
-		if ((sel = find_selector(&menu, index)) == NULL) return NULL;
+	if ((index = strtol(buf, &end, 10)) > 0 && index < INT_MAX && *end == '\0') {
+		if ((sel = find_selector(&menu, (int)index)) == NULL) return NULL;
 		if (strncmp(sel->rawurl, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[9]);
 		else snprintf(hint, sizeof(hint), " %s", sel->rawurl);
 	} else if ((val = set_var(&variables, buf, NULL)) != NULL) {
@@ -1177,7 +1184,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 static void shell(int argc, char **argv) {
 	static char path[1024];
 	const char *home = NULL;
-	char *line, *base;
+	char *line, *base, *end;
 	Selector *to = NULL;
 	int index;
 
@@ -1198,7 +1205,7 @@ static void shell(int argc, char **argv) {
 		bestlineSetHintsCallback(shell_hints);
 		if ((line = base = bestline(prompt)) == NULL) break;
 		bestlineSetHintsCallback(NULL);
-		if ((index = atoi(line)) > 0 && (to = find_selector(&menu, index)) != NULL) {
+		if ((index = strtol(line, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) {
 			if (to->url && interactive) bestlineHistoryAdd(to->url);
 			else if (interactive) bestlineHistoryAdd(line);
 			navigate(to);

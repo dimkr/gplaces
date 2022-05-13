@@ -75,6 +75,8 @@ to download a file instead of displaying it or saving it to a temporary file, ty
 
 gplaces associates a number with each link in the last viewed page. type the number of a link to show its URL, then press `ENTER` to follow it.
 
+to edit the URL of a link, type the link number, press `Tab`, edit the URL and press `ENTER`. for example, this is useful if a link leads to a post in another gemlog, but you want to see its homepage.
+
     gemini.circumlunar.space/docs/> save 2
     enter filename (press ENTER for `/home/user/Downloads/specification.gmi`):
 
@@ -101,4 +103,4 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|227|57|1023
+C|1|228|57|1029
