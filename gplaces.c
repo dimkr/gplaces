@@ -435,7 +435,7 @@ static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, i
 		}
 
 		/* if it's a full line followed by a non-whitespace character, drop the cut word from the end */
-		if (wchars + extra == width && i + out < size && sel->repr[i + out] != ' ' && sel->repr[i + out] != '\t') {
+		if (wchars + extra == width && i + out < (int)size && sel->repr[i + out] != ' ' && sel->repr[i + out] != '\t') {
 			for (p = &sel->repr[i + out - 1]; p >= &sel->repr[i] && *p != ' ' && *p != '\t'; --p);
 			if (p > &sel->repr[i]) out = p - &sel->repr[i];
 		}
