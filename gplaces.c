@@ -999,7 +999,7 @@ static void cmd_save(char *line) {
 	char *id, *path, *end;
 	Selector *to;
 	long index;
-	id = next_token(&line);
+	if ((id = next_token(&line)) == NULL) return;
 	path = next_token(&line);
 	if ((index = strtol(id, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) download_to_file(to, path);
 	else if (index == LONG_MIN || index == LONG_MAX || *end != '\0') {
