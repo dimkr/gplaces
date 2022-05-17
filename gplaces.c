@@ -621,7 +621,7 @@ static int save_body(Selector *sel, void *c, const Protocol *proto, FILE *fp) {
 
 
 static ssize_t sendall(int sockfd, const void *buf, size_t len, int flags) {
-	ssize_t sent, total;
+	ssize_t sent = 0, total;
 	for (total = 0; total < (ssize_t)len && (sent = send(sockfd, (char *)buf + total, len - total, flags)) > 0; total += sent);
 	return sent <= 0 ? sent : total;
 }
