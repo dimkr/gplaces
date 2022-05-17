@@ -578,7 +578,7 @@ static int spartan_read(void *c, void *buffer, int length) {
 
 static int spartan_error(Selector *sel, void *c, int err) {
 	(void)c;
-	(void)err;
+	if (err == 0) return 0;
 	if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "failed to download `%s`: cancelled", sel->url);
 	else error(0, "failed to download `%s`: %s", sel->url, strerror(errno));
 	return 1;
