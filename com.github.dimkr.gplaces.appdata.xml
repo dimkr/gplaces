@@ -17,6 +17,9 @@
        <li>Generation of client certificates</li>
        <li>Slightly prettified Gemtext output</li>
     </ul>
+    <p>
+       gplaces should be fairly straightforward to use for anyone used to the command-line and man pages.
+    </p>
   </description>
 
   <launchable type="desktop-id">com.github.dimkr.gplaces.desktop</launchable>
@@ -33,6 +36,57 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-05-17" version="0.16.15">
+      <description>
+        <ul>
+          <li>Fix for crash on save without arguments</li>
+        </ul>
+      </description>
+    </release>
+
+    <release date="2022-05-15" version="0.16.14">
+      <description>
+        <ul>
+          <li>Word wrapping</li>
+        </ul>
+      </description>
+    </release>
+
+    <release date="2022-05-13" version="0.16.13">
+      <description>
+        <ul>
+          <li>Shell completion using link indices</li>
+        </ul>
+      </description>
+    </release>
+
+    <release date="2022-05-12" version="0.16.12">
+      <description>
+        <ul>
+          <li>Fix for breakge of file:// handling</li>
+          <li>Fix for use-after-free when parsing large blocks of preformatted text</li>
+          <li>The pager exit code is no longer logged when it's 0</li>
+        </ul>
+      </description>
+    </release>
+
+    <release date="2022-05-11" version="0.16.11">
+      <description>
+        <ul>
+          <li>IDN support</li>
+          <li>Improved documentation</li>
+        </ul>
+      </description>
+    </release>
+
+    <release date="2022-05-10" version="0.16.10">
+      <description>
+        <ul>
+          <li>Fix for a parsing regression in 0.16.9</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-05-10" version="0.16.9">
       <description>
         <ul>

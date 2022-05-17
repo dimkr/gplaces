@@ -53,6 +53,12 @@
 
 #include <curl/curl.h>
 
+#ifdef GPLACES_USE_LIBIDN2
+	#include <idn2.h>
+#elif defined(GPLACES_USE_LIBIDN)
+	#include <idna.h>
+#endif
+
 #ifdef GPLACES_USE_LIBMAGIC
 	#include <magic.h>
 #endif
@@ -199,6 +205,10 @@ static void free_selectors(SelectorList *list) {
 
 static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 	static char buffer[1024];
+#if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
+	char *host;
+#endif
+	int file;
 
 	/* TODO: why does curl_url_set() return CURLE_OUT_OF_MEMORY if the scheme is missing, but only inside the Flatpak sandbox? */
 	if (curl_url_set(sel->cu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) {
@@ -207,7 +217,22 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 		if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
 	}
 
-	if (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK) return 0;
+	if (curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || (!(file = (strcmp(sel->scheme, "file") == 0)) && curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK)) return 0;
+
+#if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
+	#ifdef GPLACES_USE_LIBIDN2
+	if (!file && (idn2_to_ascii_8z(sel->host, &host, IDN2_NONTRANSITIONAL) == IDN2_OK || idn2_to_ascii_8z(sel->host, &host, IDN2_TRANSITIONAL) == IDN2_OK)) {
+	#elif defined(GPLACES_USE_LIBIDN)
+	if (!file && idna_to_ascii_8z(sel->host, &host, 0) == IDNA_SUCCESS) {
+	#endif
+		if (curl_url_set(sel->cu, CURLUPART_HOST, host, 0) != CURLUE_OK) { free(host); return 0; }
+		free(host);
+		curl_free(sel->host); sel->host = NULL;
+		if (curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK) return 0;
+	}
+#endif
+
+	if (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK) return 0;
 
 	switch (curl_url_get(sel->cu, CURLUPART_QUERY, &sel->query, CURLU_URLDECODE)) {
 	case CURLE_OK:
@@ -218,13 +243,11 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 	free(sel->rawurl);
 	sel->rawurl = str_copy(url);
 
-	if (!strcmp(sel->scheme, "file")) {
+	if (file) {
 		sel->host = str_copy("");
 		sel->port = str_copy("");
 		return 1;
 	}
-
-	if (curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK) return 0;
 
 	switch (curl_url_get(sel->cu, CURLUPART_PORT, &sel->port, 0)) {
 		case CURLUE_OK: break;
@@ -253,12 +276,14 @@ static int parse_url(Selector *from, Selector *sel, const char *url) {
 }
 
 
-static int parse_gemtext_line(Selector *from, char *line, int *pre, int *index, Selector **sel) {
+static void parse_gemtext_line(Selector *from, char *line, int *pre, int *index, Selector **sel, SelectorList *list) {
 	char *url;
+
+	*sel = NULL;
 
 	if (strncmp(line, "```", 3) == 0) {
 		*pre = !*pre;
-		return 1;
+		return;
 	}
 
 	line[strcspn(line, "\r\n")] = '\0';
@@ -273,7 +298,7 @@ static int parse_gemtext_line(Selector *from, char *line, int *pre, int *index, 
 			*line = '\0';
 			line += 1 + strspn(line + 1, " \t");
 		}
-		if (!parse_url(from, *sel, url)) { free_selector(*sel); *sel = NULL; return 1; }
+		if (!parse_url(from, *sel, url)) { free_selector(*sel); *sel = NULL; return; }
 		if (*line) (*sel)->repr = str_copy(line);
 		else (*sel)->repr = str_copy(url);
 		(*sel)->index = (*index)++;
@@ -284,7 +309,7 @@ static int parse_gemtext_line(Selector *from, char *line, int *pre, int *index, 
 		(*sel)->repr = str_copy(line + 1 + strspn(line + 1, " \t"));
 	} else *sel = new_selector('i', line);
 
-	return 1;
+	SIMPLEQ_INSERT_TAIL(list, *sel, next);
 }
 
 
@@ -296,7 +321,7 @@ static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 	int pre = 0, index = 1;
 
 	for (sel = NULL; (line = fgets(buffer, sizeof(buffer), fp)) != NULL; sel = NULL) {
-		if (parse_gemtext_line(from, line, &pre, &index, &sel) && sel) SIMPLEQ_INSERT_TAIL(&list, sel, next);
+		parse_gemtext_line(from, line, &pre, &index, &sel, &list);
 	}
 
 	return list;
@@ -335,12 +360,12 @@ static const char *find_mime_handler(const char *mime) {
 }
 
 
-static void reap(const char *command, pid_t pid) {
+static void reap(const char *command, pid_t pid, int silent) {
 	pid_t ret;
 	int status;
 
 	while ((ret = waitpid(pid, &status, 0)) < 0 && errno == EINTR);
-	if (ret == pid && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
+	if (!silent && ret == pid && WIFEXITED(status)) fprintf(stderr, "`%s` has exited with exit status %d\n", command, WEXITSTATUS(status));
 	else if (ret == pid && !WIFEXITED(status)) fprintf(stderr, "`%s` has exited abnormally\n", command);
 }
 
@@ -379,7 +404,7 @@ static void execute_handler(const char *handler, const char *filename, Selector 
 			execl("/bin/sh", "sh", "-c", command, (char *)NULL);
 		}
 		exit(EXIT_FAILURE);
-	} else if (pid > 0) reap(command, pid);
+	} else if (pid > 0) reap(command, pid, 0);
 	else error(0, "could not execute `%s`", command);
 }
 
@@ -420,6 +445,12 @@ static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, i
 				p = &sel->repr[i + out + 1];
 				w = 1;
 			} else if (wchars + w > width - extra) break;
+		}
+
+		/* if it's a full line followed by a non-whitespace character, drop the cut word from the end */
+		if (wchars + extra == width && i + out < (int)size && sel->repr[i + out] != ' ' && sel->repr[i + out] != '\t') {
+			for (p = &sel->repr[i + out - 1]; p >= &sel->repr[i] && *p != ' ' && *p != '\t'; --p);
+			if (p > &sel->repr[i]) out = p - &sel->repr[i];
 		}
 
 print:
@@ -996,15 +1027,16 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 	}
 	width = get_terminal_width();
 	while ((received = proto->read(c, &buffer[length], sizeof(buffer) - length)) > 0) {
-		/* if a line exceeds LINE_MAX, terminate it with \n and continue to the next line */
-		for (parsed = 0, start = buffer, buffer[length + received - 1] = length + received == sizeof(buffer) ? '\n' : buffer[length + received - 1], it = NULL; start < buffer + length + received && (end = memchr(start, '\n', length + received - parsed)) != NULL; parsed += end - start + 1, start = end + 1, it = NULL) {
-			*end = '\0';
-			if (parse_gemtext_line(sel, start, &pre, &index, &it) && it) {
-				if (print) print_gemtext_line(stdout, it, NULL, width);
-				SIMPLEQ_INSERT_TAIL(&list, it, next);
+		for (length += received, parsed = 0, start = buffer; start < buffer + length; parsed += end - start + 1, start = end + 1) {
+			if ((end = memchr(start, '\n', length - parsed)) == NULL) {
+				if (parsed > 0 || length < sizeof(buffer)) break; /* if we still don't have the end of the line, receive more */
+				end = &buffer[sizeof(buffer) - 1]; /* if the buffer is full and we haven't found a \n, terminate the line */
 			}
+			*end = '\0';
+			parse_gemtext_line(sel, start, &pre, &index, &it, &list);
+			if (print && it) print_gemtext_line(stdout, it, NULL, width);
 		}
-		length += received - parsed;
+		length -= parsed;
 		memmove(buffer, &buffer[parsed], length);
 		buffer[length] = '\0';
 		total += received;
@@ -1013,9 +1045,9 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 	}
 	if (prog > 0) fputc('\n', stderr);
 	if (!(ok = (received == 0 || (received < 0 && !proto->error(sel, c, received))))) goto out;
-	if (length > 0 && parse_gemtext_line(sel, buffer, &pre, &index, &it) && it) {
-		if (print) print_gemtext_line(stdout, it, NULL, width);
-		SIMPLEQ_INSERT_TAIL(&list, it, next);
+	if (length > 0) {
+		parse_gemtext_line(sel, buffer, &pre, &index, &it, &list);
+		if (print && it) print_gemtext_line(stdout, it, NULL, width);
 	}
 
 out:
@@ -1052,7 +1084,7 @@ static void page_gemtext(SelectorList *list) {
 		fclose(fp);
 	}
 
-	reap(pager, pid);
+	reap(pager, pid, 1);
 }
 
 
@@ -1099,38 +1131,6 @@ handle:
 /*============================================================================*/
 static const Help gemini_help[] = {
 	{
-		"authors",
-		"Dima Krasner <dima@dimakrasner.com>\n" \
-		"Sebastian Steinhauer <s.steinhauer@yahoo.de>" \
-	},
-	{
-		"commands",
-		"help          save          set           show          sub" \
-	},
-	{
-		"help",
-		"HELP [<topic>]" \
-	},
-	{
-		"license",
-		"gplaces - a simple terminal Gemini client\n" \
-		"Copyright (C) 2022  Dima Krasner\n" \
-		"Copyright (C) 2019  Sebastian Steinhauer\n" \
-		"\n" \
-		"This program is free software: you can redistribute it and/or modify\n" \
-		"it under the terms of the GNU General Public License as published by\n" \
-		"the Free Software Foundation, either version 3 of the License, or\n" \
-		"(at your option) any later version.\n" \
-		"\n" \
-		"This program is distributed in the hope that it will be useful,\n" \
-		"but WITHOUT ANY WARRANTY; without even the implied warranty of\n" \
-		"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n" \
-		"GNU General Public License for more details.\n" \
-		"\n" \
-		"You should have received a copy of the GNU General Public License\n" \
-		"along with this program.  If not, see <https://www.gnu.org/licenses/>." \
-	},
-	{
 		"save",
 		"SAVE <item-id|url> [<path>]" \
 	},
@@ -1159,13 +1159,13 @@ static void cmd_show(char *line) {
 
 
 static void cmd_save(char *line) {
-	char *id, *path;
+	char *id, *path, *end;
 	Selector *to;
-	int index;
-	id = next_token(&line);
+	long index;
+	if ((id = next_token(&line)) == NULL) return;
 	path = next_token(&line);
-	if ((index = atoi(id)) > 0 && (to = find_selector(&menu, index)) != NULL) download_to_file(to, path);
-	else if (index <= 0) {
+	if ((index = strtol(id, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) download_to_file(to, path);
+	else if (index == LONG_MIN || index == LONG_MAX || *end != '\0') {
 		to = new_selector('l', line);
 		if (parse_url(NULL, to, id)) download_to_file(to, path);
 		free_selector(to);
@@ -1182,13 +1182,13 @@ static void cmd_help(char *line) {
 		for (help = gemini_help; help->name; ++help) {
 			if (!strcasecmp(help->name, topic)) {
 				if (help->text) puts(help->text);
-				else printf("sorry topic `%s` has no text yet :(\n", topic);
 				return;
 			}
 		}
+		return;
 	}
 
-	puts("available topics, type `help <topic>` to get more information");
+	puts("available commands, type `help <command>` to get more information");
 	for (i = 1, help = gemini_help; help->name; ++help, ++i) {
 		printf("%-13s ", help->name);
 		if (i % 5 == 0) puts("");
@@ -1301,6 +1301,11 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	static int len;
 	const Command *cmd;
 	const Variable *var;
+	Selector *sel;
+	long index;
+	char *end;
+
+	if ((index = strtol(text, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (sel = find_selector(&menu, (int)index)) != NULL) bestlineAddCompletion(lc,sel->url);
 
 	len = strlen(text);
 
@@ -1316,7 +1321,9 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 	static char hint[1024];
 	Selector *sel;
 	const char *val;
-	int first = -1, last = -1, index;
+	char *end;
+	long index;
+	int first = -1, last = -1;
 	(void)ansi1;
 	(void)ansi2;
 	if (strcspn(buf, " ") == 0) {
@@ -1331,8 +1338,8 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 		} else if (first != -1) return "1, URL, variable or command";
 		else return "URL, variable or command; type `help` for help";
 	}
-	if ((index = atoi(buf)) > 0) {
-		if ((sel = find_selector(&menu, index)) == NULL) return NULL;
+	if ((index = strtol(buf, &end, 10)) > 0 && index < INT_MAX && *end == '\0') {
+		if ((sel = find_selector(&menu, (int)index)) == NULL) return NULL;
 		if (strncmp(sel->rawurl, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[9]);
 		else if (strncmp(sel->rawurl, "spartan://", 10) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[10]);
 		else snprintf(hint, sizeof(hint), " %s", sel->rawurl);
@@ -1348,7 +1355,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 static void shell(int argc, char **argv) {
 	static char path[1024];
 	const char *home = NULL;
-	char *line, *base;
+	char *line, *base, *end;
 	Selector *to = NULL;
 	int index;
 
@@ -1369,7 +1376,7 @@ static void shell(int argc, char **argv) {
 		bestlineSetHintsCallback(shell_hints);
 		if ((line = base = bestline(prompt)) == NULL) break;
 		bestlineSetHintsCallback(NULL);
-		if ((index = atoi(line)) > 0 && (to = find_selector(&menu, index)) != NULL) {
+		if ((index = strtol(line, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) {
 			if (to->url && interactive) bestlineHistoryAdd(to->url);
 			else if (interactive) bestlineHistoryAdd(line);
 			navigate(to);
@@ -1467,9 +1474,8 @@ int main(int argc, char **argv) {
 	if (interactive) puts(
 		"gplaces - "GPLACES_VERSION"  Copyright (C) 2022  Dima Krasner\n" \
 		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
-		"This program comes with ABSOLUTELY NO WARRANTY; for details type `help license'.\n" \
-		"This is free software, and you are welcome to redistribute it\n" \
-		"under certain conditions; type `help license' for details.\n"
+		"This program is free software and comes with ABSOLUTELY NO WARRANTY;\n" \
+		"see "PREFIX"/share/doc/gplaces/LICENSE for details.\n"
 	);
 
 	shell(argc, argv);

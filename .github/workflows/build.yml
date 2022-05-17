@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           apt-get update -qq
-          apt-get install --no-install-recommends -y git ca-certificates gcc libc6-dev make pkg-config libssl-dev libcurl4-openssl-dev libmagic-dev
+          apt-get install --no-install-recommends -y git ca-certificates gcc libc6-dev make pkg-config libssl-dev libcurl4-openssl-dev libidn2-dev libidn11-dev libmagic-dev
       - name: Checkout code
         uses: actions/checkout@v2
         with:
@@ -29,12 +29,14 @@ jobs:
       - name: Build
         run: |
           cd gplaces
-          make install
+          CFLAGS="-O3 -Wall -Wextra -pedantic -Wno-unused-result -Wstack-usage=1024 -Werror" make install
           make uninstall
           make clean
-          CFLAGS="-O3 -Wall -Wextra -pedantic -Wno-unused-result -Wstack-usage=1024 -Werror" make WITH_LIBMAGIC=1
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBIDN2=0
           make clean
-          make WITH_LIBMAGIC=0
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBIDN2=0 WITH_LIBIDN=0
+          make clean
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBMAGIC=0
   alpine:
     runs-on: ubuntu-latest
     strategy:
@@ -46,7 +48,7 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
-          apk add git gcc musl-dev make pkgconf ${{ matrix.libssl }}-dev curl-dev file-dev
+          apk add git gcc musl-dev make pkgconf ${{ matrix.libssl }}-dev curl-dev libidn-dev file-dev
       - name: Checkout code
         uses: actions/checkout@v2
         with:
@@ -56,12 +58,12 @@ jobs:
       - name: Build
         run: |
           cd gplaces
-          make install
+          CFLAGS="-O3 -Wall -Wextra -pedantic -Wno-unused-result -Wstack-usage=1024 -Werror" make install
           make uninstall
           make clean
-          CFLAGS="-O3 -Wall -Wextra -pedantic -Wno-unused-result -Wstack-usage=1024 -Werror" make WITH_LIBMAGIC=1
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBIDN=0
           make clean
-          make WITH_LIBMAGIC=0
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBMAGIC=0
   arch:
     runs-on: ubuntu-latest
     container:
@@ -70,7 +72,7 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm git gcc make pkgconf
+          pacman -S --noconfirm git gcc make pkgconf libidn
       - name: Checkout code
         uses: actions/checkout@v2
         with:
@@ -80,9 +82,11 @@ jobs:
       - name: Build
         run: |
           cd gplaces
-          make install
+          CFLAGS="-O3 -Wall -Wextra -pedantic -Wno-unused-result -Wstack-usage=1024 -Werror" make install
           make uninstall
           make clean
-          CFLAGS="-O3 -Wall -Wextra -pedantic -Wno-unused-result -Wstack-usage=1024 -Werror" make WITH_LIBMAGIC=1
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBIDN2=0
           make clean
-          make WITH_LIBMAGIC=0
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBIDN2=0 WITH_LIBIDN=0
+          make clean
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBMAGIC=0
