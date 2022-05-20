@@ -77,6 +77,11 @@ gplaces associates a number with each link in the last viewed page. type the num
 
 to edit the URL of a link, type the link number, press `Tab`, edit the URL and press `ENTER`. for example, this is useful if a link leads to a post in another gemlog, but you want to see its homepage.
 
+    gemini.circumlunar.space/> #gemini://gemini.circumlunar.space/docs/
+    gemini.circumlunar.space/> 
+
+the history can be used as a reading list: prefix a URL with `#` and press `ENTER` to add it to the history without opening it first. for example, to add the URL of link 2 to the history, type `2`, press `Tab` to edit the URL, press `CTRL+a` or `Home` to go to the beginning of the line, type `#` and press `ENTER`. to open this URL later, press the `Up` key, press `CTRL+a` or `Home`, press `Delete` to remove the leading `#`, then press `ENTER`.
+
     gemini.circumlunar.space/docs/> save 2
     enter filename (press ENTER for `/home/user/Downloads/specification.gmi`):
 
