@@ -14,6 +14,7 @@ set gmisub							calcuode.com/gmisub-aggregate.gmi
 set station							station.martinrue.com
 set geddit							geddit.glv.one
 set antenna							warmedal.se/~antenna/
+set explore							tilde.team/~sumpygump/explore/
 
 # subscribe to some pages
 sub									rawtext.club/~sloum/spacewalk.gmi
