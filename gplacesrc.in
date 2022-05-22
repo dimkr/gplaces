@@ -1,5 +1,5 @@
 # gplaces Gemini client initialization example
-# place this file in ~/.gplacesrc or /etc/gplacesrc
+# place this file in $XDG_CONFIG_HOME/gplacesrc, ~/.gplacesrc or /etc/gplacesrc
 
 # define default handlers
 set https							"xdg-open %u"
