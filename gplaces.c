@@ -263,6 +263,17 @@ static int parse_url(Selector *from, Selector *sel, const char *url) {
 }
 
 
+static void parse_plaintext_line(Selector *from, char *line, int *pre, int *index, Selector **sel, SelectorList *list) {
+	(void)from;
+	(void)pre;
+	(void)index;
+
+	line[strcspn(line, "\r\n")] = '\0';
+	*sel = new_selector('`', line);
+	SIMPLEQ_INSERT_TAIL(list, *sel, next);
+}
+
+
 static void parse_gemtext_line(Selector *from, char *line, int *pre, int *index, Selector **sel, SelectorList *list) {
 	char *url;
 
@@ -300,7 +311,7 @@ static void parse_gemtext_line(Selector *from, char *line, int *pre, int *index,
 }
 
 
-static SelectorList parse_gemtext(Selector *from, FILE *fp) {
+static SelectorList parse_file(Selector *from, FILE *fp, void (*parse_line)(Selector *, char *, int *, int *, Selector **, SelectorList *)) {
 	static char buffer[LINE_MAX];
 	char *line;
 	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
@@ -308,7 +319,7 @@ static SelectorList parse_gemtext(Selector *from, FILE *fp) {
 	int pre = 0, index = 1;
 
 	for (sel = NULL; (line = fgets(buffer, sizeof(buffer), fp)) != NULL; sel = NULL) {
-		parse_gemtext_line(from, line, &pre, &index, &sel, &list);
+		parse_line(from, line, &pre, &index, &sel, &list);
 	}
 
 	return list;
@@ -848,17 +859,17 @@ static void save_and_handle(Selector *sel, SSL *ssl, const char *mime) {
 }
 
 
-static SelectorList download_gemtext(Selector *sel, int ask, int handle, int print) {
+static SelectorList download_text(Selector *sel, int ask, int handle, int print) {
 	static char buffer[LINE_MAX];
 	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
 	Selector *it;
 	char *mime, *p = NULL, *start, *end;
 	SSL *ssl = NULL;
 	size_t parsed, length = 0, total = 0, prog = 0;
-	int received, pre = 0, index = 1, width, ok = 0;
+	int plain, received, pre = 0, index = 1, width, ok = 0;
 
 	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
-	if (strncmp(mime, "text/gemini", 11) != 0) {
+	if (!(plain = strncmp(mime, "text/plain", 10) == 0) && strncmp(mime, "text/gemini", 11) != 0) {
 		if (handle) save_and_handle(sel, ssl, mime);
 		goto out;
 	}
@@ -870,7 +881,8 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 				end = &buffer[sizeof(buffer) - 1]; /* if the buffer is full and we haven't found a \n, terminate the line */
 			}
 			*end = '\0';
-			parse_gemtext_line(sel, start, &pre, &index, &it, &list);
+			if (plain) parse_plaintext_line(sel, start, &pre, &index, &it, &list);
+			else parse_gemtext_line(sel, start, &pre, &index, &it, &list);
 			if (print && it) print_gemtext_line(stdout, it, NULL, width);
 		}
 		length -= parsed;
@@ -883,7 +895,8 @@ static SelectorList download_gemtext(Selector *sel, int ask, int handle, int pri
 	if (prog > 0) fputc('\n', stderr);
 	if (!(ok = (received == 0 || (received < 0 && !ssl_error(sel, ssl, received))))) goto out;
 	if (length > 0) {
-		parse_gemtext_line(sel, buffer, &pre, &index, &it, &list);
+		if (plain) parse_plaintext_line(sel, buffer, &pre, &index, &it, &list);
+		else parse_gemtext_line(sel, buffer, &pre, &index, &it, &list);
 		if (print && it) print_gemtext_line(stdout, it, NULL, width);
 	}
 
@@ -933,28 +946,32 @@ static void navigate(Selector *to) {
 	magic_t mag;
 #endif
 	const char *mime = NULL;
+	int plain = 0, gemtext = 0, off = 0;
 
 	if (!strcmp(to->scheme, "file")) {
-		if ((ext = strrchr(to->path, '.')) != NULL && !strcmp(ext, ".gmi")) {
-			if ((fp = fopen(to->path, "r")) == NULL) return;
-			new = parse_gemtext(to, fp);
-			fclose(fp);
-		} else {
+		if ((ext = strrchr(to->path, '.')) == NULL || (!(plain = (strcmp(ext, ".txt") == 0)) && !(gemtext = (strcmp(ext, ".gmi") == 0)))) {
 #ifdef GPLACES_USE_LIBMAGIC
 			if ((mag = magic_open(MAGIC_MIME_TYPE | MAGIC_NO_CHECK_COMPRESS | MAGIC_ERROR)) == NULL) return;
-			if (magic_load(mag, NULL) == 0 && (mime = magic_file(mag, to->path)) != NULL) handler = find_mime_handler(mime);
+			if (magic_load(mag, NULL) == 0 && (mime = magic_file(mag, to->path)) != NULL && !(plain = (strncmp(mime, "text/plain", 10) == 0)) && !(gemtext = (strncmp(mime, "text/gemini", 11) == 0))) handler = find_mime_handler(mime);
 			magic_close(mag);
 #endif
 			if (mime == NULL) error(0, "unable to detect the MIME type of %s", to->path);
-			goto handle;
 		}
+		if (!plain && !gemtext) goto handle;
+		if ((fp = fopen(to->path, "r")) == NULL) return;
+		new = parse_file(to, fp, plain ? parse_plaintext_line : parse_gemtext_line);
+		fclose(fp);
+		off = 7;
 	} else if (strcmp(to->scheme, "gemini")) {
 		handler = find_mime_handler(to->scheme);
 		goto handle;
-	} else new = download_gemtext(to, interactive, 1, 1);
+	} else {
+		new = download_text(to, interactive, 1, 1);
+		off = 9;
+	}
 
 	if (SIMPLEQ_EMPTY(&new)) return;
-	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + 9);
+	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + off);
 	free_selectors(&menu);
 	menu = new;
 	if (interactive) page_gemtext(&menu);
@@ -1052,7 +1069,7 @@ static void cmd_sub(char *line) {
 		strftime(ts, sizeof(ts), "%Y-%m-%d", tm);
 
 		SIMPLEQ_FOREACH(sel, &subscriptions, next) {
-			list = download_gemtext(sel, 0, 0, 0);
+			list = download_text(sel, 0, 0, 0);
 			if (SIMPLEQ_EMPTY(&list)) continue;
 
 			copy = new_selector('l', sel->raw);
@@ -1181,6 +1198,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 		else snprintf(hint, sizeof(hint), " %s", sel->rawurl);
 	} else if ((val = set_var(&variables, buf, NULL)) != NULL) {
 		if (strncmp(val, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &val[9]);
+		else if (strncmp(val, "file://", 7) == 0) snprintf(hint, sizeof(hint), " %s", &val[7]);
 		else snprintf(hint, sizeof(hint), " %s", val);
 	} else return NULL;
 	return hint;

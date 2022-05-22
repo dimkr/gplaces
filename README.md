@@ -64,7 +64,7 @@ use the arrow keys to scroll, `/` to search and `q` to exit less and return to t
 
 in addition, gplaces adds the page URL to the history: use the `Up` and `Down` keys to navigate through the history, or `CTRL+r` to search through it. these are only three examples of key bindings from shells like bash(1) which work in gplaces, too.
 
-gplaces does not display non-Gemtext files: instead, it downloads them to temporary files and runs external "handler" programs (one for each file type) defined in the gplaces configuration file.
+gplaces displays only Gemtext or plain text files: it downloads other kinds of files to temporary files and runs external "handler" programs (one for each file type) defined in the gplaces configuration file.
 
     > save gemini.circumlunar.space/docs/specification.gmi
     enter filename (press ENTER for `/home/user/Downloads/specification.gmi`):
@@ -108,4 +108,4 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|229|58|1033
+C|1|232|58|1048

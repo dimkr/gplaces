@@ -36,6 +36,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-05-22" version="0.16.16">
+      <description>
+        <ul>
+          <li>Extended support for plain text files</li>
+          <li>More useful default settings</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-05-17" version="0.16.15">
       <description>
         <ul>

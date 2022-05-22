@@ -6,6 +6,9 @@ set https							"xdg-open %u"
 set "text/plain; charset=utf-8"		"xdg-open %f"
 
 # define some aliases
+set readme							file://DOCDIR/README.md
+set license							file://DOCDIR/LICENSE
+set authors							file://DOCDIR/AUTHORS
 set search							geminispace.info/search
 set home							gemini.circumlunar.space
 set capcom							gemini.circumlunar.space/capcom

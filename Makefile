@@ -29,14 +29,19 @@ endif
 OBJ = bestline/bestline.o gplaces.o
 BIN = gplaces
 
+all: $(BIN) gplacesrc
+
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)
 
+gplacesrc: gplacesrc.in
+	sed s~DOCDIR~$(PREFIX)/share/doc/gplaces~g $^ > $@
+
 .PHONY: clean
 clean:
-	@rm -f $(BIN) $(OBJ)
+	@rm -f $(BIN) $(OBJ) gplacesrc
 
-install: $(BIN)
+install: all
 	@install -D -m 755 $(BIN) $(DESTDIR)$(PREFIX)/bin/${BIN}
 	@install -D -m 644 gplacesrc $(DESTDIR)$(CONFDIR)/gplacesrc
 	@install -D -m 644 README.md $(DESTDIR)$(PREFIX)/share/doc/gplaces/README.md
