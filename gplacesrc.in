@@ -3,7 +3,12 @@
 
 # define default handlers
 set https							"xdg-open %u"
-set "text/plain; charset=utf-8"		"xdg-open %f"
+set image/jpeg						"xdg-open %f"
+set image/png						"xdg-open %f"
+set image/gif						"xdg-open %f"
+set image/svg+xml					"xdg-open %f"
+set audio/mpeg						"xdg-open %f"
+set application/pdf					"xdg-open %f"
 
 # define some aliases
 set readme							file://DOCDIR/README.md
