@@ -677,6 +677,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 			if (data[1] == '1') bestlineMaskModeDisable();
 			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) { free(line); goto fail; }
 			curl_free(sel->url); sel->url = url;
+			if (data[1] != '1' && interactive) bestlineHistoryAdd(url);
 			free(line);
 			break;
 
@@ -1234,8 +1235,8 @@ static void shell(int argc, char **argv) {
 			else if (interactive) bestlineHistoryAdd(line);
 			navigate(to);
 		} else if (index <= 0) {
-			eval(line, NULL, 0);
 			if (interactive) bestlineHistoryAdd(line);
+			eval(line, NULL, 0);
 		}
 		free(base);
 	}

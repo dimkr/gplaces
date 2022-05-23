@@ -40,6 +40,7 @@
       <description>
         <ul>
           <li>Extended support for plain text files</li>
+          <li>URLs with user input are now saved to history</li>
           <li>More useful default settings</li>
         </ul>
       </description>
