@@ -6,4 +6,4 @@ Icon=gplaces
 Terminal=true
 Type=Application
 MimeType=x-scheme-handler/gemini
-Categories=Network
+Categories=Network;WebBrowser;ConsoleOnly;
