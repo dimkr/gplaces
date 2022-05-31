@@ -47,7 +47,7 @@ install: all
 	@install -D -m 644 README.md $(DESTDIR)$(PREFIX)/share/doc/gplaces/README.md
 	@install -m 644 LICENSE $(DESTDIR)$(PREFIX)/share/doc/gplaces/LICENSE
 	@install -m 644 AUTHORS $(DESTDIR)$(PREFIX)/share/doc/gplaces/AUTHORS
-	@install -D -m 644 gplaces.1 $(DESTDIR)$(PREFIX)/share/man1/gplaces.1
+	@install -D -m 644 gplaces.1 $(DESTDIR)$(PREFIX)/share/man/man1/gplaces.1
 	@install -D -m 644 gplaces.svg $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/gplaces.svg
 	@install -D -m 644 gplaces.desktop $(DESTDIR)$(PREFIX)/share/applications/gplaces.desktop
 	@install -D -m 644 com.github.dimkr.gplaces.appdata.xml $(DESTDIR)$(PREFIX)/share/metainfo/com.github.dimkr.gplaces.appdata.xml
@@ -56,7 +56,7 @@ uninstall:
 	@rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
 	@rm -f $(DESTDIR)$(CONFDIR)/gplacesrc
 	@rm -rf $(DESTDIR)$(PREFIX)/share/doc/gplaces
-	@rm -f $(DESTDIR)$(PREFIX)/share/man1/gplaces.1
+	@rm -f $(DESTDIR)$(PREFIX)/share/man/man1/gplaces.1
 	@rm -f $(DESTDIR)$(PREFIX)/share/icons/hicolor/scalable/apps/gplaces.svg
 	@rm -f $(DESTDIR)$(PREFIX)/share/applications/gplaces.desktop
 	@rm -f $(DESTDIR)$(PREFIX)/share/metainfo/com.github.dimkr.gplaces.appdata.xml
