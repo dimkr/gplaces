@@ -99,17 +99,19 @@ static SelectorList subscriptions = SIMPLEQ_HEAD_INITIALIZER(subscriptions);
 static SelectorList menu = SIMPLEQ_HEAD_INITIALIZER(menu);
 static char prompt[256] = "\33[35m>\33[0m ";
 static int interactive;
+static int color;
 
 
 /*============================================================================*/
 __attribute__((format(printf, 2, 3)))
 static void error(int fatal, const char *fmt, ...) {
 	va_list va;
-	if (interactive) fwrite("\33[31m\n", 1, 6, stderr);
+	if (color) fwrite("\33[31m\n", 1, 6, stderr);
+	else fputc('\n', stderr);
 	va_start(va, fmt);
 	vfprintf(stderr, fmt, va);
 	va_end(va);
-	if (interactive) fwrite("\33[0m\n", 1, 5, stderr);
+	if (color) fwrite("\33[0m\n", 1, 5, stderr);
 	else fputc('\n', stderr);
 	if (fatal) exit(EXIT_FAILURE);
 }
@@ -455,12 +457,16 @@ print:
 		switch (sel->type) {
 			case 'l':
 				if (i == 0) {
-					fprintf(fp, "\33[4;36m[%d]\33[0;39m %.*s\n", sel->index, out, &sel->repr[i]);
+					if (color) fprintf(fp, "\33[4;36m[%d]\33[0;39m %.*s\n", sel->index, out, &sel->repr[i]);
+					else fprintf(fp, "[%d] %.*s\n", sel->index, out, &sel->repr[i]);
 					break;
 				}
 				/* fall through */
 			case 'i': fprintf(fp, "%.*s\n", out, &sel->repr[i]); break;
-			case '#': fprintf(fp, "\33[4m%.*s\33[0m\n", out, &sel->repr[i]); break;
+			case '#':
+				if (color) fprintf(fp, "\33[4m%.*s\33[0m\n", out, &sel->repr[i]);
+				else fprintf(fp, "%.*s\n", out, &sel->repr[i]);
+				break;
 			case '`':
 				fprintf(fp, "%s\n", &sel->repr[i]);
 				break;
@@ -670,7 +676,8 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 
 		case '1':
 			if (!ask || !*meta) goto fail;
-			snprintf(buffer, sizeof(buffer), "\33[35m%.*s>\33[0m ", get_terminal_width() - 2, meta);
+			if (color) snprintf(buffer, sizeof(buffer), "\33[35m%.*s>\33[0m ", get_terminal_width() - 2, meta);
+			else snprintf(buffer, sizeof(buffer), "%.*s> ", get_terminal_width() - 2, meta);
 			if (data[1] == '1') bestlineMaskModeEnable();
 			if ((line = bestline(buffer)) == NULL) goto fail;
 			if (data[1] != '1' && interactive) bestlineHistoryAdd(line);
@@ -691,7 +698,8 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 			if (*meta) error(0, "`%s`: %s", sel->host, meta);
 			else error(0, "client certificate is required for `%s`", sel->host);
 			if (ask && stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT) {
-				snprintf(buffer, sizeof(buffer), "\33[35mGenerate client certificate for `%s`? (y/n)>\33[0m ", sel->host);
+				if (color) snprintf(buffer, sizeof(buffer), "\33[35mGenerate client certificate for `%s`? (y/n)>\33[0m ", sel->host);
+				else snprintf(buffer, sizeof(buffer), "Generate client certificate for `%s`? (y/n)> ", sel->host);
 				if ((line = bestline(buffer)) != NULL) {
 					if (*line == 'y' || *line == 'Y') mkcert(crtpath, keypath);
 					free(line);
@@ -972,7 +980,8 @@ static void navigate(Selector *to) {
 	}
 
 	if (SIMPLEQ_EMPTY(&new)) return;
-	snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + off);
+	if (color) snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + off);
+	else snprintf(prompt, sizeof(prompt), "%s> ", to->url + off);
 	free_selectors(&menu);
 	menu = new;
 	if (interactive) page_gemtext(&menu);
@@ -1179,8 +1188,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 	char *end;
 	long index;
 	int first = -1, last = -1;
-	(void)ansi1;
-	(void)ansi2;
+	if (!color) *ansi1 = *ansi2 = "";
 	if (strcspn(buf, " ") == 0) {
 		SIMPLEQ_FOREACH(sel, &menu, next) {
 			if (sel->type != 'l') continue;
@@ -1322,6 +1330,7 @@ int main(int argc, char **argv) {
 	SSL_load_error_strings();
 
 	interactive = isatty(STDOUT_FILENO);
+	if (!(color = interactive && (getenv("NO_COLOR") == NULL))) memcpy(prompt, "> ", 3);
 
 	load_rc_files(parse_arguments(argc, argv));
 

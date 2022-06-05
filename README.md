@@ -18,6 +18,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 - ~command aliases~ use variables
 - sh-style history with $XDG_DATA_HOME/gplaces_history or ~/.gplaces_history
 - VT100 compatible with ANSI escape sequences
+	- with [NO_COLOR](https://no-color.org/) support
 - no exotic external dependencies, no NIH
 	- ~GNU readline is fully optional~ bestline
 	- openssl or libressl
@@ -108,4 +109,4 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|232|58|1049
+C|1|232|58|1058
