@@ -1242,7 +1242,7 @@ static void shell(int argc, char **argv) {
 			if (to->url && interactive) bestlineHistoryAdd(to->url);
 			else if (interactive) bestlineHistoryAdd(line);
 			navigate(to);
-		} else if (index <= 0) {
+		} else if (index <= 0 || index == LONG_MAX || *end != '\0') {
 			if (interactive) bestlineHistoryAdd(line);
 			eval(line, NULL, 0);
 		}
