@@ -1219,7 +1219,7 @@ static void shell(int argc, char **argv) {
 	const char *home = NULL;
 	char *line, *base, *end;
 	Selector *to = NULL;
-	int index;
+	long index;
 
 	if (interactive) {
 		bestlineSetCompletionCallback(shell_name_completion);
