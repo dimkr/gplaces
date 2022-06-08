@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-06-08" version="0.16.21">
+      <description>
+        <ul>
+          <li>Fix bad encoding of input with spaces</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-06-08" version="0.16.20">
       <description>
         <ul>
