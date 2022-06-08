@@ -198,7 +198,7 @@ static void free_selectors(SelectorList *list) {
 }
 
 
-static int set_selector_url(Selector *sel, Selector *from, const char *url) {
+static int set_selector_url(Selector *sel, Selector *from, const char *url, const char *input) {
 	static char buffer[1024];
 #if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
 	char *host;
@@ -211,6 +211,8 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url) {
 		snprintf(buffer, sizeof(buffer), "gemini://%s", url);
 		if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
 	}
+
+	if (input != NULL && input[0] != '\0' && curl_url_set(sel->cu, CURLUPART_QUERY, input, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
 
 	if (curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || (!(file = (strcmp(sel->scheme, "file") == 0)) && curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK)) return 0;
 
@@ -255,11 +257,11 @@ static Selector *find_selector(SelectorList *list, int index) {
 }
 
 
-static int parse_url(Selector *from, Selector *sel, const char *url) {
+static int parse_url(Selector *from, Selector *sel, const char *url, const char *input) {
 	if (url == NULL || *url == '\0') return 0;
 
 	sel->cu = (from && from->cu) ? curl_url_dup(from->cu) : curl_url();
-	if (!sel->cu || !set_selector_url(sel, from, url)) return 0;
+	if (!sel->cu || !set_selector_url(sel, from, url, input)) return 0;
 
 	return 1;
 }
@@ -298,7 +300,7 @@ static void parse_gemtext_line(Selector *from, char *line, int *pre, int *index,
 			*line = '\0';
 			line += 1 + strspn(line + 1, " \t");
 		}
-		if (!parse_url(from, *sel, url)) { free_selector(*sel); *sel = NULL; return; }
+		if (!parse_url(from, *sel, url, NULL)) { free_selector(*sel); *sel = NULL; return; }
 		if (*line) (*sel)->repr = str_copy(line);
 		else (*sel)->repr = str_copy(url);
 		(*sel)->index = (*index)++;
@@ -1031,7 +1033,7 @@ static void cmd_save(char *line) {
 	if ((index = strtol(id, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) download_to_file(to, path);
 	else if (index == LONG_MIN || index == LONG_MAX || *end != '\0') {
 		to = new_selector('l', line);
-		if (parse_url(NULL, to, id)) download_to_file(to, path);
+		if (parse_url(NULL, to, id, NULL)) download_to_file(to, path);
 		free_selector(to);
 	}
 }
@@ -1071,7 +1073,7 @@ static void cmd_sub(char *line) {
 	char *url = next_token(&line);
 	if (url) {
 		Selector *sel = new_selector('l', url);
-		if (parse_url(NULL, sel, url)) SIMPLEQ_INSERT_TAIL(&subscriptions, sel, next);
+		if (parse_url(NULL, sel, url, NULL)) SIMPLEQ_INSERT_TAIL(&subscriptions, sel, next);
 		else free_selector(sel);
 	} else {
 		t = time(NULL);
@@ -1083,7 +1085,7 @@ static void cmd_sub(char *line) {
 			if (SIMPLEQ_EMPTY(&list)) continue;
 
 			copy = new_selector('l', sel->raw);
-			if (!parse_url(NULL, copy, sel->url)) { free_selector(copy); free_selectors(&list); continue; }
+			if (!parse_url(NULL, copy, sel->url, NULL)) { free_selector(copy); free_selectors(&list); continue; }
 			copy->index = index++;
 
 			SIMPLEQ_FOREACH(it, &list, next) {
@@ -1098,7 +1100,7 @@ static void cmd_sub(char *line) {
 			SIMPLEQ_FOREACH(it, &list, next) {
 				if (it->type == 'l' && !strncmp(it->repr, ts, 10)) {
 					copy = new_selector('l', it->raw);
-					if (!parse_url(NULL, copy, it->url)) { free_selector(copy); continue; }
+					if (!parse_url(NULL, copy, it->url, NULL)) { free_selector(copy); continue; }
 					copy->repr = str_copy(it->repr);
 					copy->index = index++;
 					SIMPLEQ_INSERT_TAIL(&feed, copy, next);
@@ -1151,7 +1153,7 @@ static void eval(const char *input, const char *filename, int line_no) {
 		}
 		if ((var = set_var(&variables, token, NULL)) != NULL) url = var;
 		to = new_selector('l', token);
-		if (parse_url(NULL, to, url)) navigate(to);
+		if (parse_url(NULL, to, url, next_token(&line))) navigate(to);
 		else if (filename == NULL) error(0, "unknown command `%s`", token);
 		else error(0, "unknown command `%s` in file `%s` at line %d", token, filename, line_no);
 		free_selector(to);
