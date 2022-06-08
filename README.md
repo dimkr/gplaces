@@ -114,4 +114,4 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|233|58|1059
+C|1|233|58|1064

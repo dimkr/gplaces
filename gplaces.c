@@ -200,6 +200,7 @@ static void free_selectors(SelectorList *list) {
 
 static int set_selector_url(Selector *sel, Selector *from, const char *url, const char *input) {
 	static char buffer[1024];
+	char *query;
 #if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
 	char *host;
 #endif
@@ -212,7 +213,11 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url, cons
 		if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
 	}
 
-	if (input != NULL && input[0] != '\0' && curl_url_set(sel->cu, CURLUPART_QUERY, input, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
+	if (input != NULL && input[0] != '\0') {
+		if ((query = curl_easy_escape(NULL, input, 0)) == NULL) return 0;
+		if (curl_url_set(sel->cu, CURLUPART_QUERY, query, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) { curl_free(query); return 0; }
+		curl_free(query);
+	}
 
 	if (curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || (!(file = (strcmp(sel->scheme, "file") == 0)) && curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK)) return 0;
 
