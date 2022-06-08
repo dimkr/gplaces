@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-06-08" version="0.16.20">
+      <description>
+        <ul>
+          <li>Allow input to be specified as an argument</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-06-05" version="0.16.19">
       <description>
         <ul>
