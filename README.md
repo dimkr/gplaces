@@ -95,6 +95,7 @@ the gplaces configuration file allows you to define short aliases for URLs you v
 
     > geminispace.info/search gplaces
     > search gplaces
+    > search "gemini client"
 
 if a URL accepts input, you can specify the input in a second argument, to avoid another request to the same URL and skip the prompt. this works with aliases, too.
 
