@@ -198,9 +198,17 @@ static void free_selectors(SelectorList *list) {
 }
 
 
+static int set_input(Selector *sel, const char *input) {
+	char *query;
+	if ((query = curl_easy_escape(NULL, input, 0)) == NULL) return 0;
+	if (curl_url_set(sel->cu, CURLUPART_QUERY, query, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) { curl_free(query); return 0; }
+	curl_free(query);
+	return 1;
+}
+
+
 static int set_selector_url(Selector *sel, Selector *from, const char *url, const char *input) {
 	static char buffer[1024];
-	char *query;
 #if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
 	char *host;
 #endif
@@ -213,11 +221,7 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url, cons
 		if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
 	}
 
-	if (input != NULL && input[0] != '\0') {
-		if ((query = curl_easy_escape(NULL, input, 0)) == NULL) return 0;
-		if (curl_url_set(sel->cu, CURLUPART_QUERY, query, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) { curl_free(query); return 0; }
-		curl_free(query);
-	}
+	if (input != NULL && input[0] != '\0' && !set_input(sel, input)) return 0;
 
 	if (curl_url_get(sel->cu, CURLUPART_SCHEME, &sel->scheme, 0) != CURLUE_OK || (!(file = (strcmp(sel->scheme, "file") == 0)) && curl_url_get(sel->cu, CURLUPART_HOST, &sel->host, 0) != CURLUE_OK)) return 0;
 
@@ -689,10 +693,11 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 			if ((line = bestline(buffer)) == NULL) goto fail;
 			if (data[1] != '1' && interactive) bestlineHistoryAdd(line);
 			if (data[1] == '1') bestlineMaskModeDisable();
-			if (curl_url_set(sel->cu, CURLUPART_QUERY, line, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) { free(line); goto fail; }
+			if (!set_input(sel, line)) { free(line); goto fail; }
+			free(line);
+			if (curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) goto fail;
 			curl_free(sel->url); sel->url = url;
 			if (data[1] != '1' && interactive) bestlineHistoryAdd(url);
-			free(line);
 			break;
 
 		case '3':
