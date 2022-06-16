@@ -68,7 +68,7 @@
 /*============================================================================*/
 typedef struct Selector {
 	SIMPLEQ_ENTRY(Selector) next;
-	int index;
+	int index, level;
 	char type, *raw, *repr, *scheme, *host, *port, *path, *url, *rawurl;
 	CURLU *cu;
 } Selector;
@@ -289,6 +289,7 @@ static void parse_plaintext_line(Selector *from, char *line, int *pre, int *inde
 
 static void parse_gemtext_line(Selector *from, char *line, int *pre, int *index, Selector **sel, SelectorList *list) {
 	char *url;
+	int level;
 
 	*sel = NULL;
 
@@ -313,9 +314,11 @@ static void parse_gemtext_line(Selector *from, char *line, int *pre, int *index,
 		if (*line) (*sel)->repr = str_copy(line);
 		else (*sel)->repr = str_copy(url);
 		(*sel)->index = (*index)++;
-	} else if (*line == '#')
+	} else if (line[0] == '#' && (level = 1 + strspn(&line[1], "#")) <= 3) {
 		*sel = new_selector('#', line);
-	else if (*line == '>' || (line[0] == '*' && line[1] == ' ')) {
+		(*sel)->repr = str_copy(line + level + strspn(line + level, " \t"));
+		(*sel)->level = level;
+	} else if (*line == '>' || (line[0] == '*' && line[1] == ' ')) {
 		*sel = new_selector(*line, line);
 		(*sel)->repr = str_copy(line + 1 + strspn(line + 1, " \t"));
 	} else *sel = new_selector('i', line);
@@ -447,6 +450,7 @@ static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, i
 			case '`': goto print;
 			case '>':
 			case '*': extra = 2; break;
+			case '#': if (i == 0) extra = sel->level + 1;
 		}
 
 		memset(&ps, 0, sizeof(ps));
@@ -475,7 +479,8 @@ print:
 				/* fall through */
 			case 'i': fprintf(fp, "%.*s\n", out, &sel->repr[i]); break;
 			case '#':
-				if (color) fprintf(fp, "\33[4m%.*s\33[0m\n", out, &sel->repr[i]);
+				if (i == 0 && color) fprintf(fp, "\33[4m%.*s %.*s\33[0m\n", sel->level, "###", out, &sel->repr[i]);
+				else if (i == 0) fprintf(fp, "%.*s %.*s\n", sel->level, "###", out, &sel->repr[i]);
 				else fprintf(fp, "%.*s\n", out, &sel->repr[i]);
 				break;
 			case '`':
