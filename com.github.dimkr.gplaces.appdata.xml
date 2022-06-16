@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-06-16" version="0.16.23">
+      <description>
+        <ul>
+          <li>Fix inconsistent formatting of heading lines</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-06-09" version="0.16.22">
       <description>
         <ul>
