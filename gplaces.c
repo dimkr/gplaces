@@ -276,8 +276,9 @@ static int parse_url(Selector *from, Selector *sel, const char *url, const char 
 }
 
 
-static void parse_plaintext_line(Selector *from, char *line, int *pre, int *index, Selector **sel, SelectorList *list) {
+static void parse_plaintext_line(Selector *from, char *line, int start, int *pre, int *index, Selector **sel, SelectorList *list) {
 	(void)from;
+	(void)start;
 	(void)pre;
 	(void)index;
 
@@ -287,11 +288,13 @@ static void parse_plaintext_line(Selector *from, char *line, int *pre, int *inde
 }
 
 
-static void parse_gemtext_line(Selector *from, char *line, int *pre, int *index, Selector **sel, SelectorList *list) {
+static void parse_gemtext_line(Selector *from, char *line, int start, int *pre, int *index, Selector **sel, SelectorList *list) {
 	char *url;
 	int level;
 
 	*sel = NULL;
+
+	if (start && strncmp(line, "\xef\xbb\xbf", 3) == 0) line += 3;
 
 	if (strncmp(line, "```", 3) == 0) {
 		*pre = !*pre;
@@ -327,15 +330,15 @@ static void parse_gemtext_line(Selector *from, char *line, int *pre, int *index,
 }
 
 
-static SelectorList parse_file(Selector *from, FILE *fp, void (*parse_line)(Selector *, char *, int *, int *, Selector **, SelectorList *)) {
+static SelectorList parse_file(Selector *from, FILE *fp, void (*parse_line)(Selector *, char *, int, int *, int *, Selector **, SelectorList *)) {
 	static char buffer[LINE_MAX];
 	char *line;
 	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
 	Selector *sel;
-	int pre = 0, index = 1;
+	int pre = 0, index = 1, start = 1;
 
-	for (sel = NULL; (line = fgets(buffer, sizeof(buffer), fp)) != NULL; sel = NULL) {
-		parse_line(from, line, &pre, &index, &sel, &list);
+	for (sel = NULL; (line = fgets(buffer, sizeof(buffer), fp)) != NULL; sel = NULL, start = 0) {
+		parse_line(from, line, start, &pre, &index, &sel, &list);
 	}
 
 	return list;
@@ -907,8 +910,8 @@ static SelectorList download_text(Selector *sel, int ask, int handle, int print)
 				end = &buffer[sizeof(buffer) - 1]; /* if the buffer is full and we haven't found a \n, terminate the line */
 			}
 			*end = '\0';
-			if (plain) parse_plaintext_line(sel, start, &pre, &index, &it, &list);
-			else parse_gemtext_line(sel, start, &pre, &index, &it, &list);
+			if (plain) parse_plaintext_line(sel, start, parsed == 0, &pre, &index, &it, &list);
+			else parse_gemtext_line(sel, start, parsed == 0, &pre, &index, &it, &list);
 			if (print && it) print_gemtext_line(stdout, it, NULL, width);
 		}
 		length -= parsed;
@@ -921,8 +924,8 @@ static SelectorList download_text(Selector *sel, int ask, int handle, int print)
 	if (prog > 0) fputc('\n', stderr);
 	if (!(ok = (received == 0 || (received < 0 && !ssl_error(sel, ssl, received))))) goto out;
 	if (length > 0) {
-		if (plain) parse_plaintext_line(sel, buffer, &pre, &index, &it, &list);
-		else parse_gemtext_line(sel, buffer, &pre, &index, &it, &list);
+		if (plain) parse_plaintext_line(sel, buffer, parsed == 0, &pre, &index, &it, &list);
+		else parse_gemtext_line(sel, buffer, parsed == 0, &pre, &index, &it, &list);
 		if (print && it) print_gemtext_line(stdout, it, NULL, width);
 	}
 
