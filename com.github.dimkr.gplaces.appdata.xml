@@ -36,6 +36,16 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-06-22" version="0.16.25">
+      <description>
+        <ul>
+          <li>Faster TOFU validation and improved handling of corner cases</li>
+          <li>More consistent error reporting on timeout</li>
+          <li>Fix for cut subscription headings since 0.16.23</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-06-17" version="0.16.24">
       <description>
         <ul>
