@@ -651,7 +651,8 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	freeaddrinfo(result);
 
 	if (fd == -1) {
-		error(0, "cannot connect to `%s`:`%s`: %s", sel->host, sel->port, strerror(err));
+		if (errno == EINPROGRESS) error(0, "cannot connect to `%s`:`%s`: cancelled", sel->host, sel->port);
+		else error(0, "cannot connect to `%s`:`%s`: %s", sel->host, sel->port, strerror(err));
 		goto fail;
 	}
 
