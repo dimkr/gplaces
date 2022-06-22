@@ -1116,8 +1116,8 @@ static void cmd_sub(char *line) {
 			copy->index = index++;
 
 			SIMPLEQ_FOREACH(it, &list, next) {
-				if (it->type == '#' && (it->raw[1] == ' ' || it->raw[1] == '\t')) {
-					copy->repr = str_copy(&it->repr[2]);
+				if (it->type == '#' && it->level == 1) {
+					copy->repr = str_copy(it->repr);
 					break;
 				}
 			}
