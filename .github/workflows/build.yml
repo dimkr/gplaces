@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: ["ubuntu:jammy", "debian:bullseye-slim", "debian:sid-slim"]
+        image: ["ubuntu:jammy", "ubuntu:latest", "debian:bullseye-slim", "debian:stable-slim", "debian:sid-slim"]
     container:
       image: ${{ matrix.image }}
     steps:
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: ["alpine:3.15", "alpine:edge"]
+        image: ["alpine:3.15", "alpine:latest", "alpine:edge"]
         libssl: [openssl, libressl]
     container:
       image: ${{ matrix.image }}
