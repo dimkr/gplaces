@@ -687,7 +687,8 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	}
 
 	for (total = 0; total < (int)sizeof(data) - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')) && (received = SSL_read(ssl, &data[total], 1)) > 0; ++total);
-	if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n' || (received < 0 && ssl_error(sel, ssl, received))) goto fail;
+	if (received < 0 && ssl_error(sel, ssl, received)) goto fail;
+	else if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n') { error(0, "failed to download `%s`: invalid status line", sel->url); goto fail; }
 	data[total] = '\0';
 
 	crlf = &data[total - 2];
