@@ -36,6 +36,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-07-09" version="0.16.26">
+      <description>
+        <ul>
+          <li>Improved error reporting</li>
+          <li>More useful default settings</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-06-22" version="0.16.25">
       <description>
         <ul>
