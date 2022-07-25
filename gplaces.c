@@ -388,7 +388,7 @@ static void reap(const char *command, pid_t pid, int silent) {
 }
 
 
-static void execute_handler(const char *handler, const char *filename, Selector *to) {
+static pid_t start_handler(const char *handler, const char *filename, Selector *to, int stdin) {
 	static char command[1024];
 	size_t l;
 	pid_t pid;
@@ -415,15 +415,25 @@ static void execute_handler(const char *handler, const char *filename, Selector 
 
 	if ((pid = fork()) == 0) {
 		if ((fd = open("/dev/null", O_RDWR)) != -1) {
-			dup2(fd, STDIN_FILENO);
+			if (stdin == -1) dup2(fd, STDIN_FILENO);
+			else {
+				dup2(stdin, STDIN_FILENO);
+				close(stdin);
+			}
 			dup2(fd, STDOUT_FILENO);
 			dup2(fd, STDERR_FILENO);
 			close(fd);
 			execl("/bin/sh", "sh", "-c", command, (char *)NULL);
 		}
 		exit(EXIT_FAILURE);
-	} else if (pid > 0) reap(command, pid, 0);
-	else error(0, "could not execute `%s`", command);
+	} else if (pid < 0) error(0, "could not execute `%s`", command);
+	return pid;
+}
+
+
+static void execute_handler(const char *handler, const char *filename, Selector *to) {
+	pid_t pid;
+	if ((pid = start_handler(handler, filename, to, -1)) > 0) reap(handler, pid, 0);
 }
 
 
@@ -643,7 +653,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 
 	for (it = result; it && err != EINTR; it = it->ai_next) {
 		if ((fd = socket(it->ai_family, it->ai_socktype, it->ai_protocol)) == -1) { err = errno; continue; }
-		if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0 && setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == 0 && connect(fd, it->ai_addr, it->ai_addrlen) == 0) break;
+		if (fcntl(fd, F_SETFD, FD_CLOEXEC) == 0 && setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0 && setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == 0 && connect(fd, it->ai_addr, it->ai_addrlen) == 0) break;
 		err = errno;
 		close(fd); fd = -1;
 	}
@@ -842,6 +852,35 @@ static const char *get_filename(Selector *sel, size_t *len) {
 }
 
 
+static void stream_to_handler(Selector *sel, const char *filename) {
+	int fds[2];
+	char *mime = NULL;
+	SSL *ssl = NULL;
+	const char *handler;
+	FILE *fp;
+	pid_t pid;
+
+	if (pipe(fds) == -1) return;
+	if (fcntl(fds[1], F_SETFD, FD_CLOEXEC) == 0 && (fp = fdopen(fds[1], "w")) != NULL) {
+		setbuf(fp, NULL);
+		if ((ssl = download(sel, &mime, 1)) != NULL) {
+			if ((handler = find_mime_handler(mime)) != NULL && (pid = start_handler(handler, filename, sel, fds[0])) > 0) {
+				close(fds[0]); fds[0] = -1;
+				save_body(sel, ssl, fp);
+				fclose(fp); fp = NULL;
+				reap(handler, pid, 0);
+			}
+			SSL_free(ssl);
+		}
+		if (fds[0] != -1) close(fds[0]);
+		if (fp != NULL) fclose(fp);
+	} else {
+		close(fds[0]);
+		close(fds[1]);
+	}
+}
+
+
 static void download_to_file(Selector *sel, const char *def) {
 	static char suggestion[256], buffer[1024];
 	FILE *fp;
@@ -850,6 +889,8 @@ static void download_to_file(Selector *sel, const char *def) {
 	SSL *ssl = NULL;
 	size_t len;
 	int ret = 0;
+
+	if (strcmp(def, "-") == 0) { stream_to_handler(sel, def); return; }
 
 	if (def == NULL) {
 		def = get_filename(sel, &len);
