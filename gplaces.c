@@ -890,7 +890,7 @@ static void download_to_file(Selector *sel, const char *def) {
 	size_t len;
 	int ret = 0;
 
-	if (strcmp(def, "-") == 0) { stream_to_handler(sel, def); return; }
+	if (def != NULL && strcmp(def, "-") == 0) { stream_to_handler(sel, def); return; }
 
 	if (def == NULL) {
 		def = get_filename(sel, &len);
