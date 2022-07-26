@@ -638,6 +638,7 @@ static int save_body(Selector *sel, SSL *ssl, FILE *fp) {
 		if ((total > 2048 && total - prog > total / 20)) { fputc('.', stderr); prog = total; }
 	}
 	if (prog > 0) fputc('\n', stderr);
+	if (ferror(fp)) { error(0, "failed to download `%s`: failed to write", sel->url); return 0; }
 	return received == 0 || !ssl_error(sel, ssl, received);
 }
 
