@@ -3,11 +3,9 @@
 
 # define default handlers
 set https							"xdg-open %u"
-set image/jpeg						"xdg-open %f"
-set image/png						"xdg-open %f"
-set image/gif						"xdg-open %f"
-set image/svg+xml					"xdg-open %f"
-set audio/mpeg						"xdg-open %f"
+set image/							"xdg-open %f"
+set audio/							"mpv %f"
+set video/							"mpv %f"
 set application/pdf					"xdg-open %f"
 
 # define some aliases

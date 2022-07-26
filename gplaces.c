@@ -372,7 +372,17 @@ static int get_terminal_width() {
 
 /*============================================================================*/
 static const char *find_mime_handler(const char *mime) {
-	const char *handler = set_var(&variables, mime, NULL);
+	Variable *var;
+	const char *handler = NULL;
+	size_t length, longest = 0;
+
+	LIST_FOREACH(var, &variables, next) {
+		if ((length = strlen(var->name)) > longest && !strncasecmp(mime, var->name, length)) {
+			longest = length;
+			handler = var->data;
+		}
+	}
+
 	if (!handler) fprintf(stderr, "no handler for `%s`\n", mime);
 	return handler;
 }
