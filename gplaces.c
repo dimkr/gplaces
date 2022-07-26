@@ -1101,7 +1101,7 @@ static void cmd_save(char *line) {
 	path = next_token(&line);
 	if ((index = strtol(id, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) download_to_file(to, path);
 	else if (index == LONG_MIN || index == LONG_MAX || *end != '\0') {
-		to = new_selector('l', line);
+		to = new_selector('l', id);
 		if (parse_url(NULL, to, id, NULL)) download_to_file(to, path);
 		free_selector(to);
 	}
