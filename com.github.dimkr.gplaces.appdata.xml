@@ -36,6 +36,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-07-26" version="0.16.27">
+      <description>
+        <ul>
+          <li>Support for "-" as the download destination</li>
+          <li>Support for selecting MIME type handlers by prefix</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-07-09" version="0.16.26">
       <description>
         <ul>
