@@ -43,6 +43,9 @@ jobs:
       matrix:
         image: ["alpine:3.15", "alpine:latest", "alpine:edge"]
         libssl: [openssl, libressl]
+        exclude:
+          - image: "alpine:edge"
+            libssl: libressl
     container:
       image: ${{ matrix.image }}
     steps:
