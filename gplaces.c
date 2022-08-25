@@ -561,7 +561,7 @@ static int tofu(X509 *cert, const char *host) {
 	if (stat(hosts, &stbuf) == 0 && (fd = open(hosts, O_RDONLY)) != -1) {
 		if (stbuf.st_size > 0) {
 			if ((p = mmap(NULL, stbuf.st_size % SIZE_MAX, PROT_READ, MAP_PRIVATE, fd, 0)) == MAP_FAILED) { close(fd); return 0; }
-			for (trust = 0, end = (const char *)p; !found && (start = memmem(end, stbuf.st_size - (end - p), host, hlen)) != NULL; end = start + hlen + 1) {
+			for (end = (const char *)p; !found && (start = memmem(end, stbuf.st_size - (end - p), host, hlen)) != NULL; end = start + hlen + 1) {
 				if (!(found = ((start == p || *(start - 1) == '\n') && (size_t)stbuf.st_size - (start - p) >= hlen + 2 && start[hlen] == ' ' && start[hlen + 1] != '\n'))) continue;
 				trust = (size_t)stbuf.st_size - (start - p) >= hlen + 1 + mdlen * 2 + 1 && memcmp(&start[hlen + 1], hex, mdlen * 2) == 0 && start[hlen + 1 + mdlen * 2] == '\n';
 			}
