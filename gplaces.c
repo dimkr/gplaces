@@ -542,7 +542,7 @@ static int tofu(X509 *cert, const char *host) {
 	FILE *fp = NULL;
 	const char *home, *start, *end, *p = MAP_FAILED;
 	unsigned int mdlen, i;
-	int fd, found, trust;
+	int fd, found = 0, trust = 0;
 
 	if (X509_digest(cert, EVP_sha512(), md, &mdlen) == 0) return 0;
 
@@ -561,12 +561,12 @@ static int tofu(X509 *cert, const char *host) {
 	if (stat(hosts, &stbuf) == 0 && (fd = open(hosts, O_RDONLY)) != -1) {
 		if (stbuf.st_size > 0) {
 			if ((p = mmap(NULL, stbuf.st_size % SIZE_MAX, PROT_READ, MAP_PRIVATE, fd, 0)) == MAP_FAILED) { close(fd); return 0; }
-			for (found = 0, trust = 0, end = (const char *)p; !found && (start = memmem(end, stbuf.st_size - (end - p), host, hlen)) != NULL; end = start + hlen + 1) {
+			for (trust = 0, end = (const char *)p; !found && (start = memmem(end, stbuf.st_size - (end - p), host, hlen)) != NULL; end = start + hlen + 1) {
 				if (!(found = ((start == p || *(start - 1) == '\n') && (size_t)stbuf.st_size - (start - p) >= hlen + 2 && start[hlen] == ' ' && start[hlen + 1] != '\n'))) continue;
 				trust = (size_t)stbuf.st_size - (start - p) >= hlen + 1 + mdlen * 2 + 1 && memcmp(&start[hlen + 1], hex, mdlen * 2) == 0 && start[hlen + 1 + mdlen * 2] == '\n';
 			}
 			munmap((void *)p, stbuf.st_size);
-		}
+		} else trust = 1;
 		close(fd);
 		if (found) return trust;
 	} else if (errno != ENOENT) return 0;
