@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-08-25" version="0.16.28">
+      <description>
+        <ul>
+          <li>Fix use of uninitialized variables</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-07-26" version="0.16.27">
       <description>
         <ul>
