@@ -424,17 +424,15 @@ static pid_t start_handler(const char *handler, const char *filename, Selector *
 	command[l] = '\0';
 
 	if ((pid = fork()) == 0) {
-		if ((fd = open("/dev/null", O_RDWR)) != -1) {
-			if (stdin == -1) dup2(fd, STDIN_FILENO);
-			else {
-				dup2(stdin, STDIN_FILENO);
-				close(stdin);
-			}
-			dup2(fd, STDOUT_FILENO);
-			dup2(fd, STDERR_FILENO);
+		if (stdin == -1) {
+			if ((fd = open("/dev/null", O_RDWR)) == -1) exit(EXIT_FAILURE);
+			dup2(fd, STDIN_FILENO);
 			close(fd);
-			execl("/bin/sh", "sh", "-c", command, (char *)NULL);
+		} else {
+			dup2(stdin, STDIN_FILENO);
+			close(stdin);
 		}
+		execl("/bin/sh", "sh", "-c", command, (char *)NULL);
 		exit(EXIT_FAILURE);
 	} else if (pid < 0) error(0, "could not execute `%s`", command);
 	return pid;
