@@ -3,7 +3,7 @@
 
 # define default handlers
 set https							"xdg-open %u"
-set image/							"xdg-open %f"
+set image/							"chafa %f"
 set audio/							"mpv %f"
 set video/							"mpv %f"
 set application/pdf					"xdg-open %f"
