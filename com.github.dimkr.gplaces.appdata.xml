@@ -36,6 +36,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-09-15" version="0.16.29">
+      <description>
+        <ul>
+          <li>MIME type handler output is no longer redirected to /dev/null</li>
+          <li>The default image viewer as been changed to chafa</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-08-25" version="0.16.28">
       <description>
         <ul>
