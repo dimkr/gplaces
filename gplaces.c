@@ -532,13 +532,14 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 
 
 /*============================================================================*/
-static int tofu(X509 *cert, const char *host) {
-	static char hosts[1024], hex[EVP_MAX_MD_SIZE * 2 + 1];
+static int tofu(X509 *cert, const char *host, int ask) {
+	static char hosts[1024], buffer[1024], hex[EVP_MAX_MD_SIZE * 2 + 1];
 	static unsigned char md[EVP_MAX_MD_SIZE];
 	struct stat stbuf;
 	size_t hlen;
 	FILE *fp = NULL;
-	const char *home, *start, *end, *p = MAP_FAILED;
+	const char *home, *end, *p = MAP_FAILED;
+	char *start, *line;
 	unsigned int mdlen, i;
 	int fd, found = 0, trust = 0;
 
@@ -556,23 +557,31 @@ static int tofu(X509 *cert, const char *host) {
 	else if ((home = getenv("HOME")) != NULL) snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
 	else return 0;
 
-	if (stat(hosts, &stbuf) == 0 && (fd = open(hosts, O_RDONLY)) != -1) {
+	if ((fd = open(hosts, O_RDWR | O_CREAT | O_APPEND, 0600)) != -1) {
+		if (fstat(fd, &stbuf) == -1) { close(fd); return 0; }
 		if (stbuf.st_size > 0) {
-			if ((p = mmap(NULL, stbuf.st_size % SIZE_MAX, PROT_READ, MAP_PRIVATE, fd, 0)) == MAP_FAILED) { close(fd); return 0; }
+			if ((p = mmap(NULL, stbuf.st_size % SIZE_MAX, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED) { close(fd); return 0; }
 			for (end = (const char *)p; !found && (start = memmem(end, stbuf.st_size - (end - p), host, hlen)) != NULL; end = start + hlen + 1) {
 				if (!(found = ((start == p || *(start - 1) == '\n') && (size_t)stbuf.st_size - (start - p) >= hlen + 2 && start[hlen] == ' ' && start[hlen + 1] != '\n'))) continue;
-				trust = (size_t)stbuf.st_size - (start - p) >= hlen + 1 + mdlen * 2 + 1 && memcmp(&start[hlen + 1], hex, mdlen * 2) == 0 && start[hlen + 1 + mdlen * 2] == '\n';
+				if ((size_t)stbuf.st_size - (start - p) < hlen + 1 + mdlen * 2 + 1 || start[hlen + 1 + mdlen * 2] != '\n') break;
+				if ((trust = memcmp(&start[hlen + 1], hex, mdlen * 2) == 0) || !ask) break;
+				if (color) snprintf(buffer, sizeof(buffer), "\33[35mTrust new certificate for `%s`? (y/n)>\33[0m ", host);
+				else snprintf(buffer, sizeof(buffer), "Trust new certificate for `%s`? (y/n)> ", host);
+				if ((line = bestline(buffer)) != NULL) {
+					if (*line == 'y' || *line == 'Y') {
+						memcpy(&start[hlen + 1], hex, mdlen * 2);
+						trust = 1;
+					}
+					free(line);
+				}
 			}
 			munmap((void *)p, stbuf.st_size);
-		} else trust = 1;
-		close(fd);
-		if (found) return trust;
-	} else if (errno != ENOENT) return 0;
-
-	if ((fp = fopen(hosts, "a")) != NULL) {
-		trust = fprintf(fp, "%s %s\n", host, hex) > 0;
-		fclose(fp);
-	}
+		}
+		if (!found && (fp = fdopen(fd, "w")) != NULL) {
+			trust = fprintf(fp, "%s %s\n", host, hex) > 0;
+			fclose(fp);
+		} else close(fd);
+	} else return 0;
 
 	return trust;
 }
@@ -693,7 +702,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		goto fail;
 	}
 
-	if (!tofu(cert, sel->host)) {
+	if (!tofu(cert, sel->host, ask)) {
 		error(0, "cannot establish secure connection to `%s`:`%s`: bad certificate", sel->host, sel->port);
 		goto fail;
 	}
