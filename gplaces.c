@@ -399,10 +399,14 @@ static void reap(const char *command, pid_t pid, int silent) {
 
 
 static pid_t start_handler(const char *handler, const char *filename, Selector *to, int stdin) {
-	static char command[1024];
+	static char command[1024], buffer[sizeof("/proc/self/fd/2147483647")];
 	size_t l;
 	pid_t pid;
-	int fd;
+
+	if (stdin != -1) {
+		sprintf(buffer, "/proc/self/fd/%d", stdin);
+		filename = buffer;
+	}
 
 	for (l = 0; *handler && l < sizeof(command) - 1; ) {
 		if (handler[0] == '%' && handler[1] != '\0') {
@@ -424,14 +428,6 @@ static pid_t start_handler(const char *handler, const char *filename, Selector *
 	command[l] = '\0';
 
 	if ((pid = fork()) == 0) {
-		if (stdin == -1) {
-			if ((fd = open("/dev/null", O_RDWR)) == -1) exit(EXIT_FAILURE);
-			dup2(fd, STDIN_FILENO);
-			close(fd);
-		} else {
-			dup2(stdin, STDIN_FILENO);
-			close(stdin);
-		}
 		execl("/bin/sh", "sh", "-c", command, (char *)NULL);
 		exit(EXIT_FAILURE);
 	} else if (pid < 0) error(0, "could not execute `%s`", command);
