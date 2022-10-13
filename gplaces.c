@@ -253,7 +253,7 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url, cons
 	switch (curl_url_get(sel->cu, CURLUPART_PORT, &sel->port, 0)) {
 		case CURLUE_OK: break;
 		case CURLUE_NO_PORT: sel->port = str_copy("1965"); break;
-		default: free_selector(sel); return 0;
+		default: return 0;
 	}
 
 	return 1;
