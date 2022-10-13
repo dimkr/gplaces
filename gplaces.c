@@ -69,7 +69,7 @@
 /*============================================================================*/
 typedef struct Selector {
 	SIMPLEQ_ENTRY(Selector) next;
-	int index, level;
+	int level;
 	char type, *raw, *repr, *scheme, *host, *port, *path, *url, *rawurl;
 	CURLU *cu;
 } Selector;
@@ -262,7 +262,8 @@ static int set_selector_url(Selector *sel, Selector *from, const char *url, cons
 
 static Selector *find_selector(SelectorList *list, int index) {
 	Selector *sel;
-	SIMPLEQ_FOREACH(sel, list, next) if (sel->index == index) return sel;
+	long i = 0;
+	SIMPLEQ_FOREACH(sel, list, next) if (sel->type == 'l' && ++i == index) return sel;
 	return NULL;
 }
 
@@ -277,7 +278,7 @@ static int parse_url(Selector *from, Selector *sel, const char *url, const char 
 }
 
 
-static void parse_plaintext_line(Selector *from, char *line, int start, int *pre, int *index, Selector **sel, SelectorList *list) {
+static void parse_plaintext_line(Selector *from, char *line, int start, int *pre, Selector **sel, SelectorList *list) {
 	(void)from;
 	(void)start;
 	(void)pre;
@@ -289,7 +290,7 @@ static void parse_plaintext_line(Selector *from, char *line, int start, int *pre
 }
 
 
-static void parse_gemtext_line(Selector *from, char *line, int start, int *pre, int *index, Selector **sel, SelectorList *list) {
+static void parse_gemtext_line(Selector *from, char *line, int start, int *pre, Selector **sel, SelectorList *list) {
 	char *url;
 	int level;
 
@@ -317,7 +318,6 @@ static void parse_gemtext_line(Selector *from, char *line, int start, int *pre, 
 		if (!parse_url(from, *sel, url, NULL)) { free_selector(*sel); *sel = NULL; return; }
 		if (*line) (*sel)->repr = str_copy(line);
 		else (*sel)->repr = str_copy(url);
-		(*sel)->index = (*index)++;
 	} else if (line[0] == '#' && (level = 1 + strspn(&line[1], "#")) <= 3) {
 		*sel = new_selector('#', line);
 		(*sel)->repr = str_copy(line + level + strspn(line + level, " \t"));
@@ -331,15 +331,15 @@ static void parse_gemtext_line(Selector *from, char *line, int start, int *pre, 
 }
 
 
-static SelectorList parse_file(Selector *from, FILE *fp, void (*parse_line)(Selector *, char *, int, int *, int *, Selector **, SelectorList *)) {
+static SelectorList parse_file(Selector *from, FILE *fp, void (*parse_line)(Selector *, char *, int, int *, Selector **, SelectorList *)) {
 	static char buffer[LINE_MAX];
 	char *line;
 	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
 	Selector *sel;
-	int pre = 0, index = 1, start = 1;
+	int pre = 0, start = 1;
 
 	for (sel = NULL; (line = fgets(buffer, sizeof(buffer), fp)) != NULL; sel = NULL, start = 0) {
-		parse_line(from, line, start, &pre, &index, &sel, &list);
+		parse_line(from, line, start, &pre, &sel, &list);
 	}
 
 	return list;
@@ -449,7 +449,7 @@ static int ndigits(int n) {
 }
 
 
-static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, int width) {
+static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, int width, int *links) {
 	mbstate_t ps;
 	size_t size;
 	wchar_t wchar;
@@ -464,7 +464,7 @@ static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, i
 	for (i = 0, out = (int)size; i < (int)size; i += out, i += strspn(&sel->repr[i], " "), out = (int)size) {
 		extra = 0;
 		switch (sel->type) {
-			case 'l': if (i == 0) extra = 3 + ndigits(sel->index); break;
+			case 'l': if (i == 0) extra = 3 + ndigits(++*links); break;
 			case '`': goto print;
 			case '>':
 			case '*': extra = 2; break;
@@ -490,8 +490,8 @@ print:
 		switch (sel->type) {
 			case 'l':
 				if (i == 0) {
-					if (color) fprintf(fp, "\33[4;36m[%d]\33[0;39m %.*s\n", sel->index, out, &sel->repr[i]);
-					else fprintf(fp, "[%d] %.*s\n", sel->index, out, &sel->repr[i]);
+					if (color) fprintf(fp, "\33[4;36m[%d]\33[0;39m %.*s\n", *links, out, &sel->repr[i]);
+					else fprintf(fp, "[%d] %.*s\n", *links, out, &sel->repr[i]);
 					break;
 				}
 				/* fall through */
@@ -518,11 +518,11 @@ print:
 static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 	regex_t re;
 	Selector *sel;
-	int width;
+	int width, links = 0;
 
 	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
 	width = get_terminal_width();
-	SIMPLEQ_FOREACH(sel, list, next) print_gemtext_line(fp, sel, filter ? &re : NULL, width);
+	SIMPLEQ_FOREACH(sel, list, next) print_gemtext_line(fp, sel, filter ? &re : NULL, width, &links);
 	if (filter) regfree(&re);
 }
 
@@ -960,7 +960,7 @@ static SelectorList download_text(Selector *sel, int ask, int handle, int print)
 	char *mime, *p = NULL, *start, *end;
 	SSL *ssl = NULL;
 	size_t parsed, length = 0, total = 0, prog = 0;
-	int plain, received, pre = 0, index = 1, width, ok = 0;
+	int plain, received, pre = 0, width, ok = 0, links = 0;
 
 	if ((ssl = download(sel, &mime, ask)) == NULL) goto out;
 	if (!(plain = strncmp(mime, "text/plain", 10) == 0) && strncmp(mime, "text/gemini", 11) != 0) {
@@ -975,9 +975,9 @@ static SelectorList download_text(Selector *sel, int ask, int handle, int print)
 				end = &buffer[sizeof(buffer) - 1]; /* if the buffer is full and we haven't found a \n, terminate the line */
 			}
 			*end = '\0';
-			if (plain) parse_plaintext_line(sel, start, parsed == 0, &pre, &index, &it, &list);
-			else parse_gemtext_line(sel, start, parsed == 0, &pre, &index, &it, &list);
-			if (print && it) print_gemtext_line(stdout, it, NULL, width);
+			if (plain) parse_plaintext_line(sel, start, parsed == 0, &pre, &it, &list);
+			else parse_gemtext_line(sel, start, parsed == 0, &pre, &it, &list);
+			if (print && it) print_gemtext_line(stdout, it, NULL, width, &links);
 		}
 		length -= parsed;
 		memmove(buffer, &buffer[parsed], length);
@@ -989,9 +989,9 @@ static SelectorList download_text(Selector *sel, int ask, int handle, int print)
 	if (prog > 0) fputc('\n', stderr);
 	if (!(ok = (received == 0 || (received < 0 && !ssl_error(sel, ssl, received))))) goto out;
 	if (length > 0) {
-		if (plain) parse_plaintext_line(sel, buffer, parsed == 0, &pre, &index, &it, &list);
-		else parse_gemtext_line(sel, buffer, parsed == 0, &pre, &index, &it, &list);
-		if (print && it) print_gemtext_line(stdout, it, NULL, width);
+		if (plain) parse_plaintext_line(sel, buffer, parsed == 0, &pre, &it, &list);
+		else parse_gemtext_line(sel, buffer, parsed == 0, &pre, &it, &list);
+		if (print && it) print_gemtext_line(stdout, it, NULL, width, &links);
 	}
 
 out:
@@ -1152,7 +1152,6 @@ static void cmd_sub(char *line) {
 	Selector *sel, *it, *copy;
 	struct tm *tm;
 	time_t t;
-	int index = 1;
 	char *url = next_token(&line);
 	if (url) {
 		Selector *sel = new_selector('l', url);
@@ -1169,7 +1168,6 @@ static void cmd_sub(char *line) {
 
 			copy = new_selector('l', sel->raw);
 			if (!parse_url(NULL, copy, sel->url, NULL)) { free_selector(copy); free_selectors(&list); continue; }
-			copy->index = index++;
 
 			SIMPLEQ_FOREACH(it, &list, next) {
 				if (it->type == '#' && it->level == 1) {
@@ -1185,7 +1183,6 @@ static void cmd_sub(char *line) {
 					copy = new_selector('l', it->raw);
 					if (!parse_url(NULL, copy, it->url, NULL)) { free_selector(copy); continue; }
 					copy->repr = str_copy(it->repr);
-					copy->index = index++;
 					SIMPLEQ_INSERT_TAIL(&feed, copy, next);
 				}
 			}
@@ -1272,18 +1269,14 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 	const char *val;
 	char *end;
 	long index;
-	int first = -1, last = -1;
+	int links = 0;
 	if (!color) *ansi1 = *ansi2 = "";
 	if (strcspn(buf, " ") == 0) {
-		SIMPLEQ_FOREACH(sel, &menu, next) {
-			if (sel->type != 'l') continue;
-			if (first == -1) first = sel->index;
-			last = sel->index;
-		}
-		if (first != last) {
-			snprintf(hint, sizeof(hint), "%d-%d, URL, variable or command", first, last);
+		SIMPLEQ_FOREACH(sel, &menu, next) if (sel->type == 'l') ++links;
+		if (links > 1) {
+			snprintf(hint, sizeof(hint), "1-%d, URL, variable or command", links);
 			return hint;
-		} else if (first != -1) return "1, URL, variable or command";
+		} else if (links == 1) return "1, URL, variable or command";
 		else return "URL, variable or command; type `help` for help";
 	}
 	if ((index = strtol(buf, &end, 10)) > 0 && index < INT_MAX && *end == '\0') {
