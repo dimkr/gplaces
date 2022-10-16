@@ -1294,9 +1294,10 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 
 static void shell(int argc, char **argv) {
 	static char path[1024];
+	SelectorList links = SIMPLEQ_HEAD_INITIALIZER(links);
 	const char *home = NULL;
-	char *line, *base, *end;
-	Selector *to = NULL;
+	char *line, *base, *end, *token;
+	Selector *to = NULL, *copy;
 	long index;
 
 	if (interactive) {
@@ -1316,10 +1317,22 @@ static void shell(int argc, char **argv) {
 		bestlineSetHintsCallback(shell_hints);
 		if ((line = base = bestline(prompt)) == NULL) break;
 		bestlineSetHintsCallback(NULL);
-		if ((index = strtol(line, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) {
-			if (to->url && interactive) bestlineHistoryAdd(to->url);
-			else if (interactive) bestlineHistoryAdd(line);
-			navigate(to);
+		if ((index = strtol(line, &end, 10)) > 0 && index < INT_MAX && (*end == ' ' || *end == '\0') && (to = find_selector(&menu, (int)index)) != NULL) {
+			do {
+				copy = new_selector('l', to->raw);
+				if (!parse_url(NULL, copy, to->url, NULL)) { free_selector(copy); continue; }
+				copy->repr = str_copy(to->repr);
+				SIMPLEQ_INSERT_TAIL(&links, copy, next);
+				token = end;
+			} while ((index = strtol(token, &end, 10)) > 0 && index < INT_MAX && (*end == ' ' || *end == '\0') && (to = find_selector(&menu, (int)index)) != NULL);
+
+			while ((to = SIMPLEQ_FIRST(&links)) != NULL) {
+				if (to->url && interactive) bestlineHistoryAdd(to->url);
+				else if (interactive) bestlineHistoryAdd(line);
+				navigate(to);
+				SIMPLEQ_REMOVE_HEAD(&links, next);
+				free_selector(to);
+			}
 		} else if (index <= 0 || index == LONG_MAX || *end != '\0') {
 			if (interactive) bestlineHistoryAdd(line);
 			eval(line, NULL, 0);
