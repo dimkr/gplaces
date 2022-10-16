@@ -78,6 +78,10 @@ gplaces associates a number with each link in the last viewed page. type the num
 
 to edit the URL of a link, type the link number, press `Tab`, edit the URL and press `ENTER`. for example, this is useful if a link leads to a post in another gemlog, but you want to see its homepage.
 
+    gemini.circumlunar.space/> 2 3
+
+it's possible to loop through multiple links, too.
+
     gemini.circumlunar.space/> #gemini://gemini.circumlunar.space/docs/
     gemini.circumlunar.space/> 
 
@@ -115,4 +119,4 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|244|58|1124
+C|1|247|58|1155

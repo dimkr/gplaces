@@ -1217,9 +1217,11 @@ static const Command gemini_commands[] = {
 
 /*============================================================================*/
 static void eval(const char *input, const char *filename, int line_no) {
+	SelectorList links = SIMPLEQ_HEAD_INITIALIZER(links);
 	const Command *cmd;
-	Selector *to;
-	char *copy, *line, *token, *var, *url;
+	Selector *to, *res, *tmp;
+	char *copy, *line, *token, *var, *url, *end;
+	long index;
 
 	copy = line = str_copy(input); /* copy input as it will be modified */
 
@@ -1231,12 +1233,40 @@ static void eval(const char *input, const char *filename, int line_no) {
 				return;
 			}
 		}
-		if ((var = set_var(&variables, token, NULL)) != NULL) url = var;
-		to = new_selector('l', token);
-		if (parse_url(NULL, to, url, next_token(&line))) navigate(to);
-		else if (filename == NULL) error(0, "unknown command `%s`", token);
-		else error(0, "unknown command `%s` in file `%s` at line %d", token, filename, line_no);
-		free_selector(to);
+
+		if ((var = set_var(&variables, token, NULL)) != NULL) {
+			to = new_selector('l', token);
+			if (parse_url(NULL, to, var, next_token(&line))) {
+				bestlineHistoryAdd(to->url);
+				navigate(to);
+			} else {
+				bestlineHistoryAdd(token);
+				if (filename == NULL) error(0, "unknown command `%s`", token);
+				else error(0, "unknown command `%s` in file `%s` at line %d", token, filename, line_no);
+			}
+			free_selector(to);
+		} else {
+			do {
+				if (*token == '\0') continue;
+				if ((index = strtol(token, &end, 10)) > 0 && index < INT_MAX && (*end == ' ' || *end == '\0') && (to = find_selector(&menu, (int)index)) != NULL) url = to->url;
+				else url = ((var = set_var(&variables, token, NULL)) != NULL) ? var : token;
+
+				res = new_selector('l', token);
+				if (parse_url(NULL, res, url, NULL)) SIMPLEQ_INSERT_TAIL(&links, res, next);
+				else {
+					bestlineHistoryAdd(url);
+					if (filename == NULL) error(0, "unknown command `%s`", token);
+					else error(0, "unknown command `%s` in file `%s` at line %d", token, filename, line_no);
+				}
+			} while ((token = next_token(&line)) != NULL);
+
+			while ((res = SIMPLEQ_FIRST(&links)) != NULL) {
+				bestlineHistoryAdd(res->url);
+				navigate(res);
+				SIMPLEQ_REMOVE_HEAD(&links, next);
+				free_selector(res);
+			}
+		}
 	}
 
 	free(copy);
@@ -1244,14 +1274,23 @@ static void eval(const char *input, const char *filename, int line_no) {
 
 
 static void shell_name_completion(const char *text, bestlineCompletions *lc) {
-	static int len;
+	static char buffer[1024];
+	int len;
 	const Command *cmd;
 	const Variable *var;
 	Selector *sel;
 	long index;
+	const char *pos;
 	char *end;
 
-	if ((index = strtol(text, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (sel = find_selector(&menu, (int)index)) != NULL) bestlineAddCompletion(lc,sel->url);
+	pos = strrchr(text, ' ');
+	if ((index = strtol(pos == NULL ? text : pos, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (sel = find_selector(&menu, (int)index)) != NULL) {
+		if (pos == NULL) bestlineAddCompletion(lc, sel->url);
+		else {
+			snprintf(buffer, sizeof(buffer), "%.*s %s", (int)(pos - text), text, sel->url);
+			bestlineAddCompletion(lc, buffer);
+		}
+	}
 
 	len = strlen(text);
 
@@ -1266,18 +1305,22 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2) {
 	static char hint[1024];
 	Selector *sel;
-	const char *val;
+	const char *val, *pos;
 	char *end;
 	long index;
 	int links = 0;
 	if (!color) *ansi1 = *ansi2 = "";
+	if ((pos = strrchr(buf, ' ')) != NULL) buf = &pos[1];
 	if (strcspn(buf, " ") == 0) {
 		SIMPLEQ_FOREACH(sel, &menu, next) if (sel->type == 'l') ++links;
 		if (links > 1) {
-			snprintf(hint, sizeof(hint), "1-%d, URL, variable or command", links);
+			if (pos == NULL) snprintf(hint, sizeof(hint), "1-%d, URL, variable or command", links);
+			else snprintf(hint, sizeof(hint), "1-%d, URL or variable", links);
 			return hint;
-		} else if (links == 1) return "1, URL, variable or command";
-		else return "URL, variable or command; type `help` for help";
+		} else if (links == 1 && pos == NULL) return "1, URL, variable or command";
+		else if (links == 1 && pos != NULL) return "1, URL or variable";
+		else if (pos == NULL) "URL, variable or command; type `help` for help";
+		else return "URL or variable; type `help` for help";
 	}
 	if ((index = strtol(buf, &end, 10)) > 0 && index < INT_MAX && *end == '\0') {
 		if ((sel = find_selector(&menu, (int)index)) == NULL) return NULL;
@@ -1294,11 +1337,8 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 
 static void shell(int argc, char **argv) {
 	static char path[1024];
-	SelectorList links = SIMPLEQ_HEAD_INITIALIZER(links);
 	const char *home = NULL;
-	char *line, *base, *end, *token;
-	Selector *to = NULL, *copy;
-	long index;
+	char *line, *base;
 
 	if (interactive) {
 		bestlineSetCompletionCallback(shell_name_completion);
@@ -1317,26 +1357,7 @@ static void shell(int argc, char **argv) {
 		bestlineSetHintsCallback(shell_hints);
 		if ((line = base = bestline(prompt)) == NULL) break;
 		bestlineSetHintsCallback(NULL);
-		if ((index = strtol(line, &end, 10)) > 0 && index < INT_MAX && (*end == ' ' || *end == '\0') && (to = find_selector(&menu, (int)index)) != NULL) {
-			do {
-				copy = new_selector('l', to->raw);
-				if (!parse_url(NULL, copy, to->url, NULL)) { free_selector(copy); continue; }
-				copy->repr = str_copy(to->repr);
-				SIMPLEQ_INSERT_TAIL(&links, copy, next);
-				token = end;
-			} while ((index = strtol(token, &end, 10)) > 0 && index < INT_MAX && (*end == ' ' || *end == '\0') && (to = find_selector(&menu, (int)index)) != NULL);
-
-			while ((to = SIMPLEQ_FIRST(&links)) != NULL) {
-				if (to->url && interactive) bestlineHistoryAdd(to->url);
-				else if (interactive) bestlineHistoryAdd(line);
-				navigate(to);
-				SIMPLEQ_REMOVE_HEAD(&links, next);
-				free_selector(to);
-			}
-		} else if (index <= 0 || index == LONG_MAX || *end != '\0') {
-			if (interactive) bestlineHistoryAdd(line);
-			eval(line, NULL, 0);
-		}
+		eval(line, NULL, 0);
 		free(base);
 	}
 
