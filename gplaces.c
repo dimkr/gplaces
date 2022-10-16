@@ -1219,7 +1219,7 @@ static const Command gemini_commands[] = {
 static void eval(const char *input, const char *filename, int line_no) {
 	SelectorList links = SIMPLEQ_HEAD_INITIALIZER(links);
 	const Command *cmd;
-	Selector *to, *res, *tmp;
+	Selector *to, *res;
 	char *copy, *line, *token, *var, *url, *end;
 	long index;
 
@@ -1319,7 +1319,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 			return hint;
 		} else if (links == 1 && pos == NULL) return "1, URL, variable or command";
 		else if (links == 1 && pos != NULL) return "1, URL or variable";
-		else if (pos == NULL) "URL, variable or command; type `help` for help";
+		else if (pos == NULL) return "URL, variable or command; type `help` for help";
 		else return "URL or variable; type `help` for help";
 	}
 	if ((index = strtol(buf, &end, 10)) > 0 && index < INT_MAX && *end == '\0') {
