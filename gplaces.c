@@ -1244,12 +1244,12 @@ static void eval(const char *input, const char *filename, int line_no) {
 
 
 static void shell_name_completion(const char *text, bestlineCompletions *lc) {
-	static int len;
 	const Command *cmd;
 	const Variable *var;
 	Selector *sel;
 	long index;
 	char *end;
+	int len;
 
 	if ((index = strtol(text, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (sel = find_selector(&menu, (int)index)) != NULL) bestlineAddCompletion(lc,sel->url);
 
