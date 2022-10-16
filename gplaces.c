@@ -1219,7 +1219,15 @@ static const Command gemini_commands[] = {
 static void eval(const char *input, const char *filename, int line_no) {
 	const Command *cmd;
 	Selector *to;
-	char *copy, *line, *token, *var, *url;
+	char *copy, *line, *token, *var, *url, *end;
+	long index;
+
+	if ((index = strtol(input, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) {
+		if (to->url && interactive) bestlineHistoryAdd(to->url);
+		else if (interactive) bestlineHistoryAdd(line);
+		navigate(to);
+		return;
+	} else if ((index <= 0 || index == LONG_MAX || *end != '\0') && interactive) bestlineHistoryAdd(input);
 
 	copy = line = str_copy(input); /* copy input as it will be modified */
 
@@ -1295,9 +1303,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 static void shell(int argc, char **argv) {
 	static char path[1024];
 	const char *home = NULL;
-	char *line, *base, *end;
-	Selector *to = NULL;
-	long index;
+	char *line;
 
 	if (interactive) {
 		bestlineSetCompletionCallback(shell_name_completion);
@@ -1314,17 +1320,10 @@ static void shell(int argc, char **argv) {
 
 	for (;;) {
 		bestlineSetHintsCallback(shell_hints);
-		if ((line = base = bestline(prompt)) == NULL) break;
+		if ((line = bestline(prompt)) == NULL) break;
 		bestlineSetHintsCallback(NULL);
-		if ((index = strtol(line, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) {
-			if (to->url && interactive) bestlineHistoryAdd(to->url);
-			else if (interactive) bestlineHistoryAdd(line);
-			navigate(to);
-		} else if (index <= 0 || index == LONG_MAX || *end != '\0') {
-			if (interactive) bestlineHistoryAdd(line);
-			eval(line, NULL, 0);
-		}
-		free(base);
+		eval(line, NULL, 0);
+		free(line);
 	}
 
 	if (interactive && home != NULL) bestlineHistorySave(path);
