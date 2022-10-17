@@ -78,15 +78,33 @@ gplaces associates a number with each link in the last viewed page. type the num
 
 to edit the URL of a link, type the link number, press `Tab`, edit the URL and press `ENTER`. for example, this is useful if a link leads to a post in another gemlog, but you want to see its homepage.
 
-    gemini.circumlunar.space/> #gemini://gemini.circumlunar.space/docs/
-    gemini.circumlunar.space/> 
-
-the history can be used as a reading list: prefix a URL with `#` and press `ENTER` to add it to the history without opening it first. for example, to add the URL of link 2 to the history, type `2`, press `Tab` to edit the URL, press `CTRL+a` or `Home` to go to the beginning of the line, type `#` and press `ENTER`. to open this URL later, press the `Up` key, press `CTRL+a` or `Home`, press `Delete` to remove the leading `#`, then press `ENTER`.
-
     gemini.circumlunar.space/docs/> save 2
     enter filename (press ENTER for `/home/user/Downloads/specification.gmi`):
 
 this number can be used to download the link, too.
+
+    gemini.circumlunar.space/docs/> push 2
+    [1] Protocol specification
+    gemini.circumlunar.space/docs/> push 3
+    [1] Protocol specification
+    [2] Best practices for Gemini implementers
+
+to save a link for reading later, type `push` followed by a URL or a link number.
+
+    gemini.circumlunar.space/docs/> push
+    [1] Protocol specification
+    [2] Best practices for Gemini implementers
+
+to see a list of saved links, type `push`. unlike the history, this list is not saved.
+
+    gemini.circumlunar.space/docs/> pop
+
+type `pop` to navigate to the oldest link in the list.
+
+    gemini.circumlunar.space/> #gemini://gemini.circumlunar.space/docs/
+    gemini.circumlunar.space/> 
+
+the history can be used as a persistent reading list: prefix a URL with `#` and press `ENTER` to add it to the history without opening it first. for example, to add the URL of link 2 to the history, type `2`, press `Tab` to edit the URL, press `CTRL+a` or `Home` to go to the beginning of the line, type `#` and press `ENTER`. to open this URL later, press the `Up` key, press `CTRL+a` or `Home`, press `Delete` to remove the leading `#`, then press `ENTER`.
 
     gemini.circumlunar.space/docs/> search
     Search query> gplaces
@@ -115,4 +133,4 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|244|58|1124
+C|1|248|58|1174

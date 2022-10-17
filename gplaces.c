@@ -97,6 +97,7 @@ typedef struct Help {
 /*============================================================================*/
 static VariableList variables = LIST_HEAD_INITIALIZER(variables);
 static SelectorList subscriptions = SIMPLEQ_HEAD_INITIALIZER(subscriptions);
+static SelectorList queue = SIMPLEQ_HEAD_INITIALIZER(queue);
 static SelectorList menu = SIMPLEQ_HEAD_INITIALIZER(menu);
 static char prompt[256] = "\33[35m>\33[0m ";
 static int interactive;
@@ -1084,6 +1085,14 @@ static const Help gemini_help[] = {
 		"SAVE <item-id|url> [<path>]" \
 	},
 	{
+		"push",
+		"PUSH [<item-id|url>]" \
+	},
+	{
+		"pop",
+		"POP" \
+	},
+	{
 		"set",
 		"SET <name> <value>" \
 	},
@@ -1104,6 +1113,44 @@ static void cmd_show(char *line) {
 	const char *filter;
 	if ((filter = next_token(&line)) == NULL) page_gemtext(&menu);
 	print_gemtext(stdout, &menu, filter);
+}
+
+
+static void cmd_push(char *line) {
+	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
+	long index;
+	Selector *to, *copy;
+	char *end;
+	if (*line == '\0') {
+		SIMPLEQ_FOREACH(to, &queue, next) {
+			copy = new_selector('l', to->raw);
+			if (!parse_url(NULL, copy, to->url, NULL)) { free_selector(copy); continue; }
+			SIMPLEQ_INSERT_TAIL(&list, copy, next);
+		}
+		free_selectors(&menu);
+		menu = list;
+	} else if ((index = strtol(line, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) {
+		copy = new_selector('l', to->raw);
+		if (!parse_url(NULL, copy, to->url, NULL)) free_selector(copy);
+		else SIMPLEQ_INSERT_TAIL(&list, copy, next);
+	} else if ((index <= 0 || index == LONG_MAX || *end != '\0')) {
+		copy = new_selector('l', line);
+		if (!parse_url(NULL, copy, line, NULL)) { free_selector(copy); return; }
+		copy->repr = str_copy(line);
+		SIMPLEQ_INSERT_TAIL(&queue, copy, next);
+	}
+	print_gemtext(stdout, &queue, NULL);
+}
+
+
+static void cmd_pop(char *line) {
+	Selector *to;
+	(void)line;
+	if ((to = SIMPLEQ_FIRST(&queue)) == NULL) return;
+	SIMPLEQ_REMOVE_HEAD(&queue, next);
+	navigate(to);
+	if (interactive) bestlineHistoryAdd(to->url);
+	free_selector(to);
 }
 
 
@@ -1208,6 +1255,8 @@ static void cmd_set(char *line) {
 static const Command gemini_commands[] = {
 	{ "show", cmd_show },
 	{ "save", cmd_save },
+	{ "push", cmd_push },
+	{ "pop", cmd_pop },
 	{ "help", cmd_help },
 	{ "sub", cmd_sub },
 	{ "set", cmd_set },
@@ -1287,6 +1336,10 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 		if (strncmp(val, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &val[9]);
 		else if (strncmp(val, "file://", 7) == 0) snprintf(hint, sizeof(hint), " %s", &val[7]);
 		else snprintf(hint, sizeof(hint), " %s", val);
+	} else if (strncmp(buf, "pop", 3) == 0 && strcspn(&buf[3], " ") == 0) {
+		if ((sel = SIMPLEQ_FIRST(&queue)) == NULL) return NULL;
+		if (strncmp(sel->rawurl, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[9]);
+		else snprintf(hint, sizeof(hint), " %s", sel->rawurl);
 	} else return NULL;
 	return hint;
 }
@@ -1389,6 +1442,7 @@ static const char *parse_arguments(int argc, char **argv) {
 static void quit_client() {
 	free_variables(&variables);
 	free_selectors(&subscriptions);
+	free_selectors(&queue);
 	free_selectors(&menu);
 	if (interactive) puts("\33[0m");
 }
