@@ -1216,13 +1216,13 @@ static const Command gemini_commands[] = {
 
 
 /*============================================================================*/
-static void eval(const char *input, const char *filename, int line_no) {
+static void eval_line(const char *input, const char *filename, int line_no, SelectorList *links) {
 	const Command *cmd;
 	Selector *to;
 	char *copy, *line, *token, *var, *url, *end;
 	long index;
 
-	if ((index = strtol(input, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) {
+	if ((index = strtol(input, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(links, (int)index)) != NULL) {
 		if (to->url && interactive) bestlineHistoryAdd(to->url);
 		else if (interactive) bestlineHistoryAdd(line);
 		navigate(to);
@@ -1248,6 +1248,22 @@ static void eval(const char *input, const char *filename, int line_no) {
 	}
 
 	free(copy);
+}
+
+
+static void eval(const char *input, const char *filename, int line_no) {
+	SelectorList links = SIMPLEQ_HEAD_INITIALIZER(links);
+	Selector *to, *copy;
+
+	SIMPLEQ_FOREACH(to, &menu, next) {
+		if (to->type != 'l') continue;
+		copy = new_selector('l', to->raw);
+		if (!parse_url(NULL, copy, to->url, NULL)) { free_selector(copy); continue; }
+		SIMPLEQ_INSERT_TAIL(&links, copy, next);
+	}
+
+	eval_line(input, filename, line_no, &links);
+	free_selectors(&links);
 }
 
 
