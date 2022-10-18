@@ -1266,7 +1266,7 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2) {
 	static char hint[1024];
 	Selector *sel;
-	const char *val;
+	const char *val, *pos;
 	char *end;
 	long index;
 	int links = 0;
@@ -1279,6 +1279,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 		} else if (links == 1) return "1, URL, variable or command";
 		else return "URL, variable or command; type `help` for help";
 	}
+	if ((pos = strrchr(buf, ' ')) != NULL) buf = &pos[1];
 	if ((index = strtol(buf, &end, 10)) > 0 && index < INT_MAX && *end == '\0') {
 		if ((sel = find_selector(&menu, (int)index)) == NULL) return NULL;
 		if (strncmp(sel->rawurl, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[9]);
