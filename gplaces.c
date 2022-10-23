@@ -1217,15 +1217,33 @@ static const Command gemini_commands[] = {
 
 /*============================================================================*/
 static void eval(const char *input, const char *filename, int line_no) {
+	SelectorList links = SIMPLEQ_HEAD_INITIALIZER(links);
 	const Command *cmd;
-	Selector *to;
+	Selector *to, *res;
 	char *copy, *line, *token, *var, *url, *end;
 	long index;
 
-	if ((index = strtol(input, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) {
-		if (to->url && interactive) bestlineHistoryAdd(to->url);
-		else if (interactive) bestlineHistoryAdd(input);
-		navigate(to);
+	if ((index = strtol(input, &end, 10)) > 0 && index < INT_MAX && (*end == ' ' || *end == '\0')) {
+		do {
+			if ((to = find_selector(&menu, (int)index)) == NULL) continue;
+			if (*end == '\0' && SIMPLEQ_EMPTY(&links)) { /* fast path if only one number is specified */
+				bestlineHistoryAdd(to->url);
+				navigate(to);
+				return;
+			}
+			/* resolve the link URL before we navigate away from this page */
+			res = new_selector('l', to->repr);
+			if (parse_url(NULL, res, to->url, NULL)) SIMPLEQ_INSERT_TAIL(&links, res, next);
+			else free_selector(res);
+		} while (*end == ' ' && (index = strtol(&end[1], &end, 10)) > 0 && index < INT_MAX && (*end == ' ' || *end == '\0'));
+
+		while ((to = SIMPLEQ_FIRST(&links)) != NULL) {
+			bestlineHistoryAdd(to->url);
+			navigate(to);
+			SIMPLEQ_REMOVE_HEAD(&links, next);
+			free_selector(to);
+		}
+
 		return;
 	} else if (index > 0 && index != LONG_MAX && *end == '\0') return;
 

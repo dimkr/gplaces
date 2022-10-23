@@ -76,6 +76,10 @@ to download a file instead of displaying it or saving it to a temporary file, ty
 
 gplaces associates a number with each link in the last viewed page. type the number of a link to show its URL, then press `ENTER` to follow it.
 
+    gemini.circumlunar.space/> 2 9
+
+to loop through multiple links, type their numbers, separated by a space, then press `ENTER`.
+
 to edit the URL of a link, type the link number, press `Tab`, edit the URL and press `ENTER`. for example, this is useful if a link leads to a post in another gemlog, but you want to see its homepage.
 
     gemini.circumlunar.space/> #gemini://gemini.circumlunar.space/docs/
@@ -115,4 +119,4 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|246|58|1124
+C|1|248|59|1139
