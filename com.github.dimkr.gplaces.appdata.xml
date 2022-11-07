@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-11-07" version="0.16.31">
+      <description>
+        <ul>
+          <li>Improved link hints</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-10-09" version="0.16.30">
       <description>
         <ul>
