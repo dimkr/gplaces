@@ -41,7 +41,6 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include <regex.h>
 #include <sys/mman.h>
 #include "queue.h"
 
@@ -449,14 +448,13 @@ static int ndigits(int n) {
 }
 
 
-static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, int width, int *links) {
+static void print_gemtext_line(FILE *fp, Selector *sel, int width, int *links) {
 	mbstate_t ps;
 	size_t size;
 	wchar_t wchar;
 	const char *p;
 	int w, wchars, out, extra, i;
 
-	if (filter && regexec(filter, sel->raw, 0, NULL, 0) != 0) return;
 	if (!interactive) { fprintf(fp, "%s\n", sel->raw); return; }
 	size = strlen(sel->repr);
 	if (size == 0) { fputc('\n', fp); return; }
@@ -515,15 +513,12 @@ print:
 }
 
 
-static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
-	regex_t re;
+static void print_gemtext(FILE *fp, SelectorList *list) {
 	Selector *sel;
 	int width, links = 0;
 
-	if (filter && regcomp(&re, filter, REG_NOSUB) != 0) filter = NULL;
 	width = get_terminal_width();
-	SIMPLEQ_FOREACH(sel, list, next) print_gemtext_line(fp, sel, filter ? &re : NULL, width, &links);
-	if (filter) regfree(&re);
+	SIMPLEQ_FOREACH(sel, list, next) print_gemtext_line(fp, sel, width, &links);
 }
 
 
@@ -977,7 +972,7 @@ static SelectorList download_text(Selector *sel, int ask, int handle, int print)
 			*end = '\0';
 			if (plain) parse_plaintext_line(sel, start, parsed == 0, &pre, &it, &list);
 			else parse_gemtext_line(sel, start, parsed == 0, &pre, &it, &list);
-			if (print && it) print_gemtext_line(stdout, it, NULL, width, &links);
+			if (print && it) print_gemtext_line(stdout, it, width, &links);
 		}
 		length -= parsed;
 		memmove(buffer, &buffer[parsed], length);
@@ -991,7 +986,7 @@ static SelectorList download_text(Selector *sel, int ask, int handle, int print)
 	if (length > 0) {
 		if (plain) parse_plaintext_line(sel, buffer, parsed == 0, &pre, &it, &list);
 		else parse_gemtext_line(sel, buffer, parsed == 0, &pre, &it, &list);
-		if (print && it) print_gemtext_line(stdout, it, NULL, width, &links);
+		if (print && it) print_gemtext_line(stdout, it, width, &links);
 	}
 
 out:
@@ -1024,7 +1019,7 @@ static void page_gemtext(SelectorList *list) {
 
 	if ((fp = fdopen(fds[1], "w")) == NULL) close(fds[1]);
 	else {
-		print_gemtext(fp, list, NULL);
+		print_gemtext(fp, list);
 		fclose(fp);
 	}
 
@@ -1089,7 +1084,7 @@ static const Help gemini_help[] = {
 	},
 	{
 		"show",
-		"SHOW [<filter>]" \
+		"SHOW" \
 	},
 	{
 		"sub",
@@ -1101,9 +1096,8 @@ static const Help gemini_help[] = {
 
 /*============================================================================*/
 static void cmd_show(char *line) {
-	const char *filter;
-	if ((filter = next_token(&line)) == NULL) page_gemtext(&menu);
-	print_gemtext(stdout, &menu, filter);
+	(void)line;
+	page_gemtext(&menu);
 }
 
 
@@ -1192,7 +1186,7 @@ static void cmd_sub(char *line) {
 		if (SIMPLEQ_EMPTY(&feed)) return;
 		free_selectors(&menu);
 		menu = feed;
-		print_gemtext(stdout, &feed, NULL);
+		print_gemtext(stdout, &feed);
 	}
 }
 
