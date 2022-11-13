@@ -98,6 +98,7 @@ static VariableList variables = LIST_HEAD_INITIALIZER(variables);
 static SelectorList subscriptions = SIMPLEQ_HEAD_INITIALIZER(subscriptions);
 static SelectorList menu = SIMPLEQ_HEAD_INITIALIZER(menu);
 static char prompt[256] = "\33[35m>\33[0m ";
+static const char defport[] = "1965";
 static int interactive;
 static int color;
 
@@ -180,7 +181,7 @@ static void free_selector(Selector *sel) {
 	free(sel->repr);
 	curl_free(sel->scheme);
 	curl_free(sel->host);
-	curl_free(sel->port);
+	if (sel->port != defport) curl_free(sel->port);
 	curl_free(sel->path);
 	curl_free(sel->url);
 	free(sel->rawurl);
@@ -244,15 +245,11 @@ static int parse_selector_url(Selector *sel, const char *input) {
 
 	if (curl_url_get(sel->cu, CURLUPART_URL, &sel->url, 0) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_PATH, &sel->path, 0) != CURLUE_OK) return 0;
 
-	if (file) {
-		sel->host = str_copy("");
-		sel->port = str_copy("");
-		return 1;
-	}
+	if (file) return 1;
 
 	switch (curl_url_get(sel->cu, CURLUPART_PORT, &sel->port, 0)) {
 		case CURLUE_OK: break;
-		case CURLUE_NO_PORT: sel->port = str_copy("1965"); break;
+		case CURLUE_NO_PORT: sel->port = (char *)defport; break;
 		default: return 0;
 	}
 
