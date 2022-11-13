@@ -1271,7 +1271,7 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	char *end;
 	int len;
 
-	if ((index = strtol(text, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (sel = find_selector(&menu, (int)index)) != NULL) bestlineAddCompletion(lc,sel->url);
+	if ((index = strtol(text, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (sel = find_selector(&menu, (int)index)) != NULL) bestlineAddCompletion(lc, (sel->url != NULL || parse_selector_url(sel, NULL)) ? sel->url : sel->rawurl);
 
 	len = strlen(text);
 
