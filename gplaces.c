@@ -1169,6 +1169,8 @@ static void cmd_sub(char *line) {
 		strftime(ts, sizeof(ts), "%Y-%m-%d", tm);
 
 		SIMPLEQ_FOREACH(sel, &subscriptions, next) {
+			if (sel->host == NULL && !parse_selector_url(sel, NULL)) continue;
+
 			list = download_text(sel, 0, 0, 0);
 			if (SIMPLEQ_EMPTY(&list)) continue;
 
@@ -1189,7 +1191,7 @@ static void cmd_sub(char *line) {
 			SIMPLEQ_FOREACH(it, &list, next) {
 				if (it->type == 'l' && !strncmp(it->repr, ts, 10)) {
 					copy = new_selector('l');
-					if (!parse_url(NULL, copy, it->url)) { free_selector(copy); continue; }
+					if (!parse_url(NULL, copy, it->rawurl)) { free_selector(copy); continue; }
 					copy->repr = str_copy(it->repr);
 					SIMPLEQ_INSERT_TAIL(&feed, copy, next);
 				}
