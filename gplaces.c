@@ -97,6 +97,7 @@ typedef struct Help {
 static VariableList variables = LIST_HEAD_INITIALIZER(variables);
 static SelectorList subscriptions = SIMPLEQ_HEAD_INITIALIZER(subscriptions);
 static SelectorList menu = SIMPLEQ_HEAD_INITIALIZER(menu);
+static CURLU *current = NULL;
 static char prompt[256] = "\33[35m>\33[0m ";
 static const char defport[] = "1965";
 static int interactive;
@@ -205,26 +206,21 @@ static int set_input(Selector *sel, const char *input) {
 }
 
 
-static int set_selector_url(Selector *sel, Selector *from, const char *url) {
-	static char buffer[1024];
-
-	/* TODO: why does curl_url_set() return CURLE_OUT_OF_MEMORY if the scheme is missing, but only inside the Flatpak sandbox? */
-	if (curl_url_set(sel->cu, CURLUPART_URL, url, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) {
-		if (from) return 0;
-		snprintf(buffer, sizeof(buffer), "gemini://%s", url);
-		if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
-	}
-
-	sel->rawurl = str_copy(url);
-
-	return 1;
-}
-
 static int parse_selector_url(Selector *sel, const char *input) {
+	static char buffer[1024];
 #if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
 	char *host;
 #endif
 	int file;
+
+	if (sel->cu == NULL && (sel->cu = (current == NULL) ? curl_url() : curl_url_dup(current)) == NULL) return 0;
+
+	/* TODO: why does curl_url_set() return CURLE_OUT_OF_MEMORY if the scheme is missing, but only inside the Flatpak sandbox? */
+	if (curl_url_set(sel->cu, CURLUPART_URL, sel->rawurl, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) {
+puts("kkk");
+		snprintf(buffer, sizeof(buffer), "gemini://%s", sel->rawurl);
+		if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
+	}
 
 	if (input != NULL && input[0] != '\0' && !set_input(sel, input)) return 0;
 
@@ -266,11 +262,8 @@ static Selector *find_selector(SelectorList *list, int index) {
 
 
 static int parse_url(Selector *from, Selector *sel, const char *url) {
-	if (url == NULL || *url == '\0') return 0;
-
-	sel->cu = (from && from->cu) ? curl_url_dup(from->cu) : curl_url();
-	if (!sel->cu || !set_selector_url(sel, from, url)) return 0;
-
+	if (url == NULL || *url == '\0' || (from != NULL && (sel->cu = curl_url_dup(from->cu)) == NULL)) return 0;
+	sel->rawurl = str_copy(url);
 	return 1;
 }
 
@@ -314,7 +307,7 @@ static void parse_gemtext_line(Selector *from, char *line, int start, int *pre, 
 			*line = '\0';
 			line += 1 + strspn(line + 1, " \t");
 		}
-		if (!parse_url(from, *sel, url)) { free_selector(*sel); *sel = NULL; return; }
+		if (!parse_url(NULL, *sel, url)) { free_selector(*sel); *sel = NULL; return; }
 		if (*line) (*sel)->repr = str_copy(line);
 		else (*sel)->repr = str_copy(url);
 	} else if (line[0] == '#' && (level = 1 + strspn(&line[1], "#")) <= 3) {
@@ -1068,8 +1061,13 @@ static void navigate(Selector *to, const char *input) {
 	if (SIMPLEQ_EMPTY(&new)) return;
 	if (color) snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + off);
 	else snprintf(prompt, sizeof(prompt), "%s> ", to->url + off);
+
+	if (current != NULL) curl_url_cleanup(current);
+	current = curl_url_dup(to->cu);
+
 	free_selectors(&menu);
 	menu = new;
+
 	if (interactive) page_gemtext(&menu);
 	return;
 
@@ -1230,7 +1228,7 @@ static void eval(const char *input, const char *filename, int line_no) {
 	long index;
 
 	if ((index = strtol(input, &end, 10)) > 0 && index < INT_MAX && (to = find_selector(&menu, (int)index)) != NULL) {
-		if (to->url && interactive) bestlineHistoryAdd(to->url);
+		if ((to->url != NULL || parse_selector_url(to, NULL)) && interactive) bestlineHistoryAdd(to->url);
 		else if (interactive) bestlineHistoryAdd(input);
 		navigate(to, NULL);
 		return;
@@ -1399,6 +1397,7 @@ static void quit_client() {
 	free_variables(&variables);
 	free_selectors(&subscriptions);
 	free_selectors(&menu);
+	if (current != NULL) curl_url_cleanup(current);
 	if (interactive) puts("\33[0m");
 }
 
