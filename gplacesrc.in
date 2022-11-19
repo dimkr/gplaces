@@ -12,7 +12,7 @@ set application/pdf					"xdg-open %f"
 set readme							file://DOCDIR/README.md
 set license							file://DOCDIR/LICENSE
 set authors							file://DOCDIR/AUTHORS
-set search							geminispace.info/search
+set search							kennedy.gemi.dev/search
 set home							gemini.circumlunar.space
 set capcom							gemini.circumlunar.space/capcom
 set spacewalk						rawtext.club/~sloum/spacewalk.gmi
