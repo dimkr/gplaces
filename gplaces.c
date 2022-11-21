@@ -70,7 +70,7 @@
 typedef struct Selector {
 	SIMPLEQ_ENTRY(Selector) next;
 	int level;
-	char type, *repr, *scheme, *host, *port, *path, *url, *rawurl;
+	char type, *repr, *scheme, *host, *port, *path, *url, *rawurl, *from;
 	CURLU *cu;
 } Selector;
 
@@ -186,6 +186,7 @@ static void free_selector(Selector *sel) {
 	curl_free(sel->path);
 	curl_free(sel->url);
 	free(sel->rawurl);
+	free(sel->from);
 	if (sel->cu) curl_url_cleanup(sel->cu);
 	free(sel);
 }
@@ -213,7 +214,7 @@ static int set_selector_url(Selector *sel, const char *input) {
 #endif
 	int file;
 
-	if (sel->cu == NULL && (sel->cu = curl_url()) == NULL) return 0;
+	if ((sel->cu == NULL && (sel->cu = curl_url()) == NULL) || (sel->from != NULL && curl_url_set(sel->cu, CURLUPART_URL, sel->from, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK)) return 0;
 
 	/* TODO: why does curl_url_set() return CURLE_OUT_OF_MEMORY if the scheme is missing, but only inside the Flatpak sandbox? */
 	if (curl_url_set(sel->cu, CURLUPART_URL, sel->rawurl, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) {
@@ -263,8 +264,7 @@ static Selector *find_selector(SelectorList *list, int index) {
 static int parse_url(Selector *from, Selector *sel, const char *url) {
 	if (url == NULL || *url == '\0') return 0;
 
-	if (from != NULL && from->cu != NULL && (sel->cu = curl_url_dup(from->cu)) == NULL) return 0;
-
+	if (from != NULL) sel->from = str_copy(from->url);
 	sel->rawurl = str_copy(url);
 
 	return 1;

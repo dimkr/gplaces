@@ -115,4 +115,4 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|250|58|1125
+C|1|249|58|1126
