@@ -449,7 +449,7 @@ static int ndigits(int n) {
 
 static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, int width, int *links) {
 	mbstate_t ps;
-	size_t size;
+	size_t size, mbs;
 	wchar_t wchar;
 	const char *p;
 	int w, wchars, out, extra, i;
@@ -470,10 +470,10 @@ static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, i
 		}
 
 		memset(&ps, 0, sizeof(ps));
-		for (wchars = 0, out = 0, p = &sel->repr[i]; out < (int)size - i && wchars < width - extra; out += (p - &sel->repr[i + out]), p = &sel->repr[i + out], wchars += w) {
-			if (mbsrtowcs(&wchar, &p, 1, &ps) == (size_t)-1 || (w = wcwidth(wchar)) < 0) {
+		for (wchars = 0, out = 0, p = &sel->repr[i]; out < (int)size - i && wchars < width - extra; out += mbs, p = &sel->repr[i + out], wchars += w) {
+			if ((mbs = mbrtowc(&wchar, p, size - i, &ps)) == (size_t)-1 || mbs == (size_t)-2 || mbs == 0 || (w = wcwidth(wchar)) < 0) {
 				/* best-effort, we assume 1 character == 1 byte */
-				p = &sel->repr[i + out + 1];
+				mbs = 1;
 				w = 1;
 			} else if (wchars + w > width - extra) break;
 		}
