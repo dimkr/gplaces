@@ -471,7 +471,7 @@ static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, i
 
 		memset(&ps, 0, sizeof(ps));
 		for (wchars = 0, out = 0, p = &sel->repr[i]; out < (int)size - i && wchars < width - extra; out += mbs, p = &sel->repr[i + out], wchars += w) {
-			if ((mbs = mbrtowc(&wchar, p, size - i, &ps)) == (size_t)-1 || mbs == (size_t)-2 || mbs == 0 || (w = wcwidth(wchar)) < 0) {
+			if ((mbs = mbrtowc(&wchar, p, size - i - out, &ps)) == (size_t)-1 || mbs == (size_t)-2 || mbs == 0 || (w = wcwidth(wchar)) < 0) {
 				/* best-effort, we assume 1 character == 1 byte */
 				mbs = 1;
 				w = 1;
