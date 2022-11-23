@@ -207,7 +207,7 @@ static int set_input(Selector *sel, const char *input) {
 }
 
 
-static int set_selector_url(Selector *sel, const char *input) {
+static int parse_url(Selector *sel, const char *input) {
 	static char buffer[1024];
 #if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
 	char *host;
@@ -261,7 +261,7 @@ static Selector *find_selector(SelectorList *list, int index) {
 }
 
 
-static int parse_url(Selector *from, Selector *sel, const char *url) {
+static int copy_url(Selector *from, Selector *sel, const char *url) {
 	if (url == NULL || *url == '\0') return 0;
 
 	if (from != NULL) sel->from = str_copy(from->url);
@@ -310,7 +310,7 @@ static void parse_gemtext_line(Selector *from, char *line, int start, int *pre, 
 			*line = '\0';
 			line += 1 + strspn(line + 1, " \t");
 		}
-		if (!parse_url(from, *sel, url)) { free_selector(*sel); *sel = NULL; return; }
+		if (!copy_url(from, *sel, url)) { free_selector(*sel); *sel = NULL; return; }
 		if (*line) (*sel)->repr = str_copy(line);
 		else (*sel)->repr = str_copy(url);
 	} else if (line[0] == '#' && (level = 1 + strspn(&line[1], "#")) <= 3) {
@@ -905,7 +905,7 @@ static void download_to_file(Selector *sel, const char *def) {
 	size_t len;
 	int ret = 0;
 
-	if (sel->host == NULL && !set_selector_url(sel, NULL)) return;
+	if (sel->host == NULL && !parse_url(sel, NULL)) return;
 	if (def != NULL && strcmp(def, "-") == 0) { stream_to_handler(sel, def); return; }
 
 	if (def == NULL) {
@@ -1044,7 +1044,7 @@ static void navigate(Selector *to, const char *input) {
 	const char *mime = NULL;
 	int plain = 0, gemtext = 0, off = 0;
 
-	if (to->scheme == NULL && !set_selector_url(to, input)) return;
+	if (to->scheme == NULL && !parse_url(to, input)) return;
 
 	if (!strcmp(to->scheme, "file")) {
 		if ((ext = strrchr(to->path, '.')) == NULL || (!(plain = (strcmp(ext, ".txt") == 0)) && !(gemtext = (strcmp(ext, ".gmi") == 0)))) {
@@ -1120,7 +1120,7 @@ static void cmd_save(char *line) {
 	if ((index = strtol(id, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) download_to_file(to, path);
 	else if (index == LONG_MIN || index == LONG_MAX || *end != '\0') {
 		to = new_selector('l');
-		if (parse_url(NULL, to, id)) download_to_file(to, path);
+		if (copy_url(NULL, to, id)) download_to_file(to, path);
 		free_selector(to);
 	}
 }
@@ -1159,7 +1159,7 @@ static void cmd_sub(char *line) {
 	char *url = next_token(&line);
 	if (url) {
 		Selector *sel = new_selector('l');
-		if (parse_url(NULL, sel, url)) SIMPLEQ_INSERT_TAIL(&subscriptions, sel, next);
+		if (copy_url(NULL, sel, url)) SIMPLEQ_INSERT_TAIL(&subscriptions, sel, next);
 		else free_selector(sel);
 	} else {
 		t = time(NULL);
@@ -1167,13 +1167,13 @@ static void cmd_sub(char *line) {
 		strftime(ts, sizeof(ts), "%Y-%m-%d", tm);
 
 		SIMPLEQ_FOREACH(sel, &subscriptions, next) {
-			if (sel->host == NULL && !set_selector_url(sel, NULL)) continue;
+			if (sel->host == NULL && !parse_url(sel, NULL)) continue;
 
 			list = download_text(sel, 0, 0, 0);
 			if (SIMPLEQ_EMPTY(&list)) continue;
 
 			copy = new_selector('l');
-			if (!parse_url(NULL, copy, sel->url)) { free_selector(copy); free_selectors(&list); continue; }
+			if (!copy_url(NULL, copy, sel->url)) { free_selector(copy); free_selectors(&list); continue; }
 
 			SIMPLEQ_FOREACH(it, &list, next) {
 				if (it->type == '#' && it->level == 1) {
@@ -1189,7 +1189,7 @@ static void cmd_sub(char *line) {
 			SIMPLEQ_FOREACH(it, &list, next) {
 				if (it->type == 'l' && !strncmp(it->repr, ts, 10)) {
 					copy = new_selector('l');
-					if (!parse_url(sel, copy, it->rawurl)) { free_selector(copy); continue; }
+					if (!copy_url(sel, copy, it->rawurl)) { free_selector(copy); continue; }
 					copy->repr = str_copy(it->repr);
 					SIMPLEQ_INSERT_TAIL(&feed, copy, next);
 				}
@@ -1231,7 +1231,7 @@ static void eval(const char *input, const char *filename, int line_no) {
 	long index;
 
 	if ((index = strtol(input, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) {
-		if ((to->url || set_selector_url(to, NULL)) && interactive) bestlineHistoryAdd(to->url);
+		if ((to->url || parse_url(to, NULL)) && interactive) bestlineHistoryAdd(to->url);
 		else if (interactive) bestlineHistoryAdd(input);
 		navigate(to, NULL);
 		return;
@@ -1251,7 +1251,7 @@ static void eval(const char *input, const char *filename, int line_no) {
 		}
 		if ((var = set_var(&variables, token, NULL)) != NULL) url = var;
 		to = new_selector('l');
-		if (parse_url(NULL, to, url)) navigate(to, next_token(&line));
+		if (copy_url(NULL, to, url)) navigate(to, next_token(&line));
 		else if (filename == NULL) error(0, "unknown command `%s`", token);
 		else error(0, "unknown command `%s` in file `%s` at line %d", token, filename, line_no);
 		free_selector(to);
@@ -1269,7 +1269,7 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	char *end;
 	int len;
 
-	if ((index = strtol(text, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (sel = find_selector(&menu, (int)index)) != NULL && (sel->url != NULL || set_selector_url(sel, NULL))) bestlineAddCompletion(lc,sel->url);
+	if ((index = strtol(text, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (sel = find_selector(&menu, (int)index)) != NULL && (sel->url != NULL || parse_url(sel, NULL))) bestlineAddCompletion(lc,sel->url);
 
 	len = strlen(text);
 
