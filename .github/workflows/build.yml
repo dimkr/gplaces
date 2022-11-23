@@ -41,11 +41,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: ["alpine:3.15", "alpine:latest", "alpine:edge"]
-        libssl: [openssl, libressl]
-        exclude:
-          - image: "alpine:edge"
+        include:
+          - image: "alpine:3.15"
+            libssl: openssl
+          - image: "alpine:3.15"
             libssl: libressl
+          - image: "alpine:latest"
+            libssl: openssl
+          - image: "alpine:edge"
+            libssl: openssl
     container:
       image: ${{ matrix.image }}
     steps:
