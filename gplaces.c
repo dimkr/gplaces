@@ -454,15 +454,18 @@ static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, i
 	const char *p;
 	int w, wchars, out, extra, i;
 
+	if (sel->type == 'l') ++*links;
+
 	if (filter && regexec(filter, sel->repr, 0, NULL, 0) != 0 && (sel->rawurl == NULL || regexec(filter, sel->rawurl, 0, NULL, 0) != 0)) return;
 	if (!interactive) { fprintf(fp, "%s\n", sel->repr); return; }
+
 	size = strlen(sel->repr);
 	if (size == 0) { fputc('\n', fp); return; }
 
 	for (i = 0, out = (int)size; i < (int)size; i += out, i += strspn(&sel->repr[i], " "), out = (int)size) {
 		extra = 0;
 		switch (sel->type) {
-			case 'l': if (i == 0) extra = 3 + ndigits(++*links); break;
+			case 'l': if (i == 0) extra = 3 + ndigits(*links); break;
 			case '`': goto print;
 			case '>':
 			case '*': extra = 2; break;
