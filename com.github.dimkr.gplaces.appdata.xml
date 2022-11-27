@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-11-27" version="0.16.33">
+      <description>
+        <ul>
+          <li>Efficiency improvement and reduced memory consumption</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-11-23" version="0.16.32">
       <description>
         <ul>
