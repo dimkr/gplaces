@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2022-12-17" version="0.16.34">
+      <description>
+        <ul>
+          <li>A warning on unexpected EOF</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-11-27" version="0.16.33">
       <description>
         <ul>
