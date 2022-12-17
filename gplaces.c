@@ -625,7 +625,8 @@ static void mkcert(const char *crtpath, const char *keypath) {
 
 
 static int ssl_error(Selector *sel, SSL *ssl, int err) {
-	if ((err = SSL_get_error(ssl, err)) == SSL_ERROR_ZERO_RETURN) return 0; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
+	if ((err = SSL_get_error(ssl, err)) == SSL_ERROR_ZERO_RETURN) return 0;
+	if (err == SSL_ERROR_SSL) { error(0, "protocol error while downloading `%s`", sel->url); return 0; }; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
 	if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", sel->url);
 	else error(0, "failed to download `%s`: error %d", sel->url, err);
 	return 1;
@@ -641,7 +642,7 @@ static int save_body(Selector *sel, SSL *ssl, FILE *fp) {
 	}
 	if (prog > 0) fputc('\n', stderr);
 	if (ferror(fp)) { error(0, "failed to download `%s`: failed to write", sel->url); return 0; }
-	return received == 0 || !ssl_error(sel, ssl, received);
+	return !ssl_error(sel, ssl, received);
 }
 
 
@@ -710,7 +711,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	}
 
 	for (total = 0; total < (int)sizeof(data) - 1 && (total < 4 || (data[total - 2] != '\r' && data[total - 1] != '\n')) && (received = SSL_read(ssl, &data[total], 1)) > 0; ++total);
-	if (received < 0 && ssl_error(sel, ssl, received)) goto fail;
+	if (received <= 0 && ssl_error(sel, ssl, received)) goto fail;
 	else if (total < 4 || data[0] < '1' || data[0] > '6' || data[1] < '0' || data[1] > '9' || (total > 4 && data[2] != ' ') || data[total - 2] != '\r' || data[total - 1] != '\n') { error(0, "failed to download `%s`: invalid status line", sel->url); goto fail; }
 	data[total] = '\0';
 
@@ -986,7 +987,7 @@ static SelectorList download_text(Selector *sel, int ask, int handle, int print)
 		if (total > SIZE_MAX - sizeof(buffer)) break;
 	}
 	if (prog > 0) fputc('\n', stderr);
-	if (!(ok = (received == 0 || (received < 0 && !ssl_error(sel, ssl, received))))) goto out;
+	if (!(ok = (received <= 0 && !ssl_error(sel, ssl, received)))) goto out;
 	if (length > 0) {
 		if (plain || !interactive) parse_plaintext_line(buffer, parsed == 0, &pre, &it, &list);
 		else parse_gemtext_line(buffer, parsed == 0, &pre, &it, &list);
