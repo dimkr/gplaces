@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-2-12" version="0.16.35">
+      <description>
+        <ul>
+          <li>Fix inconsistent formatting of multiline headings</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2022-12-17" version="0.16.34">
       <description>
         <ul>
