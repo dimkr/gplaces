@@ -497,7 +497,8 @@ print:
 			case 'i': fprintf(fp, "%.*s\n", out, &sel->repr[i]); break;
 			case '#':
 				if (i == 0 && color) fprintf(fp, "\33[4m%.*s %.*s\33[0m\n", sel->level, "###", out, &sel->repr[i]);
-				else if (i == 0) fprintf(fp, "%.*s %.*s\n", sel->level, "###", out, &sel->repr[i]);
+				else if (i == 0 && !color) fprintf(fp, "%.*s %.*s\n", sel->level, "###", out, &sel->repr[i]);
+				else if (color) fprintf(fp, "\33[4m%.*s\33[0m\n", out, &sel->repr[i]);
 				else fprintf(fp, "%.*s\n", out, &sel->repr[i]);
 				break;
 			case '`':
