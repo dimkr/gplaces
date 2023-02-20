@@ -1417,7 +1417,7 @@ int main(int argc, char **argv) {
 	SSL_library_init();
 	SSL_load_error_strings();
 
-	interactive = isatty(STDOUT_FILENO);
+	interactive = isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
 	if (!(color = interactive && (getenv("NO_COLOR") == NULL))) memcpy(prompt, "> ", 3);
 
 	load_rc_files(parse_arguments(argc, argv));
