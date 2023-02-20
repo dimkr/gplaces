@@ -36,6 +36,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-2-20" version="0.16.36">
+      <description>
+        <ul>
+          <li>Enable non-interactive mode when stdin is a pipe</li>
+          <li>When streaming, close connections on EOF without waiting for the handler</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-2-12" version="0.16.35">
       <description>
         <ul>
