@@ -870,7 +870,7 @@ static const char *get_filename(Selector *sel, size_t *len) {
 static void stream_to_handler(Selector *sel, const char *filename) {
 	int fds[2];
 	char *mime = NULL;
-	SSL *ssl = NULL;
+	SSL *ssl;
 	const char *handler;
 	FILE *fp;
 	pid_t pid;
@@ -883,9 +883,9 @@ static void stream_to_handler(Selector *sel, const char *filename) {
 				close(fds[0]); fds[0] = -1;
 				save_body(sel, ssl, fp);
 				fclose(fp); fp = NULL;
+				SSL_free(ssl); /* close the connection while the handler is running */
 				reap(handler, pid, 0);
-			}
-			SSL_free(ssl);
+			} else SSL_free(ssl);
 		}
 		if (fds[0] != -1) close(fds[0]);
 		if (fp != NULL) fclose(fp);
