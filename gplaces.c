@@ -424,7 +424,15 @@ static pid_t start_handler(const char *handler, const char *filename, Selector *
 	command[l] = '\0';
 
 	if ((pid = fork()) == 0) {
+#ifdef GPLACES_USE_FLATPAK_SPAWN
+		if (stdin == -1) execl("/usr/bin/flatpak-spawn", "flatpak-spawn", "--host", "--", "sh", "-c", command, (char *)NULL);
+		else {
+			sprintf(buffer, "--forward-fd=%d", stdin);
+			execl("/usr/bin/flatpak-spawn", "flatpak-spawn", "--host", buffer, "--", "sh", "-c", command, (char *)NULL);
+		}
+#else
 		execl("/bin/sh", "sh", "-c", command, (char *)NULL);
+#endif
 		exit(EXIT_FAILURE);
 	} else if (pid < 0) error(0, "could not execute `%s`", command);
 	return pid;
@@ -941,8 +949,12 @@ static void save_and_handle(Selector *sel, SSL *ssl, const char *mime) {
 	int fd = -1;
 
 	if ((handler = find_mime_handler(mime)) == NULL) return;
-	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp/";
-	snprintf(filename, sizeof(filename), "%sgplaces.XXXXXXXX", tmpdir);
+#ifdef GPLACES_USE_FLATPAK_SPAWN
+	if ((tmpdir = getenv("XDG_DATA_HOME")) == NULL) tmpdir = "/tmp";
+#else
+	if ((tmpdir = getenv("TMPDIR")) == NULL) tmpdir = "/tmp";
+#endif
+	snprintf(filename, sizeof(filename), "%s/gplaces.XXXXXXXX", tmpdir);
 	if ((fd = mkstemp(filename)) == -1 || (fp = fdopen(fd, "w")) == NULL) error(0, "cannot create temporary file: %s", strerror(errno));
 	else if (save_body(sel, ssl, fp) && fflush(fp) == 0) execute_handler(handler, filename, sel);
 

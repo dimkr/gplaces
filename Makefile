@@ -26,6 +26,9 @@ ifeq ($(WITH_LIBMAGIC),1)
 	CFLAGS += -DGPLACES_USE_LIBMAGIC $(shell pkg-config --cflags libmagic)
 	LDFLAGS += $(shell pkg-config --libs libmagic)
 endif
+ifeq ($(WITH_FLATPAK_SPAWN),1)
+	CFLAGS += -DGPLACES_USE_FLATPAK_SPAWN
+endif
 OBJ = bestline/bestline.o gplaces.o
 BIN = gplaces
 
