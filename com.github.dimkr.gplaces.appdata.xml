@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-2-25" version="0.16.37">
+      <description>
+        <ul>
+          <li>The Flatpak build is now allowed to run handler programs on the host</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-2-20" version="0.16.36">
       <description>
         <ul>
