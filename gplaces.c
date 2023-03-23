@@ -458,7 +458,7 @@ static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, i
 	size_t size, mbs;
 	wchar_t wchar;
 	const char *p;
-	int w, wchars, out, extra, i;
+	int w, wchars, out, extra, i = 0;
 
 	if (sel->type == 'l') ++*links;
 
@@ -466,9 +466,10 @@ static void print_gemtext_line(FILE *fp, Selector *sel, const regex_t *filter, i
 	if (!interactive) { fprintf(fp, "%s\n", sel->repr); return; }
 
 	size = strlen(sel->repr);
-	if (size == 0) { fputc('\n', fp); return; }
 
-	for (i = 0, out = (int)size; i < (int)size; i += out, i += strspn(&sel->repr[i], " "), out = (int)size) {
+	do {
+		out = (int)size;
+
 		extra = 0;
 		switch (sel->type) {
 			case 'l': if (i == 0) extra = 3 + ndigits(*links); break;
@@ -519,7 +520,9 @@ print:
 				if (i == 0) fprintf(fp, "%c %.*s\n", sel->type, out, &sel->repr[i]);
 				else fprintf(fp, "  %.*s\n", out, &sel->repr[i]);
 		}
-	}
+
+		i += out + strspn(&sel->repr[i + out], " ");
+	} while (i < (int)size);
 }
 
 
