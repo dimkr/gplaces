@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-3-24" version="0.16.38">
+      <description>
+        <ul>
+          <li>Fix inconsistent formatting of quotes with paragraphs</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-2-25" version="0.16.37">
       <description>
         <ul>
