@@ -908,7 +908,7 @@ static void stream_to_handler(Selector *sel, const char *filename) {
 
 
 static void download_to_file(Selector *sel, const char *def) {
-	static char suggestion[256], buffer[1024];
+	static char suggestion[256];
 	FILE *fp;
 	char *mime = NULL, *input = NULL, *download_dir;
 	const char *filename = def;
@@ -926,8 +926,7 @@ static void download_to_file(Selector *sel, const char *def) {
 			if (access(suggestion, F_OK) == 0) snprintf(suggestion, sizeof(suggestion), "%s/Downloads/%.*s", download_dir, (int)len, def);
 			else snprintf(suggestion, sizeof(suggestion), "%s/%.*s", download_dir, (int)len, def);
 		} else snprintf(suggestion, sizeof(suggestion), "./%.*s", (int)len, def);
-		snprintf(buffer, sizeof(buffer), "enter filename (press ENTER for `%s`): ", suggestion);
-		if ((input = bestline(buffer)) == NULL) return;
+		if ((input = bestlineInit("enter filename: ", suggestion)) == NULL) return;
 		if (*input != '\0') filename = input;
 		else filename = suggestion;
 	}
