@@ -986,8 +986,8 @@ static SelectorList download_text(Selector *sel, int ask, int handle, int print)
 				if (parsed > 0 || length < sizeof(buffer)) break; /* if we still don't have the end of the line, receive more */
 				end = &buffer[sizeof(buffer) - 1]; /* if the buffer is full and we haven't found a \n, terminate the line */
 			}
-			if (end > start && end[-1] == '\r') --end;
-			*end = '\0';
+			if (end > start && end[-1] == '\r') end[-1] = '\0';
+			else *end = '\0';
 			if (plain || !interactive) parse_plaintext_line((parsed == 0 && strncmp(start, "\xef\xbb\xbf", 3) == 0) ? start + 3: start, &pre, &it, &list);
 			else parse_gemtext_line((parsed == 0 && strncmp(start, "\xef\xbb\xbf", 3) == 0) ? start + 3: start, &pre, &it, &list);
 			if (print && it) print_gemtext_line(stdout, it, NULL, width, &links);
