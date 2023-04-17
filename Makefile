@@ -10,6 +10,27 @@ endif
 CFLAGS += -D_GNU_SOURCE  -DPREFIX=\"$(PREFIX)\" -DCONFDIR=\"$(CONFDIR)\" -DGPLACES_VERSION=\"$(VERSION)\" $(shell pkg-config --cflags libcurl libssl libcrypto)
 LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
+MIMETYPES =
+WITH_GOPHER ?= 1
+ifeq ($(WITH_GOPHER),1)
+	CFLAGS += -DGPLACES_WITH_GOPHER
+	MIMETYPES := $(MIMETYPES);x-scheme-handler/gopher
+endif
+WITH_GOPHERS ?= 1
+ifeq ($(WITH_GOPHERS),1)
+	CFLAGS += -DGPLACES_WITH_GOPHERS
+	MIMETYPES := $(MIMETYPES);x-scheme-handler/gophers
+endif
+WITH_SPARTAN ?= 1
+ifeq ($(WITH_SPARTAN),1)
+	CFLAGS += -DGPLACES_WITH_SPARTAN
+	MIMETYPES := $(MIMETYPES);x-scheme-handler/spartan
+endif
+WITH_FINGER ?= 1
+ifeq ($(WITH_FINGER),1)
+	CFLAGS += -DGPLACES_WITH_FINGER
+	MIMETYPES := $(MIMETYPES);x-scheme-handler/finger
+endif
 WITH_LIBIDN2 ?= $(shell pkg-config --exists libidn2 && echo 1 || echo 0)
 ifeq ($(WITH_LIBIDN2),1)
 	CFLAGS += -DGPLACES_USE_LIBIDN2 $(shell pkg-config --cflags libidn2)
@@ -32,17 +53,22 @@ endif
 OBJ = bestline/bestline.o gplaces.o
 BIN = gplaces
 
-all: $(BIN) gplacesrc
+all: $(BIN) gplacesrc gplaces.desktop
 
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)
+
+gplaces.o: gplaces.c gopher.c gophers.c spartan.c finger.c tcp.c
+
+gplaces.desktop: gplaces.desktop.in
+	@sed "s~^MimeType=.*~&$(MIMETYPES)~" $< > $@
 
 gplacesrc: gplacesrc.in
 	sed s~DOCDIR~$(PREFIX)/share/doc/gplaces~g $^ > $@
 
 .PHONY: clean
 clean:
-	@rm -f $(BIN) $(OBJ) gplacesrc
+	@rm -f $(BIN) $(OBJ) gplacesrc gplaces.desktop
 
 install: all
 	@install -D -m 755 $(BIN) $(DESTDIR)$(PREFIX)/bin/${BIN}
