@@ -787,7 +787,7 @@ static int save_body(Selector *sel, void *c, FILE *fp) {
 static int do_gemini_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, SSL **body, char **mime, int ask) {
 	static char buffer[1024], data[2 + 1 + 1024 + 2 + 1]; /* 99 meta\r\n\0 */
 	struct stat stbuf;
-	char *crlf, *meta = &data[3], *line, *url;
+	char *crlf, *meta = &data[3], *line, *url, *from;
 	int len, total, received, ret = 40, err = 0;
 	SSL *ssl = NULL;
 
@@ -833,8 +833,16 @@ static int do_gemini_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, 
 			break;
 
 		case '3':
-			if (!*meta || curl_url_set(sel->cu, CURLUPART_URL, meta, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) goto fail;
-			curl_free(sel->url); sel->url = url;
+			if (!*meta) goto fail;
+			curl_free(sel->scheme); sel->scheme = NULL;
+			curl_free(sel->host); sel->host = NULL;
+			if (sel->port != sel->proto->port) { curl_free(sel->port); }; sel->port = NULL;
+			curl_free(sel->path); sel->path = NULL;
+			curl_url_cleanup(sel->cu); sel->cu = NULL;
+			from = sel->url;
+			free(sel->rawurl); sel->rawurl = str_copy(meta);
+			if (!parse_url(sel, from, NULL)) { curl_free(from); goto fail; }
+			curl_free(from);
 			fprintf(stderr, "redirected to `%s`\n", sel->url);
 			break;
 

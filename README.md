@@ -119,7 +119,7 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 | File      | Blank  | Comment | Code |
 | --------- | ------ | ------  | ---- |
-| gplaces.c | 269    | 64      | 1227 |
+| gplaces.c | 269    | 64      | 1235 |
 | gopher.c  | 36     | 19      | 92   |
 | spartan.c | 22     | 16      | 69   |
 | finger.c  | 12     | 16      | 23   |
