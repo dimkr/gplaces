@@ -818,7 +818,7 @@ loaded:
 			free(sel->rawurl); sel->rawurl = url;
 			curl_free(sel->scheme); sel->scheme = NULL;
 			curl_free(sel->host); sel->host = NULL;
-			if (sel->port != defport) curl_free(sel->port); sel->port = NULL;
+			if (sel->port != defport) { curl_free(sel->port); }; sel->port = NULL;
 			curl_free(sel->path); sel->path = NULL;
 			curl_url_cleanup(sel->cu); sel->cu = NULL;
 			if (!parse_url(sel, from, NULL)) { curl_free(from); goto fail; }
@@ -862,7 +862,7 @@ static void sigint(int sig) {
 
 static SSL *download(Selector *sel, char **mime, int ask) {
 	SSL *ssl = NULL;
-	int status, redirs = 0, len, i, off;
+	int status, redirs = 0;
 
 	do {
 		status = do_download(sel, &ssl, mime, ask);
