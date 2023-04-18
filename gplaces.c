@@ -270,6 +270,36 @@ static int copy_url(Selector *sel, const char *url) {
 }
 
 
+/*============================================================================*/
+static int tcp_connect(Selector *sel) {
+	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
+	struct timeval tv = {0};
+	int timeout, err, fd = -1;
+
+	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
+	tv.tv_sec = timeout;
+
+	if ((err = getaddrinfo(sel->host, sel->port, &hints, &result)) != 0) {
+		error(0, "cannot resolve hostname `%s`: %s", sel->host, gai_strerror(err));
+		return -1;
+	}
+
+	for (it = result; it && err != EINTR; it = it->ai_next) {
+		if ((fd = socket(it->ai_family, it->ai_socktype, it->ai_protocol)) == -1) { err = errno; continue; }
+		if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0 && setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == 0 && connect(fd, it->ai_addr, it->ai_addrlen) == 0) break;
+		err = errno;
+		close(fd); fd = -1;
+	}
+
+	freeaddrinfo(result);
+
+	if (fd == -1 && err == EINPROGRESS) error(0, "cannot connect to `%s`:`%s`: cancelled", sel->host, sel->port);
+	else if (fd == -1 && err != 0) error(0, "cannot connect to `%s`:`%s`: %s", sel->host, sel->port, strerror(err));
+	return fd;
+}
+
+
+/*============================================================================*/
 static void parse_plaintext_line(char *line, int *pre, Selector **sel, SelectorList *list) {
 	(void)pre;
 	(void)index;
@@ -591,6 +621,43 @@ static int tofu(X509 *cert, const char *host, int ask) {
 }
 
 
+static SSL *ssl_connect(Selector *sel, SSL_CTX *ctx, int ask) {
+	BIO *bio = NULL;
+	SSL *ssl = NULL;
+	X509 *cert = NULL;
+	int fd = -1, ok = 0, err;
+
+	if ((fd = tcp_connect(sel)) == -1) goto out;
+
+	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_CLOSE)) == NULL || SSL_set_tlsext_host_name(ssl, sel->host) == 0) {
+		error(0, "cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
+		goto out;
+	}
+	SSL_set_bio(ssl, bio, bio);
+	SSL_set_connect_state(ssl);
+
+	if ((err = SSL_get_error(ssl, SSL_do_handshake(ssl))) != SSL_ERROR_NONE) {
+		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "cannot establish secure connection to `%s`:`%s`: cancelled", sel->host, sel->port);
+		else error(0, "cannot establish secure connection to `%s`:`%s`: error %d", sel->host, sel->port, err);
+		goto out;
+	}
+
+	if ((cert = SSL_get_peer_certificate(ssl)) == NULL) {
+		error(0, "cannot establish secure connection to `%s`:`%s`: no peer certificate", sel->host, sel->port);
+		goto out;
+	}
+
+	if (!(ok = tofu(cert, sel->host, ask))) error(0, "cannot establish secure connection to `%s`:`%s`: bad certificate", sel->host, sel->port);
+
+out:
+	if (cert) X509_free(cert);
+	if (!ok && ssl) SSL_free(ssl);
+	else if (!ok && bio) BIO_free(bio);
+	else if (!ok && fd != -1) close(fd);
+	return ok ? ssl : NULL;
+}
+
+
 static void mkcert(const char *crtpath, const char *keypath) {
 	EVP_PKEY *key = NULL;
 #if OPENSSL_VERSION_NUMBER < 0x30000000L
@@ -657,60 +724,12 @@ static int save_body(Selector *sel, SSL *ssl, FILE *fp) {
 
 static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, SSL **body, char **mime, int ask) {
 	static char buffer[1024], data[2 + 1 + 1024 + 2 + 1]; /* 99 meta\r\n\0 */
-	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
 	struct stat stbuf;
 	char *crlf, *meta = &data[3], *line, *url;
-	struct timeval tv = {0};
-	int timeout, fd = -1, len, total, received, ret = 40, err = 0;
-	BIO *bio = NULL;
+	int len, total, received, ret = 40, err = 0;
 	SSL *ssl = NULL;
-	X509 *cert = NULL;
 
-	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
-	tv.tv_sec = timeout;
-
-	if ((err = getaddrinfo(sel->host, sel->port, &hints, &result)) != 0) {
-		error(0, "cannot resolve hostname `%s`: %s", sel->host, gai_strerror(err));
-		goto fail;
-	}
-
-	for (it = result; it && err != EINTR; it = it->ai_next) {
-		if ((fd = socket(it->ai_family, it->ai_socktype, it->ai_protocol)) == -1) { err = errno; continue; }
-		if (fcntl(fd, F_SETFD, FD_CLOEXEC) == 0 && setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == 0 && setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv)) == 0 && connect(fd, it->ai_addr, it->ai_addrlen) == 0) break;
-		err = errno;
-		close(fd); fd = -1;
-	}
-
-	freeaddrinfo(result);
-
-	if (fd == -1) {
-		if (errno == EINPROGRESS) error(0, "cannot connect to `%s`:`%s`: cancelled", sel->host, sel->port);
-		else error(0, "cannot connect to `%s`:`%s`: %s", sel->host, sel->port, strerror(err));
-		goto fail;
-	}
-
-	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_CLOSE)) == NULL || SSL_set_tlsext_host_name(ssl, sel->host) == 0) {
-		error(0, "cannot establish secure connection to `%s`:`%s`", sel->host, sel->port);
-		goto fail;
-	}
-	SSL_set_bio(ssl, bio, bio);
-	SSL_set_connect_state(ssl);
-
-	if ((err = SSL_get_error(ssl, SSL_do_handshake(ssl))) != SSL_ERROR_NONE) {
-		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "cannot establish secure connection to `%s`:`%s`: cancelled", sel->host, sel->port);
-		else error(0, "cannot establish secure connection to `%s`:`%s`: error %d", sel->host, sel->port, err);
-		goto fail;
-	}
-
-	if ((cert = SSL_get_peer_certificate(ssl)) == NULL) {
-		error(0, "cannot establish secure connection to `%s`:`%s`: no peer certificate", sel->host, sel->port);
-		goto fail;
-	}
-
-	if (!tofu(cert, sel->host, ask)) {
-		error(0, "cannot establish secure connection to `%s`:`%s`: bad certificate", sel->host, sel->port);
-		goto fail;
-	}
+	if ((ssl = ssl_connect(sel, ctx, ask)) == NULL) goto fail;
 
 	len = snprintf(buffer, sizeof(buffer), "%s\r\n", sel->url);
 	if ((err = SSL_get_error(ssl, SSL_write(ssl, buffer, len >= (int)sizeof(buffer) ? (int)sizeof(buffer) - 1 : len))) != SSL_ERROR_NONE) {
@@ -732,7 +751,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 		case '2':
 			if (!*meta) goto fail;
 			*body = ssl;
-			ssl = NULL; bio = NULL; fd = -1;
+			ssl = NULL;
 			*mime = meta;
 			break;
 
@@ -780,10 +799,7 @@ static int do_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const c
 	ret = (data[0] - '0') * 10 + (data[1] - '0');
 
 fail:
-	if (cert) X509_free(cert);
 	if (ssl) SSL_free(ssl);
-	else if (bio) BIO_free(bio);
-	else if (fd != -1) close(fd);
 	return ret;
 }
 
