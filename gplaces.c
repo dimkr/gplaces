@@ -253,6 +253,57 @@ static int parse_url(Selector *sel, const char *from, const char *input) {
 }
 
 
+static int do_redirect(Selector *sel, const char *to, size_t len) {
+	char *from = sel->url; sel->url = NULL;
+	curl_free(sel->scheme); sel->scheme = NULL;
+	curl_free(sel->host); sel->host = NULL;
+	if (sel->port != defport) { curl_free(sel->port); }; sel->port = NULL;
+	curl_free(sel->path); sel->path = NULL;
+	curl_url_cleanup(sel->cu); sel->cu = NULL;
+	free(sel->rawurl); if ((sel->rawurl = strndup(to, len)) == NULL) error(1, "cannot allocate new string");
+	if (!parse_url(sel, from, NULL)) { curl_free(from); return 0; }
+	curl_free(from);
+	fprintf(stderr, "redirected to `%s`\n", sel->url);
+	return 1;
+}
+
+
+static int redirect(Selector *sel, const char *to) {
+	static char redirs[1024], buffer[1024];
+	struct stat stbuf;
+	size_t len;
+	FILE *fp = NULL;
+	const char *home, *end, *p = MAP_FAILED;
+	char *start, *line;
+	unsigned int i;
+	int fd, found = 0, ok = 1;
+
+	len = strlen(sel->url);
+
+	if ((home = getenv("XDG_DATA_HOME")) != NULL) snprintf(redirs, sizeof(redirs), "%s/gplaces_redirects", home);
+	else if ((home = getenv("HOME")) != NULL) snprintf(redirs, sizeof(redirs), "%s/.gplaces_redirects", home);
+	else return 0;
+
+	if ((fd = open(redirs, O_RDWR | O_CREAT | O_APPEND, 0600)) != -1) {
+		if (fstat(fd, &stbuf) == -1) { close(fd); return 0; }
+		if (stbuf.st_size > 0) {
+			if ((p = mmap(NULL, stbuf.st_size % SIZE_MAX, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED) { close(fd); return 0; }
+			for (end = (const char *)p; !found && (start = memmem(end, stbuf.st_size - (end - p), sel->url, len)) != NULL; end = start + len + 1) {
+				if (!(found = ((start == p || *(start - 1) == '\n') && (size_t)stbuf.st_size - (start - p) >= len + 2 && start[len] == ' ' && start[len + 1] != '\n'))) continue;
+				ok = do_redirect(sel, &start[len + 1], strchr(&start[len + 1], '\n') - &start[len + 1]);
+			}
+			munmap((void *)p, stbuf.st_size);
+		}
+		if (to != NULL && !found && (fp = fdopen(fd, "w")) != NULL) {
+			ok = fprintf(fp, "%s %s\n", sel->url, to) > 0 && do_redirect(sel, to, strlen(to));
+			fclose(fp);
+		} else close(fd);
+	} else return 0;
+
+	return ok;
+}
+
+
 static Selector *find_selector(SelectorList *list, int index) {
 	Selector *sel;
 	long i = 0;
@@ -814,16 +865,8 @@ loaded:
 
 		case '3':
 			if (!*meta) goto fail;
-			curl_free(sel->scheme); sel->scheme = NULL;
-			curl_free(sel->host); sel->host = NULL;
-			if (sel->port != defport) { curl_free(sel->port); }; sel->port = NULL;
-			curl_free(sel->path); sel->path = NULL;
-			curl_url_cleanup(sel->cu); sel->cu = NULL;
-			from = sel->url;
-			free(sel->rawurl); sel->rawurl = str_copy(meta);
-			if (!parse_url(sel, from, NULL)) { curl_free(from); goto fail; }
-			curl_free(from);
-			fprintf(stderr, "redirected to `%s`\n", sel->url);
+			if (data[1] == '1') redirect(sel, meta);
+			else do_redirect(sel, meta, total - 2);
 			break;
 
 		case '6':
@@ -863,6 +906,8 @@ static void sigint(int sig) {
 static SSL *download(Selector *sel, char **mime, int ask) {
 	SSL *ssl = NULL;
 	int status, redirs = 0;
+
+	if (!redirect(sel, NULL)) return NULL;
 
 	do {
 		status = do_download(sel, &ssl, mime, ask);
