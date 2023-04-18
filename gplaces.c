@@ -813,14 +813,14 @@ loaded:
 			break;
 
 		case '3':
-			if (!*meta || curl_url_set(sel->cu, CURLUPART_URL, meta, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) goto fail;
-			from = sel->url;
-			free(sel->rawurl); sel->rawurl = url;
+			if (!*meta) goto fail;
 			curl_free(sel->scheme); sel->scheme = NULL;
 			curl_free(sel->host); sel->host = NULL;
 			if (sel->port != defport) { curl_free(sel->port); }; sel->port = NULL;
 			curl_free(sel->path); sel->path = NULL;
 			curl_url_cleanup(sel->cu); sel->cu = NULL;
+			from = sel->url;
+			free(sel->rawurl); sel->rawurl = str_copy(meta);
 			if (!parse_url(sel, from, NULL)) { curl_free(from); goto fail; }
 			curl_free(from);
 			fprintf(stderr, "redirected to `%s`\n", sel->url);
