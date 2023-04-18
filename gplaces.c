@@ -784,12 +784,54 @@ static int save_body(Selector *sel, void *c, FILE *fp) {
 }
 
 
-static int do_gemini_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, const char *keypath, SSL **body, char **mime, int ask) {
-	static char buffer[1024], data[2 + 1 + 1024 + 2 + 1]; /* 99 meta\r\n\0 */
+static int do_download(Selector *sel, SSL **body, char **mime, int ask) {
+	static char crtpath[1024], keypath[1024], suffix[1024], buffer[1024], data[2 + 1 + 1024 + 2 + 1]; /* 99 meta\r\n\0 */
 	struct stat stbuf;
+	const char *home;
+	SSL_CTX *ctx = NULL;
 	char *crlf, *meta = &data[3], *line, *url, *from;
-	int len, total, received, ret = 40, err = 0;
+	int off, len, i, total, received, ret = 40, err = 0;
 	SSL *ssl = NULL;
+
+	if ((home = getenv("XDG_DATA_HOME")) != NULL) {
+		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) goto fail;;
+	} else if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) goto fail;
+
+	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) goto fail;
+	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
+	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+
+	/*
+	 * If the user requests gemini://example.com/foo/bar/baz.gmi, try to load:
+	 *
+	 *  1) The certificate for gemini://example.com/foo/bar/baz.gmi
+	 *  2) The certificate for gemini://example.com/foo/bar
+	 *  3) The certificate for gemini://example.com/foo
+	 *  4) The certificate for gemini://example.com
+	 *
+	 * If we found a certificate for one of these, stop even if loading fails.
+	 */
+	for (len = 0; len < (int)sizeof(suffix) - 1 && sel->path[len] != '\0'; ++len) suffix[len] = sel->path[len] == '/' ? '_' : sel->path[len];
+	suffix[len] = '\0';
+	memcpy(keypath, crtpath, off);
+	for (i = sel->path[len - 1] == '/' ? len - 1 : len; i >= 0; --i) {
+		if (i < len && sel->path[i] != '/') continue;
+		snprintf(&crtpath[off], sizeof(crtpath) - off, "%.*s.crt", i, suffix);
+		snprintf(&keypath[off], sizeof(keypath) - off, "%.*s.key", i, suffix);
+		if (stat(crtpath, &stbuf) == 0 && stat(keypath, &stbuf) == 0) {
+			SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM);
+			SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM);
+			goto loaded;
+		}
+	}
+
+	/*
+	 * if we failed to find a matching certificate and a certificate is
+	 * generated, we want to associate it with the full path
+	 */
+	snprintf(&crtpath[off], sizeof(crtpath) - off, "%s.crt", suffix);
+	snprintf(&keypath[off], sizeof(keypath) - off, "%s.key", suffix);
+loaded:
 
 	if ((ssl = ssl_connect(sel, ctx, ask)) == NULL) goto fail;
 
@@ -870,6 +912,7 @@ static int do_gemini_download(Selector *sel, SSL_CTX *ctx, const char *crtpath, 
 
 fail:
 	if (ssl) SSL_free(ssl);
+	if (ctx) SSL_CTX_free(ctx);
 	return ret;
 }
 
@@ -880,59 +923,13 @@ static void sigint(int sig) {
 
 
 static void *gemini_download(Selector *sel, char **mime, Parser *parser, int ask) {
-	static char crtpath[1024], keypath[1024], suffix[1024];
-	struct stat stbuf;
-	const char *home;
-	SSL_CTX *ctx = NULL;
 	SSL *ssl = NULL;
-	int status, redirs = 0, needcert = 0, len, i, off;
+	int status, redirs = 0;
 
-	if ((home = getenv("XDG_DATA_HOME")) != NULL) {
-		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) return NULL;
-	} else if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) return NULL;
-
-	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return NULL;
-	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
-	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
-
-	/*
-	 * If the user requests gemini://example.com/foo/bar/baz.gmi, try to load:
-	 *
-	 *  1) The certificate for gemini://example.com/foo/bar/baz.gmi
-	 *  2) The certificate for gemini://example.com/foo/bar
-	 *  3) The certificate for gemini://example.com/foo
-	 *  4) The certificate for gemini://example.com
-	 *
-	 * If we found a certificate for one of these, stop even if loading fails.
-	 */
-	for (len = 0; len < (int)sizeof(suffix) - 1 && sel->path[len] != '\0'; ++len) suffix[len] = sel->path[len] == '/' ? '_' : sel->path[len];
-	suffix[len] = '\0';
-	memcpy(keypath, crtpath, off);
-	for (i = sel->path[len - 1] == '/' ? len - 1 : len; i >= 0; --i) {
-		if (i < len && sel->path[i] != '/') continue;
-		snprintf(&crtpath[off], sizeof(crtpath) - off, "%.*s.crt", i, suffix);
-		snprintf(&keypath[off], sizeof(keypath) - off, "%.*s.key", i, suffix);
-		if (stat(crtpath, &stbuf) == 0 && stat(keypath, &stbuf) == 0) {
-			SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM);
-			SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM);
-			goto loaded;
-		}
-	}
-
-	/*
-	 * if we failed to find a matching certificate and a certificate is
-	 * generated, we want to associate it with the full path
-	 */
-	snprintf(&crtpath[off], sizeof(crtpath) - off, "%s.crt", suffix);
-	snprintf(&keypath[off], sizeof(keypath) - off, "%s.key", suffix);
-
-loaded:
 	do {
-		status = do_gemini_download(sel, ctx, crtpath, keypath, &ssl, mime, ask);
+		status = do_download(sel, &ssl, mime, ask);
 		if (status >= 20 && status <= 29) break;
-	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69 && ++needcert == 1) || (status >= 30 && status <= 39 && ++redirs < 5));
-
-	SSL_CTX_free(ctx);
+	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69) || (status >= 30 && status <= 39 && ++redirs < 5));
 
 	if (ssl != NULL) {
 		if (!interactive) *parser = parse_plaintext_line;
