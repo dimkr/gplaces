@@ -946,7 +946,7 @@ const Protocol gemini = {"gemini", "1965", ssl_read, ssl_error, ssl_close, gemin
 
 
 /*============================================================================*/
-#if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN)
+#if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN) || defined(GPLACES_WITH_FINGER)
 	#include "tcp.c"
 #endif
 #if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_GOPHERS)
