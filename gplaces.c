@@ -269,13 +269,12 @@ static int do_redirect(Selector *sel, const char *to, size_t len) {
 
 
 static int redirect(Selector *sel, const char *to) {
-	static char redirs[1024], buffer[1024];
+	static char redirs[1024];
 	struct stat stbuf;
 	size_t len;
 	FILE *fp = NULL;
 	const char *home, *end, *p = MAP_FAILED;
-	char *start, *line;
-	unsigned int i;
+	char *start;
 	int fd, found = 0, ok = 1;
 
 	len = strlen(sel->url);
@@ -778,7 +777,7 @@ static int do_download(Selector *sel, SSL **body, char **mime, int ask) {
 	struct stat stbuf;
 	const char *home;
 	SSL_CTX *ctx = NULL;
-	char *crlf, *meta = &data[3], *line, *url, *from;
+	char *crlf, *meta = &data[3], *line, *url;
 	int off, len, i, total, received, ret = 40, err = 0;
 	SSL *ssl = NULL;
 
