@@ -260,7 +260,7 @@ static int redirect(Selector *sel, const char *to, size_t len) {
 	if (sel->port != defport) { curl_free(sel->port); }; sel->port = NULL;
 	curl_free(sel->path); sel->path = NULL;
 	curl_url_cleanup(sel->cu); sel->cu = NULL;
-	free(sel->rawurl); if ((sel->rawurl = strndup(to, len)) == NULL) error(1, "cannot allocate new string");
+	free(sel->rawurl); if ((sel->rawurl = len > 0 ? strndup(to, len) : strdup(to)) == NULL) error(1, "cannot allocate new string");
 	if (!parse_url(sel, from, NULL)) { curl_free(from); return 0; }
 	curl_free(from);
 	fprintf(stderr, "redirected to `%s`\n", sel->url);
@@ -269,13 +269,11 @@ static int redirect(Selector *sel, const char *to, size_t len) {
 
 
 static int perm_redirect(Selector *sel, const char *to) {
-	static char redirs[1024];
-	struct stat stbuf;
+	static char redirs[1024], buffer[LINE_MAX];
 	size_t len;
 	FILE *fp = NULL;
-	const char *home, *end, *p = MAP_FAILED;
-	char *start;
-	int fd, found = 0, ret = 20;
+	const char *home, *line;
+	int found = 0, ret = 20;
 
 	len = strlen(sel->url);
 
@@ -283,22 +281,20 @@ static int perm_redirect(Selector *sel, const char *to) {
 	else if ((home = getenv("HOME")) != NULL) snprintf(redirs, sizeof(redirs), "%s/.gplaces_redirects", home);
 	else return 40;
 
-	if ((fd = open(redirs, O_RDWR | O_CREAT | O_APPEND, 0600)) != -1) {
-		if (fstat(fd, &stbuf) == -1) { close(fd); return 0; }
-		if (stbuf.st_size > 0) {
-			if ((p = mmap(NULL, stbuf.st_size % SIZE_MAX, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED) { close(fd); return 0; }
-			for (end = (const char *)p; !found && (start = memmem(end, stbuf.st_size - (end - p), sel->url, len)) != NULL; end = start + len + 1) {
-				if ((found = ((start == p || *(start - 1) == '\n') && (size_t)stbuf.st_size - (start - p) >= len + 2 && start[len] == ' ' && start[len + 1] != '\n')) == 0) continue;
-				ret = redirect(sel, &start[len + 1], strchr(&start[len + 1], '\n') - &start[len + 1]) ? 31 : 40;
-			}
-			munmap((void *)p, stbuf.st_size);
-		}
-		if (to != NULL && !found && (fp = fdopen(fd, "w")) != NULL) {
-			ret = (fprintf(fp, "%s %s\n", sel->url, to) > 0 && redirect(sel, to, strlen(to))) ? 31 : 40;
-			fclose(fp);
-		} else close(fd);
-	} else return 20;
+	if ((fp = fopen(redirs, "r+w")) == NULL) return 40;
+	len = strlen(sel->url);
 
+	while (!found && (line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
+		if (strncmp(line, sel->url, len)) continue;
+		if (!(found = line[len] == ' ' && line[len + 1] != '\0' && line[len + 1] != '\n')) continue;
+		ret = redirect(sel, &line[len + 1], strcspn(&line[len + 1], " \n")) ? 31 : 40;
+	}
+
+	if (to != NULL && !found && fseek(fp, 0, SEEK_END) == 0) {
+		ret = (fprintf(fp, "%s %s\n", sel->url, to) > 0 && redirect(sel, to, -1)) ? 31 : 40;
+	}
+
+	fclose(fp);
 	return ret;
 }
 
