@@ -171,6 +171,39 @@ static int get_var_integer(const char *name, int def) {
 
 
 /*============================================================================*/
+static void *map_file(const char *name, int *fd, size_t *size) {
+	static char path[1024];
+	struct stat stbuf;
+	const char *home;
+	void *p;
+
+	if ((home = getenv("XDG_DATA_HOME")) != NULL) snprintf(path, sizeof(path), "%s/gplaces_%s", home, name);
+	else if ((home = getenv("HOME")) != NULL) snprintf(path, sizeof(path), "%s/.gplaces_%s", home, name);
+	else return NULL;
+
+	if ((*fd = open(path, O_RDWR | O_CREAT | O_APPEND, 0600)) == -1) return NULL;
+	if (fstat(*fd, &stbuf) == -1) { close(*fd); return NULL; }
+	if ((*size = (size_t)stbuf.st_size) == 0) { close(*fd); return NULL; }
+	if ((p = mmap(NULL, stbuf.st_size % SIZE_MAX, PROT_READ | PROT_WRITE, MAP_SHARED, *fd, 0)) == MAP_FAILED) { close(*fd); return NULL; }
+	return p;
+}
+
+
+__attribute__((format(printf, 2, 3)))
+static int append_line(int fd, const char *fmt, ...) {
+	va_list va;
+	FILE *fp;
+	int ret;
+	if ((fp = fdopen(fd, "a")) == NULL) return 0;
+	va_start(va, fmt);
+	ret = vfprintf(fp, fmt, va) > 0;
+	va_end(va);
+	fclose(fp);
+	return ret;
+}
+
+
+/*============================================================================*/
 static Selector *new_selector(const char type) {
 	Selector *new = calloc(1, sizeof(Selector));
 	if (new == NULL) error(1, "cannot allocate new selector");
@@ -269,32 +302,22 @@ static int redirect(Selector *sel, const char *to, size_t len) {
 
 
 static int perm_redirect(Selector *sel, const char *to) {
-	static char redirs[1024], buffer[LINE_MAX];
-	size_t len;
-	FILE *fp = NULL;
-	const char *home, *line;
-	int found = 0, ret = 20;
+	size_t size = 1, len;
+	const char *p, *start, *end;
+	int fd, ret = 40, found = 0;
 
 	len = strlen(sel->url);
 
-	if ((home = getenv("XDG_DATA_HOME")) != NULL) snprintf(redirs, sizeof(redirs), "%s/gplaces_redirects", home);
-	else if ((home = getenv("HOME")) != NULL) snprintf(redirs, sizeof(redirs), "%s/.gplaces_redirects", home);
-	else return 40;
-
-	if ((fp = fopen(redirs, "r+w")) == NULL) return 40;
-	len = strlen(sel->url);
-
-	while (!found && (line = fgets(buffer, sizeof(buffer), fp)) != NULL) {
-		if (strncmp(line, sel->url, len)) continue;
-		if (!(found = line[len] == ' ' && line[len + 1] != '\0' && line[len + 1] != '\n')) continue;
-		ret = redirect(sel, &line[len + 1], strcspn(&line[len + 1], " \n")) ? 31 : 40;
+	if ((p = map_file("redirs", &fd, &size)) == NULL && size > 0) return 40;
+	else if (p != NULL) {
+		for (end = p; !found && (start = memmem(end, size - (end - p), sel->url, len)) != NULL; end = start + len + 1) {
+			if (!(found = ((start == p || *(start - 1) == '\n') && size - (start - p) >= len + 2 && start[len] == ' ' && start[len + 1] != '\n'))) continue;
+			ret = redirect(sel, &start[len + 1], strcspn(&start[len + 1], " \n")) ? 31 : 40;
+		}
+		munmap((void *)p, size);
 	}
-
-	if (to != NULL && !found && fseek(fp, 0, SEEK_END) == 0) {
-		ret = (fprintf(fp, "%s %s\n", sel->url, to) > 0 && redirect(sel, to, -1)) ? 31 : 40;
-	}
-
-	fclose(fp);
+	if (to != NULL && !found) ret = (append_line(fd, "%s %s\n", sel->url, to) && redirect(sel, to, -1)) ? 31 : 40;
+	close(fd);
 	return ret;
 }
 
@@ -613,13 +636,11 @@ static void print_gemtext(FILE *fp, SelectorList *list, const char *filter) {
 
 /*============================================================================*/
 static int tofu(X509 *cert, const char *host, int ask) {
-	static char hosts[1024], buffer[1024], hex[EVP_MAX_MD_SIZE * 2 + 1];
+	static char buffer[1024], hex[EVP_MAX_MD_SIZE * 2 + 1];
 	static unsigned char md[EVP_MAX_MD_SIZE];
-	struct stat stbuf;
-	size_t hlen;
-	FILE *fp = NULL;
-	const char *home, *end, *p = MAP_FAILED;
-	char *start, *line;
+	size_t size = 1, hlen;
+	const char *p, *end;
+	char *line, *start;
 	unsigned int mdlen, i;
 	int fd, found = 0, trust = 0;
 
@@ -633,36 +654,26 @@ static int tofu(X509 *cert, const char *host, int ask) {
 
 	hlen = strlen(host);
 
-	if ((home = getenv("XDG_DATA_HOME")) != NULL) snprintf(hosts, sizeof(hosts), "%s/gplaces_hosts", home);
-	else if ((home = getenv("HOME")) != NULL) snprintf(hosts, sizeof(hosts), "%s/.gplaces_hosts", home);
-	else return 0;
-
-	if ((fd = open(hosts, O_RDWR | O_CREAT | O_APPEND, 0600)) != -1) {
-		if (fstat(fd, &stbuf) == -1) { close(fd); return 0; }
-		if (stbuf.st_size > 0) {
-			if ((p = mmap(NULL, stbuf.st_size % SIZE_MAX, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0)) == MAP_FAILED) { close(fd); return 0; }
-			for (end = (const char *)p; !found && (start = memmem(end, stbuf.st_size - (end - p), host, hlen)) != NULL; end = start + hlen + 1) {
-				if (!(found = ((start == p || *(start - 1) == '\n') && (size_t)stbuf.st_size - (start - p) >= hlen + 2 && start[hlen] == ' ' && start[hlen + 1] != '\n'))) continue;
-				if ((size_t)stbuf.st_size - (start - p) < hlen + 1 + mdlen * 2 + 1 || start[hlen + 1 + mdlen * 2] != '\n') break;
-				if ((trust = memcmp(&start[hlen + 1], hex, mdlen * 2) == 0) || !ask) break;
-				if (color) snprintf(buffer, sizeof(buffer), "\33[35mTrust new certificate for `%s`? (y/n)>\33[0m ", host);
-				else snprintf(buffer, sizeof(buffer), "Trust new certificate for `%s`? (y/n)> ", host);
-				if ((line = bestline(buffer)) != NULL) {
-					if (*line == 'y' || *line == 'Y') {
-						memcpy(&start[hlen + 1], hex, mdlen * 2);
-						trust = 1;
-					}
-					free(line);
+	if ((p = map_file("hosts", &fd, &size)) == NULL && size > 0) return 0;
+	else if (p != NULL) {
+		for (end = p; !found && (start = memmem(end, size - (end - p), host, hlen)) != NULL; end = start + hlen + 1) {
+			if (!(found = ((start == p || *(start - 1) == '\n') && size - (start - p) >= hlen + 2 && start[hlen] == ' ' && start[hlen + 1] != '\n'))) continue;
+			if (size - (start - p) < hlen + 1 + mdlen * 2 + 1 || start[hlen + 1 + mdlen * 2] != '\n') break;
+			if ((trust = memcmp(&start[hlen + 1], hex, mdlen * 2) == 0) || !ask) break;
+			if (color) snprintf(buffer, sizeof(buffer), "\33[35mTrust new certificate for `%s`? (y/n)>\33[0m ", host);
+			else snprintf(buffer, sizeof(buffer), "Trust new certificate for `%s`? (y/n)> ", host);
+			if ((line = bestline(buffer)) != NULL) {
+				if (*line == 'y' || *line == 'Y') {
+					memcpy(&start[hlen + 1], hex, mdlen * 2);
+					trust = 1;
 				}
+				free(line);
 			}
-			munmap((void *)p, stbuf.st_size);
+			munmap((void *)p, size);
 		}
-		if (!found && (fp = fdopen(fd, "w")) != NULL) {
-			trust = fprintf(fp, "%s %s\n", host, hex) > 0;
-			fclose(fp);
-		} else close(fd);
-	} else return 0;
-
+	}
+	if (!found) trust = append_line(fd, "%s %s\n", host, hex);
+	close(fd);
 	return trust;
 }
 
