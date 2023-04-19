@@ -183,7 +183,7 @@ static void *map_file(const char *name, int *fd, size_t *size) {
 
 	if ((*fd = open(path, O_RDWR | O_CREAT | O_APPEND, 0600)) == -1) return NULL;
 	if (fstat(*fd, &stbuf) == -1) { close(*fd); return NULL; }
-	if ((*size = (size_t)stbuf.st_size) == 0) { close(*fd); return NULL; }
+	if ((*size = (size_t)stbuf.st_size) == 0) return NULL;
 	if ((p = mmap(NULL, stbuf.st_size % SIZE_MAX, PROT_READ | PROT_WRITE, MAP_SHARED, *fd, 0)) == MAP_FAILED) { close(*fd); return NULL; }
 	return p;
 }
@@ -642,7 +642,7 @@ static int tofu(X509 *cert, const char *host, int ask) {
 	const char *p, *end;
 	char *line, *start;
 	unsigned int mdlen, i;
-	int fd, found = 0, trust = 0;
+	int fd = -1, found = 0, trust = 0;
 
 	if (X509_digest(cert, EVP_sha512(), md, &mdlen) == 0) return 0;
 
