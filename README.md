@@ -116,4 +116,4 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 Language|files|blank|comment|code
 :-------|-------:|-------:|-------:|-------:
-C|1|265|60|1188
+C|1|265|60|1189
