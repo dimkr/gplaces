@@ -304,7 +304,7 @@ static int redirect(Selector *sel, const char *to, size_t len) {
 static int perm_redirect(Selector *sel, const char *to) {
 	size_t size = 1, len;
 	const char *p, *start, *end;
-	int fd, ret = 40, found = 0;
+	int fd, ret = 20, found = 0;
 
 	len = strlen(sel->url);
 
