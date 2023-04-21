@@ -17,6 +17,7 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 - variables
 - ~command aliases~ use variables
 - sh-style history with $XDG_DATA_HOME/gplaces_history or ~/.gplaces_history
+- permanent redirects with $XDG_DATA_HOME/gplaces_redirects or ~/.gplaces_redirects
 - VT100 compatible with ANSI escape sequences
 	- with [NO_COLOR](https://no-color.org/) support
 - no exotic external dependencies, no NIH
@@ -119,7 +120,7 @@ additional documentation and more details are available in `man gplaces`. type `
 ## Statistic
 | File      | Blank  | Comment | Code |
 | --------- | ------ | ------  | ---- |
-| gplaces.c | 268    | 64      | 1233 |
+| gplaces.c | 279    | 65      | 1273 |
 | gopher.c  | 36     | 19      | 92   |
 | spartan.c | 22     | 16      | 69   |
 | finger.c  | 12     | 16      | 23   |
