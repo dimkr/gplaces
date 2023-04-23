@@ -19,6 +19,16 @@
 
 ================================================================================
 */
+static void parse_spartan_line(char *line, int *pre, Selector **sel, SelectorList *list) {
+	if (!*pre && line[0] == '=' && line[1] == ':') {
+		line[1] = '>';
+		parse_gemtext_line(line, pre, sel, list);
+		if (*sel != NULL) (*sel)->prompt = 1;
+	} else parse_gemtext_line(line, pre, sel, list);
+}
+
+
+/*============================================================================*/
 static int do_spartan_download(Selector *sel, int *body, char **mime, const char *input, size_t inputlen) {
 	static char buffer[1024], data[1 + 1 + 1024 + 2 + 1]; /* 9 meta\r\n\0 */
 	char *crlf, *meta = &data[2], *url;
@@ -88,7 +98,7 @@ static void *spartan_download(Selector *sel, char **mime, Parser *parser, int as
 		if (status == 2) break;
 	} while (status == 3 && ++redirs < 5);
 
-	if (fd != -1 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
+	if (fd != -1 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_spartan_line;
 	else if (fd != -1 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
 
 	if (redirs == 5) error(0, "too many redirects from `%s`", sel->url);

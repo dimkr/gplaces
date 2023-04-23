@@ -445,15 +445,8 @@ static void parse_gemtext_line(char *line, int *pre, Selector **sel, SelectorLis
 	if (*pre) {
 		*sel = new_selector('`');
 		(*sel)->repr = str_copy(line);
-#ifdef GPLACES_WITH_SPARTAN
-	} else if (line[0] == '=' && (line[1] == '>' || line[1] == ':')) {
-#else
 	} else if (line[0] == '=' && line[1] == '>') {
-#endif
 		*sel = new_selector('l');
-#ifdef GPLACES_WITH_SPARTAN
-		(*sel)->prompt = line[1] == ':';
-#endif
 		url = line + 2 + strspn(line + 2, " \t");
 		line = url + strcspn(url, " \t");
 		if (*line != '\0') {
