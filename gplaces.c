@@ -1242,8 +1242,7 @@ static void navigate(Selector *to) {
 	}
 
 	if (SIMPLEQ_EMPTY(&new)) return;
-	if (color && to->proto->read == ssl_read) snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + off + 3);
-	else if (color && to->proto->read != ssl_read) snprintf(prompt, sizeof(prompt), "\33[91m%s>\33[0m ", to->url + off + 3);
+	if (color) snprintf(prompt, sizeof(prompt), "\33[35m%s>\33[0m ", to->url + off + 3);
 	else snprintf(prompt, sizeof(prompt), "%s> ", to->url + off + 3);
 	free(current);
 	current = str_copy(to->url);
@@ -1479,13 +1478,10 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 		if (strncmp(sel->rawurl, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[9]);
 		else if (strncmp(sel->rawurl, "gophers://", 10) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[10]);
 		else snprintf(hint, sizeof(hint), " %s", sel->rawurl);
-		if (color && (strncmp(sel->rawurl, "gopher://", 9) == 0 || strncmp(sel->rawurl, "spartan://", 10) == 0 || strncmp(sel->rawurl, "finger://", 9) == 0)) *ansi1 = "\33[91m";
 	} else if ((val = set_var(&variables, buf, NULL)) != NULL) {
 		if (strncmp(val, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &val[9]);
-		if (strncmp(val, "gophers://", 10) == 0) snprintf(hint, sizeof(hint), " %s", &val[10]);
 		else if (strncmp(val, "file://", 7) == 0) snprintf(hint, sizeof(hint), " %s", &val[7]);
 		else snprintf(hint, sizeof(hint), " %s", val);
-		if (color && (strncmp(val, "gopher://", 9) == 0 || strncmp(val, "spartan://", 10) == 0 || strncmp(val, "finger://", 9) == 0)) *ansi1 = "\33[91m";
 	} else return NULL;
 	return hint;
 }
