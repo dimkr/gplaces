@@ -989,11 +989,8 @@ static void *gemini_download(Selector *sel, char **mime, Parser *parser, int ask
 		if (status >= 20 && status <= 29) break;
 	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69) || (status >= 30 && status <= 39 && ++redirs < 5));
 
-	if (ssl != NULL) {
-		if (!interactive) *parser = parse_plaintext_line;
-		else if (strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
-		else if (strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
-	}
+	if (ssl != NULL && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
+	else if (ssl != NULL && (!interactive || strncmp(*mime, "text/plain", 10) == 0)) *parser = parse_plaintext_line;
 
 	if (redirs == 5) error(0, "too many redirects from `%s`", sel->url);
 	return ssl;

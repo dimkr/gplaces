@@ -88,10 +88,8 @@ static void *spartan_download(Selector *sel, char **mime, Parser *parser, int as
 		if (status == 2) break;
 	} while (status == 3 && ++redirs < 5);
 
-	if (fd != -1) {
-		if (strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
-		else if (strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
-	}
+	if (fd != -1 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
+	else if (fd != -1 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
 
 	if (redirs == 5) error(0, "too many redirects from `%s`", sel->url);
 
