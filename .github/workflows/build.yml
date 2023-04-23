@@ -37,6 +37,10 @@ jobs:
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBIDN2=0 WITH_LIBIDN=0
           make clean
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBMAGIC=0
+          make clean
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0
+          make clean
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=1
   alpine:
     runs-on: ubuntu-latest
     strategy:
@@ -71,6 +75,10 @@ jobs:
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBIDN=0
           make clean
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBMAGIC=0
+          make clean
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0
+          make clean
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=1
   arch:
     runs-on: ubuntu-latest
     container:
@@ -97,3 +105,7 @@ jobs:
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBIDN2=0 WITH_LIBIDN=0
           make clean
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBMAGIC=0
+          make clean
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0
+          make clean
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=1
