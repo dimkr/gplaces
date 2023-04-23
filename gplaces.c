@@ -1360,7 +1360,7 @@ static void cmd_sub(char *line) {
 
 			SIMPLEQ_FOREACH(it, &list, next) {
 				if (it->type == 'l' && !strncmp(it->repr, ts, 10)) {
-					copy = new_selector(it->type);
+					copy = new_selector('l');
 					if (!copy_url(copy, it->rawurl) || !parse_url(copy, sel->url, NULL)) { free_selector(copy); continue; }
 					copy->repr = str_copy(it->repr);
 					SIMPLEQ_INSERT_TAIL(&feed, copy, next);
