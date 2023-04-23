@@ -29,12 +29,12 @@ static int tcp_error(Selector *sel, void *c, int err) {
 
 
 static int tcp_read(void *c, void *buffer, int length) {
-	return (int)recv(*(int *)c, buffer, (size_t)length, 0);
+	return (int)recv((int)(intptr_t)c, buffer, (size_t)length, 0);
 }
 
 
 static void tcp_close(void *c) {
-	close(*(int *)c);
+	close((int)(intptr_t)c);
 }
 
 

@@ -19,13 +19,6 @@
 
 ================================================================================
 */
-typedef struct Socket {
-	int fd;
-	char end[3], eof;
-} Socket;
-
-
-/*============================================================================*/
 static void parse_gophermap_line(char *line, int *pre, Selector **sel, SelectorList *list) {
 	char *path, *host, *port;
 
@@ -89,27 +82,6 @@ static char *gopher_request(Selector *sel, int ask, int *len) {
 
 
 /*============================================================================*/
-static int gopher_read(void *c, void *buffer, int length) {
-	int len;
-	if (((Socket *)c)->eof) return 0;
-	if ((len = tcp_read(c, buffer, length)) <= 0) return len;
-	switch (len) {
-	case 1: ((Socket *)c)->end[2] = ((Socket *)c)->end[1]; ((Socket *)c)->end[1] = ((Socket *)c)->end[0]; ((Socket *)c)->end[0] = ((char *)buffer)[len-1]; break;
-	case 2: ((Socket *)c)->end[2] = ((Socket *)c)->end[0]; ((Socket *)c)->end[1] = ((char *)buffer)[len-1]; ((Socket *)c)->end[0] = ((char *)buffer)[len-2]; break;
-	default: ((Socket *)c)->end[2] = ((char *)buffer)[len-1]; ((Socket *)c)->end[1] = ((char *)buffer)[len-2]; ((Socket *)c)->end[0] = ((char *)buffer)[len-3]; break;
-	}
-	((Socket *)c)->eof = memcmp(((Socket *)c)->end, ".\r\n", 3) == 0;
-	return len;
-}
-
-
-static int gopher_error(Selector *sel, void *c, int err) {
-	if (tcp_error(sel, c, err)) return 1;
-	if (!((Socket *)c)->eof) error(0, "protocol error while downloading `%s`", sel->url); /* the EOF marker is optional */
-	return 0;
-}
-
-
 static void gopher_type(Selector *sel, char **mime, Parser *parser) {
 	static char buffer[2];
 
@@ -124,25 +96,20 @@ static void gopher_type(Selector *sel, char **mime, Parser *parser) {
 
 static void *gopher_download(Selector *sel, char **mime, Parser *parser, int ask) {
 	char *buffer;
-	static Socket s;
-	int len;
+	int fd = -1, len;
 
-	s.fd = -1;
-	s.end[0] = s.end[1] = s.end[2] = 0;
-	s.eof = 0;
-
-	if ((buffer = gopher_request(sel, ask, &len)) == NULL || (s.fd = tcp_connect(sel)) == -1) goto fail;
-	if (sendall(s.fd, buffer, len, MSG_NOSIGNAL) != len) {
+	if ((buffer = gopher_request(sel, ask, &len)) == NULL || (fd = tcp_connect(sel)) == -1) goto fail;
+	if (sendall(fd, buffer, len, MSG_NOSIGNAL) != len) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", sel->host, sel->port);
 		else error(0, "cannot send request to `%s`:`%s`: %s", sel->host, sel->port, strerror(errno));
-		close(s.fd); s.fd = -1;
+		close(fd); fd = -1;
 	}
 
 	gopher_type(sel, mime, parser);
 
 fail:
-	return (s.fd == -1) ? NULL : &s;
+	return fd == -1 ? NULL : (void *)(intptr_t)fd;
 }
 
 
-const Protocol gopher = {"gopher", "70", gopher_read, gopher_error, tcp_close, gopher_download};
+const Protocol gopher = {"gopher", "70", tcp_read, tcp_error, tcp_close, gopher_download};

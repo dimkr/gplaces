@@ -22,8 +22,7 @@
 static void *finger_download(Selector *sel, char **mime, Parser *parser, int ask) {
 	static char buffer[1024 + 3]; /* path\r\n\0 */
 	char *user = NULL;
-	static int fd;
-	int len = 0;
+	int fd = -1, len = 0;
 
 	(void)ask;
 
@@ -44,7 +43,7 @@ static void *finger_download(Selector *sel, char **mime, Parser *parser, int ask
 	*mime = "text/plain";
 	*parser = parse_plaintext_line;
 
-	return &fd;
+	return (void *)(intptr_t)fd;
 }
 
 

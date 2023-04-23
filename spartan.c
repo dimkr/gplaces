@@ -96,7 +96,7 @@ static void *spartan_download(Selector *sel, char **mime, Parser *parser, int as
 fail:
 	if (input != query) free(input);
 	curl_free(query);
-	return fd == -1 ? NULL : &fd;
+	return fd == -1 ? NULL : (void *)(intptr_t)fd;
 }
 
 
