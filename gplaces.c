@@ -82,6 +82,9 @@ typedef struct Protocol {
 struct Selector {
 	SIMPLEQ_ENTRY(Selector) next;
 	int level;
+#if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN)
+	char prompt;
+#endif
 	char type, *repr, *scheme, *host, *port, *path, *url, *rawurl;
 	CURLU *cu;
 	const Protocol *proto;
@@ -374,7 +377,7 @@ static int perm_redirect(Selector *sel, const char *to) {
 static Selector *find_selector(SelectorList *list, int index) {
 	Selector *sel;
 	long i = 0;
-	SIMPLEQ_FOREACH(sel, list, next) if ((sel->type == 'l' || sel->type == ':') && ++i == index) return sel;
+	SIMPLEQ_FOREACH(sel, list, next) if (sel->type == 'l' && ++i == index) return sel;
 	return NULL;
 }
 
@@ -447,7 +450,10 @@ static void parse_gemtext_line(char *line, int *pre, Selector **sel, SelectorLis
 #else
 	} else if (line[0] == '=' && line[1] == '>') {
 #endif
-		*sel = new_selector(line[1] == '>' ? 'l' : ':');
+		*sel = new_selector('l');
+#ifdef GPLACES_WITH_SPARTAN
+		(*sel)->prompt = line[1] == ':';
+#endif
 		url = line + 2 + strspn(line + 2, " \t");
 		line = url + strcspn(url, " \t");
 		if (*line != '\0') {
@@ -608,7 +614,7 @@ static void print_line(FILE *fp, Selector *sel, const regex_t *filter, int width
 	const char *p;
 	int w, wchars, out, extra, i = 0;
 
-	if (sel->type == 'l' || sel->type == ':') ++*links;
+	if (sel->type == 'l') ++*links;
 
 	if (filter && regexec(filter, sel->repr, 0, NULL, 0) != 0 && (sel->rawurl == NULL || regexec(filter, sel->rawurl, 0, NULL, 0) != 0)) return;
 	if (!interactive) { fprintf(fp, "%s\n", sel->repr); return; }
@@ -620,7 +626,7 @@ static void print_line(FILE *fp, Selector *sel, const regex_t *filter, int width
 
 		extra = 0;
 		switch (sel->type) {
-			case 'l': case ':': if (i == 0) extra = 3 + ndigits(*links); break;
+			case 'l': if (i == 0) extra = 3 + ndigits(*links); break;
 			case '`': goto print;
 			case '>':
 			case '*': extra = 2; break;
@@ -644,7 +650,7 @@ static void print_line(FILE *fp, Selector *sel, const regex_t *filter, int width
 
 print:
 		switch (sel->type) {
-			case 'l': case ':':
+			case 'l':
 				if (i == 0) {
 					if (color) fprintf(fp, "\33[4;36m[%d]\33[0;39m %.*s\n", *links, out, &sel->repr[i]);
 					else fprintf(fp, "[%d] %.*s\n", *links, out, &sel->repr[i]);
@@ -1362,7 +1368,7 @@ static void cmd_sub(char *line) {
 			SIMPLEQ_INSERT_TAIL(&feed, copy, next);
 
 			SIMPLEQ_FOREACH(it, &list, next) {
-				if ((it->type == 'l' || it->type == ':') && !strncmp(it->repr, ts, 10)) {
+				if (it->type == 'l' && !strncmp(it->repr, ts, 10)) {
 					copy = new_selector(it->type);
 					if (!copy_url(copy, it->rawurl) || !parse_url(copy, sel->url, NULL)) { free_selector(copy); continue; }
 					copy->repr = str_copy(it->repr);
@@ -1465,7 +1471,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 	int links = 0;
 	if (!color) *ansi1 = *ansi2 = "";
 	if (strcspn(buf, " ") == 0) {
-		SIMPLEQ_FOREACH(sel, &menu, next) if (sel->type == 'l' || sel->type == ':') ++links;
+		SIMPLEQ_FOREACH(sel, &menu, next) if (sel->type == 'l') ++links;
 		if (links > 1) {
 			snprintf(hint, sizeof(hint), "1-%d, URL, variable or command", links);
 			return hint;

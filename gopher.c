@@ -35,7 +35,8 @@ static void parse_gophermap_line(char *line, int *pre, Selector **sel, SelectorL
 
 	if ((line[0] == '.' && line[1] == '\0') || line[0] == '\0') return;
 
-	*sel = new_selector(*line == 'i' ? '`' : (*line == '7' ? ':' : 'l'));
+	*sel = new_selector(*line == 'i' ? '`' : 'l');
+	(*sel)-> prompt = *line == '7';
 
 	path = line + 1 + strcspn(line + 1, "\t");
 	*path = '\0';
@@ -67,7 +68,7 @@ static char *gopher_request(Selector *sel, int ask, int *len) {
 	static char buffer[1024 + 3]; /* path\r\n\0 */
 	char *query = NULL, *criteria = NULL;
 
-	if (sel->type == ':' || (sel->path[1] == '7' && sel->path[2] == '/')) {
+	if (sel->prompt || strncmp(sel->path, "/7/", 3) == 0) {
 		switch (curl_url_get(sel->cu, CURLUPART_QUERY, &query, 0)) {
 		case CURLUE_OK: criteria = query; break;
 		case CURLUE_NO_QUERY: break;
@@ -78,7 +79,7 @@ static char *gopher_request(Selector *sel, int ask, int *len) {
 			if (interactive) bestlineHistoryAdd(criteria);
 		}
 	}
-	if (criteria && *criteria != '\0') *len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", sel->path[1] == '\0' ? sel->path : sel->path + 2, criteria);
+	if (criteria && *criteria != '\0') *len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", strncmp(sel->path, "/7/", 3) == 0 ? sel->path + 2 : sel->path, criteria);
 	else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", (sel->path[0] != '\0' && sel->path[1] != '/' && sel->path[1] != '\0' && sel->path[2] == '/') ? sel->path + 2 : sel->path);
 
 	if (criteria != query) free(criteria);

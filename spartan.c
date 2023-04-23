@@ -72,18 +72,16 @@ static void *spartan_download(Selector *sel, char **mime, Parser *parser, int as
 	static int fd = -1;
 	int status, redirs = 0;
 
-	if (sel->type == ':') {
-		switch (curl_url_get(sel->cu, CURLUPART_QUERY, &query, 0)) {
-		case CURLUE_OK: input = query; break;
-		case CURLUE_NO_QUERY: break;
-		default: return NULL;
-		}
-		if (input == NULL || *input == '\0') {
-			if (!ask || (input = bestline(color ? "\33[35mData>\33[0m " : "Data> ")) == NULL) goto fail;
-			if (interactive) bestlineHistoryAdd(input);
-		}
-		if (input != NULL) inputlen = strlen(input);
+	switch (curl_url_get(sel->cu, CURLUPART_QUERY, &query, 0)) {
+	case CURLUE_OK: input = query; break;
+	case CURLUE_NO_QUERY: break;
+	default: return NULL;
 	}
+	if (sel->prompt && (input == NULL || *input == '\0')) {
+		if (!ask || (input = bestline(color ? "\33[35mData>\33[0m " : "Data> ")) == NULL) goto fail;
+		if (interactive) bestlineHistoryAdd(input);
+	}
+	if (input != NULL) inputlen = strlen(input);
 
 	do {
 		status = do_spartan_download(sel, &fd, mime, input, inputlen);
