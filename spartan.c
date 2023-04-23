@@ -31,7 +31,7 @@ static void parse_spartan_line(char *line, int *pre, Selector **sel, SelectorLis
 /*============================================================================*/
 static int do_spartan_download(Selector *sel, int *body, char **mime, const char *input, size_t inputlen) {
 	static char buffer[1024], data[1 + 1 + 1024 + 2 + 1]; /* 9 meta\r\n\0 */
-	char *crlf, *meta = &data[2], *url;
+	char *crlf, *meta = &data[2];
 	int fd = -1, len, total, received, ret = 40;
 
 	len = snprintf(buffer, sizeof(buffer), "%s %s %zu\r\n", sel->host, sel->path, inputlen);
@@ -59,8 +59,8 @@ static int do_spartan_download(Selector *sel, int *body, char **mime, const char
 			break;
 
 		case '3':
-			if (!*meta || curl_url_set(sel->cu, CURLUPART_PATH, meta, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(sel->cu, CURLUPART_URL, &url, 0) != CURLUE_OK) goto fail;
-			curl_free(sel->url); sel->url = url;
+			if (!*meta) goto fail;
+			if (!redirect(sel, meta, total - 2)) goto fail;
 			fprintf(stderr, "redirected to `%s`\n", sel->url);
 			break;
 
