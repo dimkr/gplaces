@@ -1472,7 +1472,6 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 	if ((index = strtol(buf, &end, 10)) > 0 && index < INT_MAX && *end == '\0') {
 		if ((sel = find_selector(&menu, (int)index)) == NULL) return NULL;
 		if (strncmp(sel->rawurl, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[9]);
-		else if (strncmp(sel->rawurl, "gophers://", 10) == 0) snprintf(hint, sizeof(hint), " %s", &sel->rawurl[10]);
 		else snprintf(hint, sizeof(hint), " %s", sel->rawurl);
 	} else if ((val = set_var(&variables, buf, NULL)) != NULL) {
 		if (strncmp(val, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &val[9]);
