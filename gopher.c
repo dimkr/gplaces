@@ -73,7 +73,7 @@ static char *gopher_request(Selector *sel, int ask, int *len) {
 		}
 	}
 	if (criteria && *criteria != '\0') *len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", strncmp(sel->path, "/7/", 3) == 0 ? sel->path + 2 : sel->path, criteria);
-	else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", (sel->path[0] != '\0' && sel->path[1] != '/' && sel->path[1] != '\0' && sel->path[2] == '/') ? sel->path + 2 : sel->path);
+	else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", (sel->path[1] != '/' && sel->path[1] != '\0' && sel->path[2] == '/') ? sel->path + 2 : sel->path);
 
 	if (criteria != query) free(criteria);
 	curl_free(query);
