@@ -16,12 +16,12 @@ ifeq ($(WITH_GOPHER),1)
 	CFLAGS += -DGPLACES_WITH_GOPHER
 	MIMETYPES := $(MIMETYPES);x-scheme-handler/gopher
 endif
-WITH_GOPHERS ?= 0
+WITH_GOPHERS ?= 1
 ifeq ($(WITH_GOPHERS),1)
 	CFLAGS += -DGPLACES_WITH_GOPHERS
 	MIMETYPES := $(MIMETYPES);x-scheme-handler/gophers
 endif
-WITH_SPARTAN ?= 0
+WITH_SPARTAN ?= 1
 ifeq ($(WITH_SPARTAN),1)
 	CFLAGS += -DGPLACES_WITH_SPARTAN
 	MIMETYPES := $(MIMETYPES);x-scheme-handler/spartan
