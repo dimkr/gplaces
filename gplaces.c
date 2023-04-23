@@ -485,6 +485,7 @@ static SelectorList parse_file(FILE *fp, const Parser parser) {
 		else if (line[len - 1] == '\n') line[len - 1] = '\0';
 		parser((start && strncmp(line, "\xef\xbb\xbf", 3) == 0) ? line + 3: line, &pre, &sel, &list);
 	}
+
 	return list;
 }
 
