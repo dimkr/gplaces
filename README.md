@@ -33,7 +33,11 @@ gplaces is originally a Gemini port of the [delve](https://github.com/kieselstei
 - ~internal~ configurable external pager for text & menus
 - support for non-interactive operation
 - UTF-8 word wrapping
-- hackable, about *1k lines* of *C* code
+- optional Gopher support
+- optional gophers:// (Gopher+TLS+TOFU) support
+- optional Spartan support
+- optional Finger support
+- hackable, ~about *1k lines* of *C* code~
 - ~100K executable when built with -O3 and -Wl,-s on x86_64
 
 ## How to install?
@@ -112,8 +116,3 @@ additional documentation and more details are available in `man gplaces`. type `
 
 ## License
 - [GPLv3](https://www.gnu.org/licenses/gpl-3.0.html)
-
-## Statistic
-Language|files|blank|comment|code
-:-------|-------:|-------:|-------:|-------:
-C|1|267|61|1193
