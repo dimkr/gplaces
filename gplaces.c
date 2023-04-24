@@ -281,13 +281,13 @@ static int parse_url(Selector *sel, const char *from, const char *input) {
 
 	/* TODO: why does curl_url_set() return CURLE_OUT_OF_MEMORY if the scheme is missing, but only inside the Flatpak sandbox? */
 	if (curl_url_set(sel->cu, CURLUPART_URL, sel->rawurl, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) {
-#if defined(GPLACES_WITH_GOPHER)
+#if defined(GPLACES_WITH_GOPHER) && defined(CURLU_ALLOW_SPACE)
 		if (strncmp(sel->rawurl, "gopher://", 9) == 0) {
 			if (curl_url_set(sel->cu, CURLUPART_URL, sel->rawurl, CURLU_NON_SUPPORT_SCHEME | CURLU_ALLOW_SPACE) == CURLUE_OK) goto valid;
 			return 0;
 		}
 #endif
-#if defined(GPLACES_WITH_GOPHERS)
+#if defined(GPLACES_WITH_GOPHERS) && defined(CURLU_ALLOW_SPACE)
 		if (strncmp(sel->rawurl, "gophers://", 10) == 0) {
 			if (curl_url_set(sel->cu, CURLUPART_URL, sel->rawurl, CURLU_NON_SUPPORT_SCHEME | CURLU_ALLOW_SPACE) == CURLUE_OK) goto valid;
 			return 0;
@@ -296,7 +296,7 @@ static int parse_url(Selector *sel, const char *from, const char *input) {
 		snprintf(buffer, sizeof(buffer), "gemini://%s", sel->rawurl);
 		if (curl_url_set(sel->cu, CURLUPART_URL, buffer, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK) return 0;
 	}
-#if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_GOPHERS)
+#if (defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_GOPHERS)) && defined(CURLU_ALLOW_SPACE)
 valid:
 #endif
 
