@@ -1403,9 +1403,8 @@ static void eval(const char *input, const char *filename, int line_no) {
 	long index;
 
 	if ((index = strtol(input, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (to = find_selector(&menu, (int)index)) != NULL) {
-		if ((to->url || parse_url(to, current, NULL)) && interactive) bestlineHistoryAdd(to->url);
+		if ((to->url || parse_url(to, current, NULL)) && interactive) { bestlineHistoryAdd(to->url); navigate(to); }
 		else if (interactive) bestlineHistoryAdd(input);
-		navigate(to);
 		return;
 	} else if (index > 0 && index != LONG_MAX && *end == '\0') return;
 
