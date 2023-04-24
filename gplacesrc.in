@@ -23,8 +23,6 @@ set antenna							warmedal.se/~antenna/
 set explore							tilde.team/~sumpygump/explore/
 set gemipedia						gemi.dev/cgi-bin/wp.cgi
 set whatis							gemi.dev/cgi-bin/wp.cgi/view
-set youtube							auragem.space/youtube
-set watch							auragem.space/youtube/search
 
 # subscribe to some pages
 sub									rawtext.club/~sloum/spacewalk.gmi
