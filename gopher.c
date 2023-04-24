@@ -86,7 +86,7 @@ static void gopher_type(void *c, Selector *sel, char **mime, Parser *parser) {
 #ifdef GPLACES_USE_LIBMAGIC
 	static char buffer[1024];
 	magic_t mag;
-	ssize_t len, had;
+	ssize_t len, had = 0;
 	const char *tmp = NULL;
 #else
 	static char buffer[2];
@@ -99,13 +99,13 @@ static void gopher_type(void *c, Selector *sel, char **mime, Parser *parser) {
 		if ((len = sel->proto->peek(c, buffer, sizeof(buffer))) <= 0 || (mag = magic_open(MAGIC_MIME_TYPE | MAGIC_NO_CHECK_COMPRESS | MAGIC_ERROR)) == NULL) goto unk;
 		if (magic_load(mag, NULL) == -1) { magic_close(mag); goto unk; }
 		do {
-			had = len;
 			if ((tmp = magic_buffer(mag, buffer, (size_t)len)) == NULL) continue;
 			if (strncmp(tmp, "text/plain", 10) == 0) *parser = parse_plaintext_line;
 			strncpy(buffer, tmp, sizeof(buffer));
 			buffer[sizeof(buffer) - 1] = '\0';
 			*mime = buffer;
-		} while (len < sizeof(buffer) && (len = sel->proto->peek(c, buffer, sizeof(buffer))) > 0 && len > had);
+			had = len;
+		} while (len < (ssize_t)sizeof(buffer) && (len = sel->proto->peek(c, buffer, sizeof(buffer))) > 0 && len > had);
 		magic_close(mag);
 		if (tmp != NULL) return;
 	}
