@@ -90,6 +90,8 @@ static void gopher_type(void *c, Selector *sel, char **mime, Parser *parser) {
 	const char *tmp = NULL;
 #else
 	static char buffer[2];
+
+	(void)c;
 #endif
 
 	if (sel->path[1] == '0' || sel->path[1] == '+') *parser = parse_plaintext_line;
