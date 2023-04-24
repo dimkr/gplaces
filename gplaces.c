@@ -74,6 +74,7 @@ typedef void (*Parser)(char *, int *pre, Selector **, SelectorList *);
 typedef struct Protocol {
 	const char *scheme, *port;
 	int (*read)(void *, void *, int);
+	int (*peek)(void *, void *, int);
 	int (*error)(Selector *, void *, int);
 	void (*close)(void *);
 	void *(*download)(Selector *, char **mime, Parser *, int ask);
@@ -838,6 +839,11 @@ static int ssl_read(void *c, void *buffer, int length) {
 }
 
 
+static int ssl_peek(void *c, void *buffer, int length) {
+	return SSL_peek((SSL *)c, buffer, length);
+}
+
+
 static void ssl_close(void *c) {
 	SSL_free((SSL *)c);
 }
@@ -1006,7 +1012,7 @@ static void *gemini_download(Selector *sel, char **mime, Parser *parser, int ask
 }
 
 
-const Protocol gemini = {"gemini", "1965", ssl_read, ssl_error, ssl_close, gemini_download};
+const Protocol gemini = {"gemini", "1965", ssl_read, ssl_peek, ssl_error, ssl_close, gemini_download};
 
 
 /*============================================================================*/

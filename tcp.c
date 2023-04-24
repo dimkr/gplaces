@@ -33,6 +33,11 @@ static int tcp_read(void *c, void *buffer, int length) {
 }
 
 
+static int tcp_peek(void *c, void *buffer, int length) {
+	return (int)recv((int)(intptr_t)c, buffer, (size_t)length, MSG_PEEK);
+}
+
+
 static void tcp_close(void *c) {
 	close((int)(intptr_t)c);
 }

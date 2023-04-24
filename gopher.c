@@ -82,15 +82,39 @@ static char *gopher_request(Selector *sel, int ask, int *len) {
 
 
 /*============================================================================*/
-static void gopher_type(Selector *sel, char **mime, Parser *parser) {
+static void gopher_type(void *c, Selector *sel, char **mime, Parser *parser) {
+#ifdef GPLACES_USE_LIBMAGIC
+	static char buffer[1024];
+	magic_t mag;
+	ssize_t len, had;
+	const char *tmp = NULL;
+#else
 	static char buffer[2];
+#endif
+
+	if (sel->path[1] == '0' || sel->path[1] == '+') *parser = parse_plaintext_line;
+	else if (sel->path[1] == '1' || sel->path[1] == '7' || sel->path[1] == '\0' || sel->path[2] != '/') *parser = parse_gophermap_line;
+#ifdef GPLACES_USE_LIBMAGIC
+	else {
+		if ((len = sel->proto->peek(c, buffer, sizeof(buffer))) <= 0 || (mag = magic_open(MAGIC_MIME_TYPE | MAGIC_NO_CHECK_COMPRESS | MAGIC_ERROR)) == NULL) goto unk;
+		if (magic_load(mag, NULL) == -1) { magic_close(mag); goto unk; }
+		do {
+			had = len;
+			if ((tmp = magic_buffer(mag, buffer, (size_t)len)) == NULL) continue;
+			if (strncmp(tmp, "text/plain", 10) == 0) *parser = parse_plaintext_line;
+			strncpy(buffer, tmp, sizeof(buffer));
+			buffer[sizeof(buffer) - 1] = '\0';
+			*mime = buffer;
+		} while (len < sizeof(buffer) && (len = sel->proto->peek(c, buffer, sizeof(buffer))) > 0 && len > had);
+		magic_close(mag);
+		if (tmp != NULL) return;
+	}
+unk:
+#endif
 
 	buffer[0] = (sel->path[1] != '\0' && sel->path[1] != '/' && sel->path[2] == '/') ? sel->path[1] : '1';
 	buffer[1] = '\0';
 	*mime = buffer;
-
-	if (sel->path[1] == '0' || sel->path[1] == '+') *parser = parse_plaintext_line;
-	else if (sel->path[1] == '1' || sel->path[1] == '7' || sel->path[1] == '\0' || sel->path[2] != '/') *parser = parse_gophermap_line;
 }
 
 
@@ -105,11 +129,11 @@ static void *gopher_download(Selector *sel, char **mime, Parser *parser, int ask
 		close(fd); fd = -1;
 	}
 
-	gopher_type(sel, mime, parser);
+	if (fd != -1) gopher_type((void *)(intptr_t)fd, sel, mime, parser);
 
 fail:
 	return fd == -1 ? NULL : (void *)(intptr_t)fd;
 }
 
 
-const Protocol gopher = {"gopher", "70", tcp_read, tcp_error, tcp_close, gopher_download};
+const Protocol gopher = {"gopher", "70", tcp_read, tcp_peek, tcp_error, tcp_close, gopher_download};

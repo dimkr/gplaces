@@ -110,4 +110,4 @@ fail:
 }
 
 
-const Protocol spartan = {"spartan", "300", tcp_read, tcp_error, tcp_close, spartan_download};
+const Protocol spartan = {"spartan", "300", tcp_read, tcp_peek, tcp_error, tcp_close, spartan_download};
