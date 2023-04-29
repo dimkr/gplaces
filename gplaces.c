@@ -362,10 +362,10 @@ static int redirect(Selector *sel, const char *to, size_t len) {
 	curl_free(sel->path); sel->path = NULL;
 	curl_url_cleanup(sel->cu); sel->cu = NULL;
 	free(sel->rawurl); if ((sel->rawurl = len > 0 ? strndup(to, len) : strdup(to)) == NULL) error(1, "cannot allocate new string");
-	if (!parse_url(sel, from, NULL)) { curl_free(from); return 0; }
+	if (!parse_url(sel, from, NULL)) { curl_free(from); return 40; }
 	curl_free(from);
 	fprintf(stderr, "redirected to `%s`\n", sel->url);
-	return 1;
+	return 31;
 }
 
 
@@ -380,11 +380,11 @@ static int perm_redirect(Selector *sel, const char *to) {
 	else if (p != NULL) {
 		for (end = p; !found && (start = memmem(end, size - (end - p), sel->url, len)) != NULL; end = start + len + 1) {
 			if (!(found = ((start == p || *(start - 1) == '\n') && size - (start - p) >= len + 2 && start[len] == ' ' && start[len + 1] != '\n'))) continue;
-			ret = redirect(sel, &start[len + 1], strcspn(&start[len + 1], " \n")) ? 31 : 40;
+			ret = redirect(sel, &start[len + 1], strcspn(&start[len + 1], " \n"));
 		}
 		munmap((void *)p, size);
 	}
-	if (to != NULL && !found) ret = (append_line(fd, "%s %s\n", sel->url, to) && redirect(sel, to, -1)) ? 31 : 40;
+	if (to != NULL && !found) ret = append_line(fd, "%s %s\n", sel->url, to) ? redirect(sel, to, -1) : 40;
 	close(fd);
 	return ret;
 }
@@ -872,7 +872,7 @@ static int do_download(Selector *sel, SSL **body, char **mime, int ask) {
 	SSL *ssl = NULL;
 
 	if ((redir = perm_redirect(sel, NULL)) == 31) return 31;
-	else if (redir != 20) goto fail;
+	else if (redir == 40) goto fail;
 
 	if ((home = getenv("XDG_DATA_HOME")) != NULL) {
 		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s", home, sel->host)) >= (int)sizeof(crtpath)) goto fail;;
@@ -957,8 +957,8 @@ loaded:
 
 		case '3':
 			if (!*meta) goto fail;
-			if (data[1] == '1' && !perm_redirect(sel, meta)) goto fail;
-			else if (data[1] != '1' && !redirect(sel, meta, total - 2)) goto fail;
+			if (data[1] == '1' && perm_redirect(sel, meta) == 40) goto fail;
+			else if (data[1] != '1' && redirect(sel, meta, total - 2) == 40) goto fail;
 			break;
 
 		case '6':
