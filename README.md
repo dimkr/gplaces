@@ -70,13 +70,28 @@ use the arrow keys to scroll, `/` to search and `q` to exit less and return to t
 
 in addition, gplaces adds the page URL to the history: use the `Up` and `Down` keys to navigate through the history, or `CTRL+r` to search through it. these are only three examples of key bindings from shells like bash(1) which work in gplaces, too.
 
-gplaces displays only Gemtext or plain text files: it downloads other kinds of files to temporary files and runs external "handler" programs (one for each file type) defined in the gplaces configuration file.
+    cached 2023-04-29 19:41:44
+    gemini.circumlunar.space/> 
+
+if you visit the same page again, gplaces will return a cached copy and show the time the page was fetched. gplaces remembers up to `histsize` pages, so you can return to previously viewed pages immediately, without downloading them again. type `get` and press `ENTER` to force gplaces to fetch a cached page again.
+
+    > gemini://konpeito.media/konpeito-09-a.mp3
+
+gplaces displays only Gemtext, gophermaps or plain text files: it downloads other kinds of files (like images, audio and video) to temporary files and runs external "handler" programs (one for each file type) defined in the gplaces configuration file.
 
     > save gemini.circumlunar.space/docs/specification.gmi
-    enter filename (press ENTER for `/home/user/Downloads/specification.gmi`):
+    enter filename: /home/user/Downloads/specification.gmi
 
 to download a file instead of displaying it or saving it to a temporary file, type `save`, followed by its URL, then press `ENTER`.
 
+    > save gemini.circumlunar.space/docs/specification.gmi /tmp/spec.gmi
+
+you can also specify the destination path and skip the prompt.
+
+    > save gemini://konpeito.media/konpeito-09-a.mp3 -
+ 
+alternatively, to stream a file into standard input of the handler program without saving to a file on disk and waiting for the download to complete, use `-` as the download destination. this is useful for audio or video streaming, and works only with some programs and some file formats.
+ 
     gemini.circumlunar.space/> 2 docs/
 
 gplaces associates a number with each link in the last viewed page. type the number of a link to show its URL, then press `ENTER` to follow it.
