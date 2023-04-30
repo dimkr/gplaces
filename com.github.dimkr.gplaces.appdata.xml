@@ -36,11 +36,12 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
-    <release date="2023-4-24" version="0.17.0">
+    <release date="2023-05-01" version="0.17.0">
       <description>
         <ul>
           <li>Support for more protocols: Gopher, gophers://, Spartan and Finger</li>
           <li>Support for permanent redirects</li>
+          <li>Support for quick navigation using cached pages</li>
           <li>The download destination is now easier to change</li>
           <li>More efficient parsing</li>
           <li>Fix for broken handling of redirects</li>
