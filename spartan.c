@@ -29,16 +29,16 @@ static void parse_spartan_line(char *line, int *pre, Selector **sel, SelectorLis
 
 
 /*============================================================================*/
-static int do_spartan_download(Selector *sel, int *body, char **mime, const char *input, size_t inputlen) {
+static int do_spartan_download(URL *url, int *body, char **mime, const char *input, size_t inputlen, int ask) {
 	static char buffer[1024], data[1 + 1 + 1024 + 2 + 1]; /* 9 meta\r\n\0 */
 	char *crlf, *meta = &data[2];
 	int fd = -1, len, total, received, ret = 40;
 
-	len = snprintf(buffer, sizeof(buffer), "%s %s %zu\r\n", sel->host, sel->path, inputlen);
-	if ((fd = tcp_connect(sel)) == -1) goto fail;
+	len = snprintf(buffer, sizeof(buffer), "%s %s %zu\r\n", url->host, url->path, inputlen);
+	if ((fd = tcp_connect(url)) == -1) goto fail;
 	if (sendall(fd, buffer, len, MSG_NOSIGNAL) != len || (inputlen > 0 && sendall(fd, input, inputlen, MSG_NOSIGNAL) != (ssize_t)inputlen)) {
-		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", sel->host, sel->port);
-		else error(0, "cannot send request to `%s`:`%s`: %s", sel->host, sel->port, strerror(errno));
+		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
+		else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
 		goto fail;
 	}
 
@@ -60,12 +60,12 @@ static int do_spartan_download(Selector *sel, int *body, char **mime, const char
 
 		case '3':
 			if (!*meta) goto fail;
-			if (!redirect(sel, meta, total - 2)) goto fail;
-			fprintf(stderr, "redirected to `%s`\n", sel->url);
+			if (!redirect(url, meta, total - 2, ask)) goto fail;
+			fprintf(stderr, "redirected to `%s`\n", url->url);
 			break;
 
 		default:
-			error(0, "cannot download `%s`: %s", sel->url, *meta ? meta : data);
+			error(0, "cannot download `%s`: %s", url->url, *meta ? meta : data);
 	}
 
 	ret = data[0] - '0';
@@ -76,32 +76,32 @@ fail:
 }
 
 
-static void *spartan_download(Selector *sel, char **mime, Parser *parser, int ask) {
+static void *spartan_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
 	char *input = NULL, *query = NULL;
 	size_t inputlen = 0;
 	static int fd = -1;
 	int status, redirs = 0;
 
-	switch (curl_url_get(sel->cu, CURLUPART_QUERY, &query, 0)) {
+	switch (curl_url_get(url->cu, CURLUPART_QUERY, &query, 0)) {
 	case CURLUE_OK: input = query; break;
 	case CURLUE_NO_QUERY: break;
 	default: return NULL;
 	}
 	if (sel->prompt && (input == NULL || *input == '\0')) {
-		if (!ask || (input = bestline(color ? "\33[35mData>\33[0m " : "Data> ")) == NULL) goto fail;
-		if (interactive) bestlineHistoryAdd(input);
+		if (!ask || (input = bestline(color ? "\33[35mData>\33[0m " : "Data> ")) == NULL || !set_input(url, input)) goto fail;
+		if (interactive) { bestlineHistoryAdd(input); bestlineHistoryAdd(url->url); }
 	}
 	if (input != NULL) inputlen = strlen(input);
 
 	do {
-		status = do_spartan_download(sel, &fd, mime, input, inputlen);
+		status = do_spartan_download(url, &fd, mime, input, inputlen, ask);
 		if (status == 2) break;
 	} while (status == 3 && ++redirs < 5);
 
 	if (fd != -1 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_spartan_line;
 	else if (fd != -1 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
 
-	if (redirs == 5) error(0, "too many redirects from `%s`", sel->url);
+	if (redirs == 5) error(0, "too many redirects from `%s`", url->url);
 
 fail:
 	if (input != query) free(input);

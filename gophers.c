@@ -19,7 +19,7 @@
 
 ================================================================================
 */
-static void *gophers_download(Selector *sel, char **mime, Parser *parser, int ask) {
+static void *gophers_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
 	char *buffer;
 	SSL_CTX *ctx = NULL;
 	SSL *ssl = NULL;
@@ -28,14 +28,14 @@ static void *gophers_download(Selector *sel, char **mime, Parser *parser, int as
 	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return NULL;
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 
-	if ((buffer = gopher_request(sel, ask, &len)) == NULL || (ssl = ssl_connect(sel, ctx, ask)) == NULL) goto fail;
+	if ((buffer = gopher_request(sel, url, ask, &len)) == NULL || (ssl = ssl_connect(url, ctx, ask)) == NULL) goto fail;
 	if ((err = SSL_get_error(ssl, SSL_write(ssl, buffer, len))) != SSL_ERROR_NONE) {
-		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "cannot send request to `%s`:`%s`: cancelled", sel->host, sel->port);
-		else error(0, "cannot send request to `%s`:`%s`: error %d", sel->host, sel->port, err);
+		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
+		else error(0, "cannot send request to `%s`:`%s`: error %d", url->host, url->port, err);
 		SSL_free(ssl); ssl = NULL;
 	}
 
-	if (ssl != NULL) gopher_type(ssl, sel, mime, parser);
+	if (ssl != NULL) gopher_type(ssl, url, mime, parser);
 
 fail:
 	SSL_CTX_free(ctx);
