@@ -19,23 +19,24 @@
 
 ================================================================================
 */
-static void *finger_download(Selector *sel, char **mime, Parser *parser, int ask) {
+static void *finger_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
 	static char buffer[1024 + 3]; /* path\r\n\0 */
 	char *user = NULL;
 	int fd = -1, len = 0;
 
+	(void)sel;
 	(void)ask;
 
-	switch (curl_url_get(sel->cu, CURLUPART_USER, &user, 0)) {
+	switch (curl_url_get(url->cu, CURLUPART_USER, &user, 0)) {
 	case CURLUE_OK: len = snprintf(buffer, sizeof(buffer), "%s\r\n", user); break;
 	case CURLUE_NO_USER: break;
 	default: return NULL;
 	}
 
-	if ((fd = tcp_connect(sel)) == -1) return NULL;
+	if ((fd = tcp_connect(url)) == -1) return NULL;
 	if ((len == 0 && sendall(fd, "\r\n", 2, MSG_NOSIGNAL) != 2) || (len > 0 && sendall(fd, buffer, len, MSG_NOSIGNAL) != len)) {
-		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", sel->host, sel->port);
-		else error(0, "cannot send request to `%s`:`%s`: %s", sel->host, sel->port, strerror(errno));
+		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
+		else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
 		close(fd);
 		return NULL;
 	}

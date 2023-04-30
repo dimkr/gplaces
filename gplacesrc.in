@@ -46,3 +46,6 @@ set pager							"less -r"
 
 # download timeout
 set timeout							15
+
+# history size; this is the maximum number of cached pages
+set histsize							10

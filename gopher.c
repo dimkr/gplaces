@@ -57,23 +57,23 @@ fail:
 
 
 /*============================================================================*/
-static char *gopher_request(Selector *sel, int ask, int *len) {
+static char *gopher_request(const Selector *sel, URL *url, int ask, int *len) {
 	static char buffer[1024 + 3]; /* path\r\n\0 */
 	char *query = NULL, *criteria = NULL;
 
-	if (sel->prompt || strncmp(sel->path, "/7/", 3) == 0) {
-		switch (curl_url_get(sel->cu, CURLUPART_QUERY, &query, 0)) {
+	if (sel->prompt || strncmp(url->path, "/7/", 3) == 0) {
+		switch (curl_url_get(url->cu, CURLUPART_QUERY, &query, 0)) {
 		case CURLUE_OK: criteria = query; break;
 		case CURLUE_NO_QUERY: break;
 		default: return NULL;
 		}
 		if (criteria == NULL || *criteria == '\0')  {
-			if (!ask || (criteria = bestline(color ? "\33[35mSearch criteria>\33[0m " : "Search criteria> ")) == NULL) { curl_free(query); return NULL; }
-			if (interactive) bestlineHistoryAdd(criteria);
+			if (!ask || (criteria = bestline(color ? "\33[35mSearch criteria>\33[0m " : "Search criteria> ")) == NULL || !set_input(url, criteria)) { curl_free(query); return NULL; }
+			if (interactive) { bestlineHistoryAdd(criteria); bestlineHistoryAdd(url->url); }
 		}
 	}
-	if (criteria && *criteria != '\0') *len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", strncmp(sel->path, "/7/", 3) == 0 ? sel->path + 2 : sel->path, criteria);
-	else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", (sel->path[1] != '/' && sel->path[1] != '\0' && sel->path[2] == '/') ? sel->path + 2 : sel->path);
+	if (criteria && *criteria != '\0') *len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", strncmp(url->path, "/7/", 3) == 0 ? url->path + 2 : url->path, criteria);
+	else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", (url->path[1] != '/' && url->path[1] != '\0' && url->path[2] == '/') ? url->path + 2 : url->path);
 
 	if (criteria != query) free(criteria);
 	curl_free(query);
@@ -82,7 +82,7 @@ static char *gopher_request(Selector *sel, int ask, int *len) {
 
 
 /*============================================================================*/
-static void gopher_type(void *c, Selector *sel, char **mime, Parser *parser) {
+static void gopher_type(void *c, const URL *url, char **mime, Parser *parser) {
 #ifdef GPLACES_USE_LIBMAGIC
 	static char buffer[1024];
 	magic_t mag;
@@ -94,11 +94,11 @@ static void gopher_type(void *c, Selector *sel, char **mime, Parser *parser) {
 	(void)c;
 #endif
 
-	if (sel->path[1] == '0' || sel->path[1] == '+') *parser = parse_plaintext_line;
-	else if (sel->path[1] == '1' || sel->path[1] == '7' || sel->path[1] == '\0' || sel->path[2] != '/') *parser = parse_gophermap_line;
+	if (url->path[1] == '0' || url->path[1] == '+') *parser = parse_plaintext_line;
+	else if (url->path[1] == '1' || url->path[1] == '7' || url->path[1] == '\0' || url->path[2] != '/') *parser = parse_gophermap_line;
 #ifdef GPLACES_USE_LIBMAGIC
 	else {
-		if ((len = sel->proto->peek(c, buffer, sizeof(buffer))) <= 0 || (mag = magic_open(MAGIC_MIME_TYPE | MAGIC_NO_CHECK_COMPRESS | MAGIC_ERROR)) == NULL) goto unk;
+		if ((len = url->proto->peek(c, buffer, sizeof(buffer))) <= 0 || (mag = magic_open(MAGIC_MIME_TYPE | MAGIC_NO_CHECK_COMPRESS | MAGIC_ERROR)) == NULL) goto unk;
 		if (magic_load(mag, NULL) == -1) { magic_close(mag); goto unk; }
 		do {
 			if ((tmp = magic_buffer(mag, buffer, (size_t)len)) == NULL) continue;
@@ -107,31 +107,31 @@ static void gopher_type(void *c, Selector *sel, char **mime, Parser *parser) {
 			buffer[sizeof(buffer) - 1] = '\0';
 			*mime = buffer;
 			had = len;
-		} while (len < (ssize_t)sizeof(buffer) && (len = sel->proto->peek(c, buffer, sizeof(buffer))) > 0 && len > had);
+		} while (len < (ssize_t)sizeof(buffer) && (len = url->proto->peek(c, buffer, sizeof(buffer))) > 0 && len > had);
 		magic_close(mag);
 		if (tmp != NULL) return;
 	}
 unk:
 #endif
 
-	buffer[0] = (sel->path[1] != '\0' && sel->path[1] != '/' && sel->path[2] == '/') ? sel->path[1] : '1';
+	buffer[0] = (url->path[1] != '\0' && url->path[1] != '/' && url->path[2] == '/') ? url->path[1] : '1';
 	buffer[1] = '\0';
 	*mime = buffer;
 }
 
 
-static void *gopher_download(Selector *sel, char **mime, Parser *parser, int ask) {
+static void *gopher_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
 	char *buffer;
 	int fd = -1, len;
 
-	if ((buffer = gopher_request(sel, ask, &len)) == NULL || (fd = tcp_connect(sel)) == -1) goto fail;
+	if ((buffer = gopher_request(sel, url, ask, &len)) == NULL || (fd = tcp_connect(url)) == -1) goto fail;
 	if (sendall(fd, buffer, len, MSG_NOSIGNAL) != len) {
-		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", sel->host, sel->port);
-		else error(0, "cannot send request to `%s`:`%s`: %s", sel->host, sel->port, strerror(errno));
+		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
+		else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
 		close(fd); fd = -1;
 	}
 
-	if (fd != -1) gopher_type((void *)(intptr_t)fd, sel, mime, parser);
+	if (fd != -1) gopher_type((void *)(intptr_t)fd, url, mime, parser);
 
 fail:
 	return fd == -1 ? NULL : (void *)(intptr_t)fd;
