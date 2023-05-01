@@ -1239,7 +1239,7 @@ static SelectorList download_text(const Selector *sel, URL *url, int ask, int ha
 	SelectorList list = SIMPLEQ_HEAD_INITIALIZER(list);
 	Parser parser = NULL;
 	Selector *it;
-	char *mime, *p = NULL, *start, *end;
+	char *mime, *start, *end;
 	void *c = NULL;
 	size_t parsed, length = 0, total = 0, prog = 0;
 	int received, pre = 0, width, ok = 0, links = 0;
@@ -1276,7 +1276,6 @@ static SelectorList download_text(const Selector *sel, URL *url, int ask, int ha
 	}
 
 out:
-	free(p);
 	if (c != NULL) url->proto->close(c);
 	if (!ok) { free_selectors(&list); SIMPLEQ_INIT(&list); }
 	return list;
