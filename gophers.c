@@ -28,7 +28,7 @@ static void *gophers_download(const Selector *sel, URL *url, char **mime, Parser
 	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return NULL;
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 
-	if ((buffer = gopher_request(sel, url, ask, &len)) == NULL || (ssl = ssl_connect(url, ctx, ask)) == NULL) goto fail;
+	if ((buffer = gopher_request(sel, url, ask, &len, 10)) == NULL || (ssl = ssl_connect(url, ctx, ask)) == NULL) goto fail;
 	if ((err = SSL_get_error(ssl, SSL_write(ssl, buffer, len))) != SSL_ERROR_NONE) {
 		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
 		else error(0, "cannot send request to `%s`:`%s`: error %d", url->host, url->port, err);

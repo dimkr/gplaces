@@ -57,7 +57,7 @@ fail:
 
 
 /*============================================================================*/
-static char *gopher_request(const Selector *sel, URL *url, int ask, int *len) {
+static char *gopher_request(const Selector *sel, URL *url, int ask, int *len, size_t skip) {
 	static char buffer[1024 + 3]; /* path\r\n\0 */
 	char *query = NULL, *input = NULL;
 
@@ -72,8 +72,8 @@ static char *gopher_request(const Selector *sel, URL *url, int ask, int *len) {
 			if (interactive) { bestlineHistoryAdd(input); bestlineHistoryAdd(url->url); }
 		}
 	}
-	if (input && *input != '\0') *len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", strncmp(url->path, "/7/", 3) == 0 ? url->path + 2 : url->path, input);
-	else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", (url->path[1] != '/' && url->path[1] != '\0' && url->path[2] == '/') ? url->path + 2 : url->path);
+	if (input && *input != '\0') *len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", strncmp(url->path, "/7/", 3) == 0 ? sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2 : sel->rawurl + skip + strcspn(sel->rawurl + skip, "/"), input);
+	else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", (url->path[1] != '/' && url->path[1] != '\0' && url->path[2] == '/') ? sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2 : sel->rawurl + skip + strcspn(sel->rawurl + skip, "/"));
 
 	if (input != query) free(input);
 	curl_free(query);
@@ -124,7 +124,7 @@ static void *gopher_download(const Selector *sel, URL *url, char **mime, Parser 
 	char *buffer;
 	int fd = -1, len;
 
-	if ((buffer = gopher_request(sel, url, ask, &len)) == NULL || (fd = tcp_connect(url)) == -1) goto fail;
+	if ((buffer = gopher_request(sel, url, ask, &len, 9)) == NULL || (fd = tcp_connect(url)) == -1) goto fail;
 	if (sendall(fd, buffer, len, MSG_NOSIGNAL) != len) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
 		else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
