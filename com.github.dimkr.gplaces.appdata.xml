@@ -36,6 +36,16 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-05-02" version="0.17.1">
+      <description>
+        <ul>
+          <li>Fix for crash on save</li>
+          <li>Fix for bad handling of Gopher selectors containing ?</li>
+          <li>Shorter Gopher search prompt</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-05-01" version="0.17.0">
       <description>
         <ul>
