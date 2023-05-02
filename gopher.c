@@ -57,26 +57,17 @@ fail:
 
 
 /*============================================================================*/
-static char *gopher_request(const Selector *sel, URL *url, int ask, int *len, size_t skip) {
+static char *gopher_request(const Selector *sel, const URL *url, int ask, int *len, size_t skip) {
 	static char buffer[1024 + 3]; /* path\r\n\0 */
-	char *query = NULL, *input = NULL;
+	char *input = NULL;
 
 	if (sel->prompt || strncmp(url->path, "/7/", 3) == 0) {
-		switch (curl_url_get(url->cu, CURLUPART_QUERY, &query, 0)) {
-		case CURLUE_OK: input = query; break;
-		case CURLUE_NO_QUERY: break;
-		default: return NULL;
-		}
-		if (input == NULL || *input == '\0')  {
-			if (!ask || (input = bestline(color ? "\33[35mQuery>\33[0m " : "Query> ")) == NULL || !set_input(url, input)) { curl_free(query); return NULL; }
-			if (interactive) { bestlineHistoryAdd(input); bestlineHistoryAdd(url->url); }
-		}
-	}
-	if (input && *input != '\0') *len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", strncmp(url->path, "/7/", 3) == 0 ? sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2 : sel->rawurl + skip + strcspn(sel->rawurl + skip, "/"), input);
-	else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", (url->path[1] != '/' && url->path[1] != '\0' && url->path[2] == '/') ? sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2 : sel->rawurl + skip + strcspn(sel->rawurl + skip, "/"));
+		if (!ask || (input = bestline(color ? "\33[35mQuery>\33[0m " : "Query> ")) == NULL) return NULL;
+		if (interactive) bestlineHistoryAdd(input);
+		*len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", strncmp(url->path, "/7/", 3) == 0 ? sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2 : sel->rawurl + skip + strcspn(sel->rawurl + skip, "/"), input);
+		free(input);
+	} else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", (url->path[1] != '/' && url->path[1] != '\0' && url->path[2] == '/') ? sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2 : sel->rawurl + skip + strcspn(sel->rawurl + skip, "/"));
 
-	if (input != query) free(input);
-	curl_free(query);
 	return buffer;
 }
 
