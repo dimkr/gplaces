@@ -91,7 +91,6 @@ struct Selector {
 #endif
 	char type, *repr, *rawurl;
 	CURLU *cu;
-	const Protocol *proto;
 };
 
 struct URL {
@@ -1197,9 +1196,9 @@ static void download_to_file(const Selector *sel, URL *url, const char *def) {
 	}
 	if ((fp = fopen(filename, "wb")) == NULL) error(0, "cannot create file `%s`: %s", filename, strerror(errno));
 	else {
-		if ((c = sel->proto->download(sel, url, &mime, &parser, 1)) != NULL) {
+		if ((c = url->proto->download(sel, url, &mime, &parser, 1)) != NULL) {
 			ret = save_body(url, c, fp);
-			sel->proto->close(c);
+			url->proto->close(c);
 		}
 
 		fclose(fp);
