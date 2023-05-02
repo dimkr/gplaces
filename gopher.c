@@ -31,13 +31,13 @@ static void parse_gophermap_line(char *line, int *pre, Selector **sel, SelectorL
 	*sel = new_selector(*line == 'i' ? '`' : 'l');
 	(*sel)-> prompt = *line == '7';
 
-	path = line + 1 + strcspn(line + 1, "\t");
+	if (*(path = line + 1 + strcspn(line + 1, "\t")) == '\0') goto fail;
 	*path = '\0';
 	++path;
-	host = path + strcspn(path, "\t");
+	if (*(host = path + strcspn(path, "\t")) == '\0') goto fail;
 	*host = '\0';
 	++host;
-	if ((port = host + strcspn(host, "\t")) == host) goto fail;
+	if (*(port = host + strcspn(host, "\t")) == '\0') goto fail;
 	*port = '\0';
 	++port;
 	*(port + strcspn(port, "\t")) = '\0';
