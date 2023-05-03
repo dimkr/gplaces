@@ -36,6 +36,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-05-03" version="0.17.2">
+      <description>
+        <ul>
+          <li>Fix crash when the current page is refreshed many times</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-05-02" version="0.17.1">
       <description>
         <ul>
