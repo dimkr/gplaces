@@ -86,7 +86,7 @@ typedef struct Protocol {
 struct Selector {
 	SIMPLEQ_ENTRY(Selector) next;
 	int level;
-#if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN)
+#if defined(GPLACES_WITH_SPARTAN)
 	char prompt;
 #endif
 	char type, *repr, *rawurl;

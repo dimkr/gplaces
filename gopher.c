@@ -29,7 +29,6 @@ static void parse_gophermap_line(char *line, int *pre, Selector **sel, SelectorL
 	if ((line[0] == '.' && line[1] == '\0') || line[0] == '\0') return;
 
 	*sel = new_selector(*line == 'i' ? '`' : 'l');
-	(*sel)-> prompt = *line == '7';
 
 	if (*(path = line + 1 + strcspn(line + 1, "\t")) == '\0') goto fail;
 	*path = '\0';
@@ -44,7 +43,7 @@ static void parse_gophermap_line(char *line, int *pre, Selector **sel, SelectorL
 
 	(*sel)->repr = str_copy(line + 1);
 
-	if ((*line == '1' || *line == '0' || *line == '7' || *line == '9' || *line == 'g' || *line == 'I' || *line == '8' || *line == '2' || *line == '6' || *line == '5' || *line == '4' || *line == 'T') && asprintf(&(*sel)->rawurl, "%s://%s:%s/%c%s", "gopher", host, port, *line, *path == '\0' ? "/" : path) < 0) { (*sel)->rawurl = NULL; goto fail; }
+	if ((*line == '1' || *line == '0' || *line == '7' || *line == '9' || *line == 'g' || *line == 'I' || *line == '8' || *line == '2' || *line == '6' || *line == '5' || *line == '4' || *line == 'T') && asprintf(&(*sel)->rawurl, "%s://%s:%s/%c%s", "gopher", host, port, *line, path) < 0) { (*sel)->rawurl = NULL; goto fail; }
 	else if (*line == 'h' && strncmp(path, "URL:", 4) == 0 && !copy_url(*sel, path + 4)) goto fail;
 
 	SIMPLEQ_INSERT_TAIL(list, *sel, next);
@@ -61,12 +60,13 @@ static char *gopher_request(const Selector *sel, const URL *url, int ask, int *l
 	static char buffer[1024 + 3]; /* path\r\n\0 */
 	char *input = NULL;
 
-	if (sel->prompt || strncmp(url->path, "/7/", 3) == 0) {
+	if (url->path[0] == '/' && url->path[1] == '7') {
 		if (!ask || (input = bestline(color ? "\33[35mQuery>\33[0m " : "Query> ")) == NULL) return NULL;
 		if (interactive) bestlineHistoryAdd(input);
-		*len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", strncmp(url->path, "/7/", 3) == 0 ? sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2 : sel->rawurl + skip + strcspn(sel->rawurl + skip, "/"), input);
+		*len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2, input);
 		free(input);
-	} else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", (url->path[1] != '/' && url->path[1] != '\0' && url->path[2] == '/') ? sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2 : sel->rawurl + skip + strcspn(sel->rawurl + skip, "/"));
+	} else if (url->path[0] == '/' && url->path[1] != '\0') *len = snprintf(buffer, sizeof(buffer), "%s\r\n", sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2);
+	else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", sel->rawurl + skip + strcspn(sel->rawurl + skip, "/"));
 
 	return buffer;
 }
