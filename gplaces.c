@@ -36,6 +36,7 @@
 #include <sys/ioctl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <signal.h>
@@ -76,6 +77,7 @@ typedef void (*Parser)(char *, int *pre, Selector **, SelectorList *);
 
 typedef struct Protocol {
 	const char *scheme, *port;
+	int (*fd)(void *);
 	int (*read)(void *, void *, int);
 	int (*peek)(void *, void *, int);
 	int (*error)(const URL *, void *, int);
@@ -642,13 +644,14 @@ static void reap(const char *command, pid_t pid, int silent) {
 }
 
 
-static pid_t start_handler(const char *handler, const char *filename, const Selector *sel, const URL *url, int stdin) {
+static pid_t start_handler(const char *handler, const char *filename, const Selector *sel, const URL *url, int fd, int redirect) {
 	static char command[1024], buffer[sizeof("/proc/self/fd/2147483647")];
 	size_t l;
 	pid_t pid;
 
-	if (stdin != -1) {
-		sprintf(buffer, "/proc/self/fd/%d", stdin);
+	if (fd != -1 && redirect) filename = "-";
+	else if (fd != -1) {
+		sprintf(buffer, "/proc/self/fd/%d", fd);
 		filename = buffer;
 	}
 
@@ -672,10 +675,11 @@ static pid_t start_handler(const char *handler, const char *filename, const Sele
 	command[l] = '\0';
 
 	if ((pid = fork()) == 0) {
+		if (fd != -1 && redirect && dup2(fd, STDIN_FILENO) == -1) exit(EXIT_FAILURE);
 #ifdef GPLACES_USE_FLATPAK_SPAWN
-		if (stdin == -1) execl("/usr/bin/flatpak-spawn", "flatpak-spawn", "--host", "--", "sh", "-c", command, (char *)NULL);
+		if (fd == -1) execl("/usr/bin/flatpak-spawn", "flatpak-spawn", "--host", "--", "sh", "-c", command, (char *)NULL);
 		else {
-			sprintf(buffer, "--forward-fd=%d", stdin);
+			sprintf(buffer, "--forward-fd=%d", fd);
 			execl("/usr/bin/flatpak-spawn", "flatpak-spawn", "--host", buffer, "--", "sh", "-c", command, (char *)NULL);
 		}
 #else
@@ -689,7 +693,7 @@ static pid_t start_handler(const char *handler, const char *filename, const Sele
 
 static void execute_handler(const char *handler, const char *filename, const Selector *sel, const URL *url) {
 	pid_t pid;
-	if ((pid = start_handler(handler, filename, sel, url, -1)) > 0) reap(handler, pid, 0);
+	if ((pid = start_handler(handler, filename, sel, url, -1, 0)) > 0) reap(handler, pid, 0);
 }
 
 
@@ -909,6 +913,21 @@ static void mkcert(const char *crtpath, const char *keypath) {
 }
 
 
+static int ssl_fd(void *c) {
+#if defined(TCP_ULP)
+	char opt[4];
+	socklen_t len = sizeof(opt);
+	int s;
+	if ((s = SSL_get_fd((SSL *)c)) == -1) return s;
+	if (getsockopt(s, SOL_TCP, TCP_ULP, opt, &len) == -1) return -1;
+	if (len != 4 || memcmp(opt, "tls", 4) != 0) return -1;
+	return s;
+#else
+	return -1;
+#endif
+}
+
+
 static int ssl_error(const URL *url, void *c, int err) {
 	if ((err = SSL_get_error((SSL *)c, err)) == SSL_ERROR_ZERO_RETURN) return 0;
 	if (err == SSL_ERROR_SSL) { error(0, "protocol error while downloading `%s`", url->url); return 0; }; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
@@ -1096,7 +1115,7 @@ static void *gemini_download(const Selector *sel, URL *url, char **mime, Parser 
 }
 
 
-const Protocol gemini = {"gemini", "1965", ssl_read, ssl_peek, ssl_error, ssl_close, gemini_download};
+const Protocol gemini = {"gemini", "1965", ssl_fd, ssl_read, ssl_peek, ssl_error, ssl_close, gemini_download};
 
 
 /*============================================================================*/
@@ -1149,23 +1168,31 @@ static void stream_to_handler(const Selector *sel, URL *url, const char *filenam
 	FILE *fp;
 	pid_t pid;
 
-	if (pipe(fds) == -1) return;
-	if (fcntl(fds[1], F_SETFD, FD_CLOEXEC) == 0 && (fp = fdopen(fds[1], "w")) != NULL) {
-		setbuf(fp, NULL);
-		if ((c = url->proto->download(sel, url, &mime, &parser, 1)) != NULL) {
-			if ((handler = find_mime_handler(mime)) != NULL && (pid = start_handler(handler, filename, sel, url, fds[0])) > 0) {
-				close(fds[0]); fds[0] = -1;
-				save_body(url, c, fp);
-				fclose(fp); fp = NULL;
-				url->proto->close(c); /* close the connection while the handler is running */
-				reap(handler, pid, 0);
-			} else url->proto->close(c);
-		}
-		if (fds[0] != -1) close(fds[0]);
-		if (fp != NULL) fclose(fp);
+	if ((c = url->proto->download(sel, url, &mime, &parser, 1)) == NULL) return;
+	if ((handler = find_mime_handler(mime)) == NULL) { url->proto->close(c); return; }
+	if ((fds[0] = url->proto->fd(c)) != -1) {
+		if ((pid = start_handler(handler, filename, sel, url, fds[0], 1)) > 0) reap(handler, pid, 0);
+		url->proto->close(c);
 	} else {
+		if (pipe(fds) == -1) { url->proto->close(c); return; }
+		if (fcntl(fds[1], F_SETFD, FD_CLOEXEC) == -1 || (fp = fdopen(fds[1], "w")) == NULL) {
+			close(fds[0]);
+			close(fds[1]);
+			url->proto->close(c);
+			return;
+		}
+		pid = start_handler(handler, filename, sel, url, fds[0], 0);
 		close(fds[0]);
-		close(fds[1]);
+		if (pid <= 0) {
+			fclose(fp);
+			url->proto->close(c);
+			return;
+		}
+		setbuf(fp, NULL);
+		save_body(url, c, fp);
+		fclose(fp);
+		url->proto->close(c); /* close the connection while the handler is running */
+		reap(handler, pid, 0);
 	}
 }
 

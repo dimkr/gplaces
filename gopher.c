@@ -129,4 +129,4 @@ fail:
 }
 
 
-const Protocol gopher = {"gopher", "70", tcp_read, tcp_peek, tcp_error, tcp_close, gopher_download};
+const Protocol gopher = {"gopher", "70", tcp_fd, tcp_read, tcp_peek, tcp_error, tcp_close, gopher_download};

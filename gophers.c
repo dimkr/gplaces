@@ -43,4 +43,4 @@ fail:
 }
 
 
-const Protocol gophers = {"gophers", "70", ssl_read, ssl_peek, ssl_error, ssl_close, gophers_download};
+const Protocol gophers = {"gophers", "70", ssl_fd, ssl_read, ssl_peek, ssl_error, ssl_close, gophers_download};

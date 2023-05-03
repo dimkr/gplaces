@@ -19,6 +19,11 @@
 
 ================================================================================
 */
+static int tcp_fd(void *c) {
+	return (int)(intptr_t)c;
+}
+
+
 static int tcp_error(const URL *url, void *c, int err) {
 	(void)c;
 	if (err == 0) return 0;
