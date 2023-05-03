@@ -44,7 +44,7 @@ static void parse_gophermap_line(char *line, int *pre, Selector **sel, SelectorL
 
 	(*sel)->repr = str_copy(line + 1);
 
-	if ((*line == '1' || *line == '0' || *line == '7' || *line == '9' || *line == 'g' || *line == 'I' || *line == '8' || *line == '2' || *line == '6' || *line == '5' || *line == '4' || *line == 'T') && asprintf(&(*sel)->rawurl, "%s://%s:%s/%c%s", "gopher", host, port, *line, path) < 0) { (*sel)->rawurl = NULL; goto fail; }
+	if ((*line == '1' || *line == '0' || *line == '7' || *line == '9' || *line == 'g' || *line == 'I' || *line == '8' || *line == '2' || *line == '6' || *line == '5' || *line == '4' || *line == 'T') && asprintf(&(*sel)->rawurl, "%s://%s:%s/%c%s", "gopher", host, port, *line, *path == '\0' ? "/" : path) < 0) { (*sel)->rawurl = NULL; goto fail; }
 	else if (*line == 'h' && strncmp(path, "URL:", 4) == 0 && !copy_url(*sel, path + 4)) goto fail;
 
 	SIMPLEQ_INSERT_TAIL(list, *sel, next);
