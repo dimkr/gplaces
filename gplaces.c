@@ -1482,13 +1482,16 @@ static void cmd_get(char *line) {
 
 	page = TAILQ_FIRST(&history);
 	TAILQ_REMOVE(&history, page, next);
+	--depth;
 
 	sel.rawurl = page->url;
 	if (parse_url(&url, page->url, NULL, NULL)) new = navigate(&sel, &url);
 	free_url(&url);
 
-	if (SIMPLEQ_EMPTY(&new)) TAILQ_INSERT_HEAD(&history, page, next);
-	else free_page(page);
+	if (SIMPLEQ_EMPTY(&new)) {
+		TAILQ_INSERT_HEAD(&history, page, next);
+		++depth;
+	} else free_page(page);
 }
 
 
