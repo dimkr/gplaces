@@ -36,6 +36,16 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-05-04" version="0.17.3">
+      <description>
+        <ul>
+          <li>Fix for file descriptor leak when streaming</li>
+          <li>Fix for bad handling of Gopher selectors without leadin /</li>
+          <li>Fix for bad handling of empty Gopher selectors</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-05-03" version="0.17.2">
       <description>
         <ul>
