@@ -13,9 +13,12 @@
     <ul>
        <li>A VT100-compatible shell with completion, history and hints</li>
        <li>.gmi subscriptions</li>
-       <li>TOFU</li>
+       <li>TOFU and permanent redirects</li>
        <li>Generation of client certificates</li>
        <li>Slightly prettified Gemtext output</li>
+       <li>Configurable handlers for various file types</li>
+       <li>Quick navigation to recently viewed pages</li>
+       <li>Support for other "small internet" protocols: Spartan, Gopher and Finger</li>
     </ul>
     <p>
        gplaces should be fairly straightforward to use for anyone used to the command-line and man pages.
@@ -40,7 +43,7 @@
       <description>
         <ul>
           <li>Fix for file descriptor leak when streaming</li>
-          <li>Fix for bad handling of Gopher selectors without leadin /</li>
+          <li>Fix for bad handling of Gopher selectors without leading /</li>
           <li>Fix for bad handling of empty Gopher selectors</li>
         </ul>
       </description>
