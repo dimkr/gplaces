@@ -39,6 +39,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-05-06" version="0.17.4">
+      <description>
+        <ul>
+          <li>:70 is omitted from Gopher URLs</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-05-04" version="0.17.3">
       <description>
         <ul>
