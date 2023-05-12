@@ -73,7 +73,7 @@ clean:
 install: all
 	@install -D -m 755 $(BIN) $(DESTDIR)$(PREFIX)/bin/${BIN}
 	@install -D -m 644 gplacesrc $(DESTDIR)$(CONFDIR)/gplacesrc
-	@install -D -m 644 README.md $(DESTDIR)$(PREFIX)/share/doc/gplaces/README.md
+	@install -D -m 644 README.md $(DESTDIR)$(PREFIX)/share/doc/gplaces/README.gmi
 	@install -m 644 LICENSE $(DESTDIR)$(PREFIX)/share/doc/gplaces/LICENSE
 	@install -m 644 AUTHORS $(DESTDIR)$(PREFIX)/share/doc/gplaces/AUTHORS
 	@install -D -m 644 gplaces.1 $(DESTDIR)$(PREFIX)/share/man/man1/gplaces.1

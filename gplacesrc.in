@@ -9,7 +9,7 @@ set video/							"mpv %f"
 set application/pdf					"xdg-open %f"
 
 # define some aliases
-set readme							file://DOCDIR/README.md
+set readme							file://DOCDIR/README.gmi
 set license							file://DOCDIR/LICENSE
 set authors							file://DOCDIR/AUTHORS
 set search							geminispace.info/search
