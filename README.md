@@ -15,6 +15,7 @@ gplaces is originally a Gemini port of the delve Gopher client by Sebastian Stei
 => https://github.com/kieselsteini/delve delve
 
 ## Features
+
 * SSH-style TOFU with $XDG_DATA_HOME/gplaces_hosts or ~/.gplaces_hosts
 * client certificates support via $XDG_DATA_HOME/gplaces_$host$path.{crt,key} or ~/.gplaces_$host$path.{crt,key}
 * subscriptions
@@ -35,12 +36,16 @@ gplaces is originally a Gemini port of the delve Gopher client by Sebastian Stei
 * ~100K executable when built with -O3 and -Wl,-s on x86_64
 
 ## How to install?
+
 * Using Flatpak: `flatpak install com.github.dimkr.gplaces`
-=> https://flathub.org/apps/details/com.github.dimkr.gplaces gplaces on Flathub
 * compile yourself
 
+=> https://flathub.org/apps/details/com.github.dimkr.gplaces gplaces on Flathub
+
 ## How to compile?
-* clone this git repo
+
+* clone this repo: `git clone --recursive https://github.com/dimkr/gplaces`
+* type `cd gplaces`
 * type `make` or `make WITH_LIBIDN2=0 WITH_LIBIDN=0 WITH_LIBMAGIC=0`
 * type `make install` to install it on the system (defaults to /usr/local)
 
@@ -144,9 +149,6 @@ to exit gplaces, press `CTRL+d`.
 
 additional documentation and more details are available in `man gplaces`. type `help` and press `ENTER` to see short descriptions of available commands.
 
-## How to contribute?
-* send me pull-requests and I'll review and merge them :)
-* if you wish to appear on the `help authors` command just add yourself there
-
 ## License
+
 => LICENSE GPLv3
