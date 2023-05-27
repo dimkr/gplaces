@@ -56,15 +56,28 @@ fail:
 
 
 /*============================================================================*/
-static char *gopher_request(const Selector *sel, const URL *url, int ask, int *len, size_t skip) {
+static char *gopher_request(const Selector *sel, URL *url, int ask, int *len, size_t skip) {
 	static char buffer[1024 + 3]; /* path\r\n\0 */
-	char *input = NULL;
+	char *input = NULL, *query = NULL;
+	const char *path, *end;
 
 	if (url->path[0] == '/' && url->path[1] == '7') {
-		if (!ask || (input = bestline(color ? "\33[35mQuery>\33[0m " : "Query> ")) == NULL) return NULL;
-		if (interactive) bestlineHistoryAdd(input);
-		*len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2, input);
-		free(input);
+		switch (curl_url_get(url->cu, CURLUPART_QUERY, &query, CURLU_URLDECODE)) {
+		case CURLUE_OK: input = query; break;
+		case CURLUE_NO_QUERY: break;
+		default: return NULL;
+		}
+		if (input == NULL) {
+			if (!ask || (input = bestline(color ? "\33[35mQuery>\33[0m " : "Query> ")) == NULL || !set_input(url, input)) return NULL;
+			if (interactive) { bestlineHistoryAdd(input); bestlineHistoryAdd(url->url); }
+			*len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2, input);
+		} else {
+			path = sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2;
+			if ((end = strrchr(path, '?')) == NULL) *len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", path, input);
+			else *len = snprintf(buffer, sizeof(buffer), "%.*s\t%s\r\n", (int)(end - path), path, input);
+		}
+		if (input != query) free(input);
+		curl_free(query);
 	} else if (url->path[0] == '/' && url->path[1] != '\0') *len = snprintf(buffer, sizeof(buffer), "%s\r\n", sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2);
 	else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", sel->rawurl + skip + strcspn(sel->rawurl + skip, "/"));
 
