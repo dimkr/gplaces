@@ -21,7 +21,7 @@
        <li>Support for other "small internet" protocols: Spartan, Gopher and Finger</li>
     </ul>
     <p>
-       gplaces should be fairly straightforward to use for anyone used to the command-line and man pages. Type <code>readme</code> for a short introduction.
+       gplaces should be fairly straightforward to use for anyone used to the command-line and man pages. Type "readme" for a short introduction.
     </p>
   </description>
 
@@ -39,6 +39,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-05-31" version="0.17.6">
+      <description>
+        <ul>
+          <li>Add support for caching of Gopher search results</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-05-12" version="0.17.5">
       <description>
         <ul>
