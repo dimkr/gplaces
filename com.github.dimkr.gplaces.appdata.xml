@@ -43,6 +43,7 @@
       <description>
         <ul>
           <li>Add support for caching of Gopher search results</li>
+          <li>New alias in the default configuration file: gsearch</li>
         </ul>
       </description>
     </release>
