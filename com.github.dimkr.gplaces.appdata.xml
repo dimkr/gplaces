@@ -39,6 +39,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-06-15" version="0.17.7">
+      <description>
+        <ul>
+          <li>Fix broken links in feed</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-05-31" version="0.17.6">
       <description>
         <ul>
