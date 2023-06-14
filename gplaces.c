@@ -1302,7 +1302,7 @@ static SelectorList download_feed(void) {
 		if (SIMPLEQ_EMPTY(&list)) { free_url(&url); continue; }
 
 		copy = new_selector('l');
-		if (!copy_url(copy, sel->rawurl)) { free_selector(copy); free_selectors(&list); free_url(&url); continue; }
+		if (!copy_url(copy, url.url)) { free_selector(copy); free_selectors(&list); free_url(&url); continue; }
 
 		SIMPLEQ_FOREACH(it, &list, next) {
 			if (it->type == '#' && it->level == 1) {
