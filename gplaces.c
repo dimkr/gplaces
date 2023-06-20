@@ -145,7 +145,7 @@ const Protocol finger;
 static VariableList variables = LIST_HEAD_INITIALIZER(variables);
 static SelectorList subscriptions = SIMPLEQ_HEAD_INITIALIZER(subscriptions);
 static PageList history = TAILQ_HEAD_INITIALIZER(history);
-static const Selector feed_sel = {.rawurl = "gplaces://sub"};
+static const Selector feed_sel = {.rawurl = "gplaces://sub/"};
 SelectorList blank = SIMPLEQ_HEAD_INITIALIZER(blank);
 #define currentmenu TAILQ_EMPTY(&history) ? blank : TAILQ_FIRST(&history)->menu
 #define currenturl TAILQ_EMPTY(&history) ? NULL : TAILQ_FIRST(&history)->url
@@ -1385,7 +1385,7 @@ static SelectorList navigate(const Selector *sel, URL *url) {
 		return page->menu;
 	}
 
-	if (sel == &feed_sel) {
+	if (!strcmp(sel->rawurl, feed_sel.rawurl)) {
 		new = download_feed();
 		off = 7;
 	} else if (!strcmp(url->scheme, "file")) {
