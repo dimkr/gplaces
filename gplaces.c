@@ -1301,8 +1301,11 @@ static SelectorList download_feed(void) {
 		list = download_text(sel, &url, 0, 0, 0);
 		if (SIMPLEQ_EMPTY(&list)) { free_url(&url); continue; }
 
+		if (color) history_push(url.url, list, "\33[35m%s>\33[0m ", url.url + strlen(url.scheme) + 3);
+		else history_push(url.url, list, "%s> ", url.url + strlen(url.scheme) + 3);
+
 		copy = new_selector('l');
-		if (!copy_url(copy, url.url)) { free_selector(copy); free_selectors(&list); free_url(&url); continue; }
+		if (!copy_url(copy, url.url)) { free_selector(copy); free_url(&url); continue; }
 
 		SIMPLEQ_FOREACH(it, &list, next) {
 			if (it->type == '#' && it->level == 1) {
@@ -1327,7 +1330,6 @@ static SelectorList download_feed(void) {
 			}
 		}
 
-		free_selectors(&list);
 		free_url(&url);
 	}
 
