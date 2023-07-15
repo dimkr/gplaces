@@ -39,6 +39,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-07-16" version="0.17.9">
+      <description>
+        <ul>
+          <li>Fix client certificate loading failure for URLs with trailing /</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-06-24" version="0.17.8">
       <description>
         <ul>
