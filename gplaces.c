@@ -977,6 +977,7 @@ static int do_download(URL *url, SSL **body, char **mime, int ask) {
 	 * If we found a certificate for one of these, stop even if loading fails.
 	 */
 	for (len = 0; len < (int)sizeof(suffix) - 1 && url->path[len] != '\0'; ++len) suffix[len] = url->path[len] == '/' ? '_' : url->path[len];
+	if (suffix[len - 1] == '_') --len; /* ignore trailing / */
 	suffix[len] = '\0';
 	memcpy(keypath, crtpath, off);
 	for (i = url->path[len - 1] == '/' ? len - 1 : len; i >= 0; --i) {
