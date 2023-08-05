@@ -33,7 +33,7 @@ static void *finger_download(const Selector *sel, URL *url, char **mime, Parser 
 	default: return NULL;
 	}
 
-	if ((fd = tcp_connect(url)) == -1) return NULL;
+	if ((fd = socket_connect(url, SOCK_STREAM)) == -1) return NULL;
 	if ((len == 0 && sendall(fd, "\r\n", 2, MSG_NOSIGNAL) != 2) || (len > 0 && sendall(fd, buffer, len, MSG_NOSIGNAL) != len)) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
 		else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
@@ -48,4 +48,4 @@ static void *finger_download(const Selector *sel, URL *url, char **mime, Parser 
 }
 
 
-const Protocol finger = {"finger", "79", tcp_read, tcp_peek, tcp_error, tcp_close, finger_download};
+const Protocol finger = {"finger", "79", socket_read, socket_peek, socket_error, socket_close, finger_download};

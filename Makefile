@@ -31,6 +31,11 @@ ifeq ($(WITH_FINGER),1)
 	CFLAGS += -DGPLACES_WITH_FINGER
 	MIMETYPES := $(MIMETYPES);x-scheme-handler/finger
 endif
+WITH_GUPPY ?= 1
+ifeq ($(WITH_GUPPY),1)
+	CFLAGS += -DGPLACES_WITH_GUPPY
+	MIMETYPES := $(MIMETYPES);x-scheme-handler/guppy
+endif
 WITH_LIBIDN2 ?= $(shell pkg-config --exists libidn2 && echo 1 || echo 0)
 ifeq ($(WITH_LIBIDN2),1)
 	CFLAGS += -DGPLACES_USE_LIBIDN2 $(shell pkg-config --cflags libidn2)
@@ -58,7 +63,7 @@ all: $(BIN) gplacesrc gplaces.desktop
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)
 
-gplaces.o: gplaces.c gopher.c gophers.c spartan.c finger.c tcp.c
+gplaces.o: gplaces.c gopher.c gophers.c spartan.c finger.c guppy.c socket.c
 
 gplaces.desktop: gplaces.desktop.in
 	@sed "s~^MimeType=.*~&$(MIMETYPES)~" $< > $@
