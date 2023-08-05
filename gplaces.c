@@ -148,7 +148,7 @@ const Protocol guppy;
 static VariableList variables = LIST_HEAD_INITIALIZER(variables);
 static SelectorList subscriptions = SIMPLEQ_HEAD_INITIALIZER(subscriptions);
 static PageList history = TAILQ_HEAD_INITIALIZER(history);
-static const Selector feed_sel = {.rawurl = "gplaces://sub"};
+static const Selector feed_sel = {.rawurl = "gplaces://sub/"};
 SelectorList blank = SIMPLEQ_HEAD_INITIALIZER(blank);
 #define currentmenu TAILQ_EMPTY(&history) ? blank : TAILQ_FIRST(&history)->menu
 #define currenturl TAILQ_EMPTY(&history) ? NULL : TAILQ_FIRST(&history)->url
@@ -987,6 +987,7 @@ static int do_download(URL *url, SSL **body, char **mime, int ask) {
 	 * If we found a certificate for one of these, stop even if loading fails.
 	 */
 	for (len = 0; len < (int)sizeof(suffix) - 1 && url->path[len] != '\0'; ++len) suffix[len] = url->path[len] == '/' ? '_' : url->path[len];
+	if (suffix[len - 1] == '_') --len; /* ignore trailing / */
 	suffix[len] = '\0';
 	memcpy(keypath, crtpath, off);
 	for (i = url->path[len - 1] == '/' ? len - 1 : len; i >= 0; --i) {
@@ -1314,8 +1315,11 @@ static SelectorList download_feed(void) {
 		list = download_text(sel, &url, 0, 0, 0);
 		if (SIMPLEQ_EMPTY(&list)) { free_url(&url); continue; }
 
+		if (color) history_push(url.url, list, "\33[35m%s>\33[0m ", url.url + strlen(url.scheme) + 3);
+		else history_push(url.url, list, "%s> ", url.url + strlen(url.scheme) + 3);
+
 		copy = new_selector('l');
-		if (!copy_url(copy, url.url)) { free_selector(copy); free_selectors(&list); free_url(&url); continue; }
+		if (!copy_url(copy, url.url)) { free_selector(copy); free_url(&url); continue; }
 
 		SIMPLEQ_FOREACH(it, &list, next) {
 			if (it->type == '#' && it->level == 1) {
@@ -1340,7 +1344,6 @@ static SelectorList download_feed(void) {
 			}
 		}
 
-		free_selectors(&list);
 		free_url(&url);
 	}
 
@@ -1398,7 +1401,7 @@ static SelectorList navigate(const Selector *sel, URL *url) {
 		return page->menu;
 	}
 
-	if (sel == &feed_sel) {
+	if (!strcmp(sel->rawurl, feed_sel.rawurl)) {
 		new = download_feed();
 		off = 7;
 	} else if (!strcmp(url->scheme, "file")) {
