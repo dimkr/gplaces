@@ -127,8 +127,9 @@ static int guppy_read(void *c, void *buffer, int length) {
 	if ((received = (int)recv((int)(intptr_t)c, buffer, (size_t)length, 0)) <= 0 || (crlf = memchr(buffer, '\r', received - 1)) == NULL || crlf == buffer || *(crlf + 1) != '\n') return received;
 	*crlf = '\0';
 	if ((seq = strtol((char *)buffer, &end, 10)) == LONG_MIN || seq == LONG_MAX || end == NULL || (*end != ' ' && *end != '\0')) return -1;
+	skip = crlf - (char *)buffer + 2;
 	if (!guppy_ack((int)(intptr_t)c, seq, received > skip)) return -1;
-	if ((skip = crlf - (char *)buffer + 2) == received) return 0;
+	if (skip == received) return 0;
 	memmove(buffer, crlf + 2, received - skip);
 	return received - skip;
 }
