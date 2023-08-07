@@ -78,6 +78,7 @@ static int do_guppy_download(URL *url, int *body, char **mime, const char *input
 		if (!redirect(url, meta, received - 4, ask)) goto fail;
 	} else if (buffer[0] == '1' && buffer[1] == ' ') {
 		error(0, "cannot download `%s`: %s", url->url, meta);
+		goto fail;
 	} else {
 		*body = fd;
 		fd = -1;
