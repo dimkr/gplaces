@@ -54,7 +54,7 @@ static int guppy_ack(int fd, long seq, int more) {
 static int do_guppy_download(URL *url, int *body, char **mime, const char *input, size_t inputlen, int ask) {
 	static char buffer[1024];
 	char *crlf, *space, *meta;
-	int fd = -1, len, received, ret = 4;
+	int fd = -1, len, received, ret = 1;
 
 	if ((len = strlen(url->url)) + 2 + inputlen > sizeof(buffer)) goto fail;
 
@@ -78,7 +78,6 @@ static int do_guppy_download(URL *url, int *body, char **mime, const char *input
 		if (!redirect(url, meta, received - 4, ask)) goto fail;
 	} else if (buffer[0] == '1' && buffer[1] == ' ') {
 		error(0, "cannot download `%s`: %s", url->url, meta);
-		goto fail;
 	} else {
 		*body = fd;
 		fd = -1;
@@ -109,8 +108,8 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 
 	do {
 		status = do_guppy_download(url, &fd, mime, input, inputlen, ask);
-		if (status == 2) break;
-	} while (status == 3 && ++redirs < 5);
+		if (status > 1) break;
+	} while (status == 0 && ++redirs < 5);
 
 	if (fd != -1 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
 	else if (fd != -1 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
