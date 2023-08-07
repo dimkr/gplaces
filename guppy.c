@@ -22,16 +22,30 @@
 #include <poll.h>
 
 
-static int guppy_ack(int fd, const char *buffer, size_t length, int more) {
+static int guppy_ack(int fd, long seq, int more) {
+	static char buffer[1024];
+	char ack[12];
+	int length;
 	struct pollfd pfd = {.fd = fd, .events = POLLIN};
+	long nextseq;
+	char *end;
 	int i, n, timeout;
+	ssize_t pending;
+	length = sprintf(ack, "%ld\r\n", seq);
 	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
 	for (i = 0; i < timeout; ++i) {
-		if (send(fd, buffer, length, MSG_NOSIGNAL) != (ssize_t)length) return 0;
+		if (send(fd, ack, length, MSG_NOSIGNAL) != (ssize_t)length) return 0;
 		if (!more) return 1;
+		while (1) {
+			if ((pending = recv(fd, buffer, sizeof(buffer) - 1, MSG_PEEK | MSG_NOSIGNAL | MSG_DONTWAIT)) == 0) return -1;
+			if (pending == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
+			buffer[pending] = '\0';
+			if ((nextseq = strtol(buffer, &end, 10)) == LONG_MIN || seq == LONG_MAX || end == NULL || (*end != ' ' && *end != '\r')) continue;
+			if (nextseq == seq + 1) return 1;
+			if (recv(fd, buffer, sizeof(buffer) - 1, MSG_NOSIGNAL | MSG_DONTWAIT) <= 0) return -1;
+		}
 		pfd.revents = 0;
-		if ((n = poll(&pfd, 1, 1000)) < 0 || !(pfd.revents & POLLIN)) return 0;
-		else if (n == 1) return 1;
+		if ((n = poll(&pfd, 1, 1000)) < 0 || (n > 0 && !(pfd.revents & POLLIN))) return -1;
 	}
 	return 0;
 }
@@ -39,7 +53,7 @@ static int guppy_ack(int fd, const char *buffer, size_t length, int more) {
 
 static int do_guppy_download(URL *url, int *body, char **mime, const char *input, size_t inputlen, int ask) {
 	static char buffer[1024];
-	char *crlf, *meta = &buffer[2];
+	char *crlf, *space, *meta;
 	int fd = -1, len, received, ret = 4;
 
 	if ((len = strlen(url->url)) + 2 + inputlen > sizeof(buffer)) goto fail;
@@ -56,25 +70,18 @@ static int do_guppy_download(URL *url, int *body, char **mime, const char *input
 		else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
 		goto fail;
 	}
+	if (received < 5 || (space = memchr(buffer, ' ', received - 2)) == NULL || (crlf = memchr(space, '\r', received - (space - buffer) - 1)) == NULL || crlf <= (space + 1) || *(crlf + 1) != '\n') goto fail;
+	*crlf = '\0';
+	meta = space + 1;
 
-	if (received < 5 || buffer[1] != ' ' || *meta == '\0' || (crlf = memchr(buffer, '\r', received - 1)) == NULL || crlf <= meta || *(crlf + 1) != '\n') goto fail;
-
-	switch (buffer[0]) {
-		case '2':
-			*crlf = '\0';
-			*body = fd;
-			fd = -1;
-			*mime = meta;
-			break;
-
-		case '3':
-			*crlf = '\0';
-			if (!redirect(url, meta, received - 4, ask)) goto fail;
-			break;
-
-		default:
-			*crlf = '\0';
-			error(0, "cannot download `%s`: %s", url->url, meta);
+	if (buffer[0] == '0' && buffer[1] == ' ') {
+		if (!redirect(url, meta, received - 4, ask)) goto fail;
+	} else if (buffer[0] == '1' && buffer[1] == ' ') {
+		error(0, "cannot download `%s`: %s", url->url, meta);
+	} else {
+		*body = fd;
+		fd = -1;
+		*mime = meta;
 	}
 
 	ret = buffer[0] - '0';
@@ -115,13 +122,16 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 
 
 static int guppy_read(void *c, void *buffer, int length) {
-	int received;
-	const char *crlf;
+	int received, skip;
+	char *crlf, *end;
+	long seq;
 	if ((received = (int)recv((int)(intptr_t)c, buffer, (size_t)length, 0)) <= 0 || (crlf = memchr(buffer, '\r', received - 1)) == NULL || crlf == buffer || *(crlf + 1) != '\n') return received;
-	if (!guppy_ack((int)(intptr_t)c, buffer, crlf - (char *)buffer + 2, received > crlf - (char *)buffer + 2)) return -1;
-	received -= crlf - (char *)buffer + 2;
-	memmove(buffer, crlf + 2, received);
-	return received;
+	*crlf = '\0';
+	if ((seq = strtol((char *)buffer, &end, 10)) == LONG_MIN || seq == LONG_MAX || end == NULL || (*end != ' ' && *end != '\0')) return -1;
+	if (!guppy_ack((int)(intptr_t)c, seq, received > skip)) return -1;
+	if ((skip = crlf - (char *)buffer + 2) == received) return 0;
+	memmove(buffer, crlf + 2, received - skip);
+	return received - skip;
 }
 
 
