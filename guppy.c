@@ -116,10 +116,11 @@ read:
 	*crlf = '\0';
 	meta = space + 1;
 
-	if (buffer[0] == '0' && buffer[1] == ' ') {
-		if (!redirect(url, meta, received - 4, ask)) goto fail;
-	} else if (buffer[0] == '1' && buffer[1] == ' ') error(0, "cannot download `%s`: %s", url->url, meta);
-	else {
+	if (buffer[0] == '0' && buffer[1] == ' ' && !redirect(url, meta, received - 4, ask)) goto fail;
+	else if (buffer[0] == '1' && buffer[1] == ' ') {
+		error(0, "cannot download `%s`: %s", url->url, meta);
+		goto fail;
+	} else if ((buffer[0] != '0' && buffer[0] != '1') || buffer[1] != ' ') {
 		*body = pfd.fd;
 		pfd.fd = -1;
 		*mime = meta;
@@ -136,7 +137,7 @@ fail:
 static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
 	char *input = NULL, *query = NULL;
 	size_t inputlen = 0;
-	static int fd = -1;
+	int fd = -1;
 	int status, redirs = 0;
 
 	(void)sel;
