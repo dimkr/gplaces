@@ -70,26 +70,25 @@ static int guppy_ack(int fd, long seq, int more) {
 }
 
 
-static int do_guppy_download(URL *url, int *body, char **mime, const char *input, size_t inputlen, int ask) {
+static int do_guppy_download(URL *url, int *body, char **mime, int ask) {
 	static char buffer[1024];
 	struct pollfd pfd = {.fd = -1, .events = POLLIN};
 	char *crlf, *space, *meta;
 	int len, timeout, i, n, received, ret = 1;
 
-	if ((len = strlen(url->url)) + 2 + inputlen > sizeof(buffer)) goto fail;
+	if ((len = strlen(url->url)) + 2 > sizeof(buffer)) goto fail;
 
 	if ((pfd.fd = socket_connect(url, SOCK_DGRAM)) == -1) goto fail;
 
 	memcpy(buffer, url->url, len);
 	buffer[len] = '\r';
 	buffer[len + 1] = '\n';
-	memcpy(&buffer[len + 2], input, inputlen);
 
 	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
 
 	for (i = 0; i < timeout; ++i) {
 		/* send or re-transmit the request */
-		if (send(pfd.fd, buffer, len + 2 + inputlen, 0) <= 0) {
+		if (send(pfd.fd, buffer, len + 2, 0) <= 0) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
 			else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
 			goto fail;
@@ -135,21 +134,13 @@ fail:
 
 
 static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
-	char *input = NULL, *query = NULL;
-	size_t inputlen = 0;
 	int fd = -1;
 	int status, redirs = 0;
 
 	(void)sel;
 
-	switch (curl_url_get(url->cu, CURLUPART_QUERY, &query, 0)) {
-	case CURLUE_OK: input = query; break;
-	case CURLUE_NO_QUERY: break;
-	default: return NULL;
-	}
-
 	do {
-		status = do_guppy_download(url, &fd, mime, input, inputlen, ask);
+		status = do_guppy_download(url, &fd, mime, ask);
 		/* stop on success, on error or when the redirect limit is exhausted */
 		if (status > 1) break;
 	} while (status == 0 && ++redirs < 5);
@@ -159,7 +150,6 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 
 	if (redirs == 5) error(0, "too many redirects from `%s`", url->url);
 
-	curl_free(query);
 	return fd == -1 ? NULL : (void *)(intptr_t)fd;
 }
 
