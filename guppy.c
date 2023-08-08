@@ -30,44 +30,86 @@ static int guppy_ack(int fd, long seq, int more) {
 	long nextseq;
 	char *end;
 	int i, n, timeout;
-	ssize_t pending;
+	ssize_t sent, pending;
+
 	length = sprintf(ack, "%ld\r\n", seq);
 	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
+
 	for (i = 0; i < timeout; ++i) {
-		if (send(fd, ack, length, MSG_NOSIGNAL) != (ssize_t)length) return 0;
+		/* send ack */
+		if ((sent = send(fd, ack, length, 0)) < 0) return -1;
+		if (sent != (ssize_t)length) { errno = EPROTO; return -1; }
+
+		/* if we acked the EOF packet, stop */
 		if (!more) return 1;
+
 		while (1) {
-			if ((pending = recv(fd, buffer, sizeof(buffer) - 1, MSG_PEEK | MSG_NOSIGNAL | MSG_DONTWAIT)) == 0) return -1;
-			if (pending == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
+			/* peek at the next packet we receive */
+			if ((pending = recv(fd, buffer, sizeof(buffer) - 1, MSG_PEEK | MSG_DONTWAIT)) == 0) continue;
+			if (pending < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) break;
+			else if (pending < 0) return -1;
 			buffer[pending] = '\0';
+
 			if ((nextseq = strtol(buffer, &end, 10)) == LONG_MIN || seq == LONG_MAX || end == NULL || (*end != ' ' && *end != '\r')) continue;
+
+			/* stop once the sequence number is current+1 */
 			if (nextseq == seq + 1) return 1;
-			if (recv(fd, buffer, sizeof(buffer) - 1, MSG_NOSIGNAL | MSG_DONTWAIT) <= 0) return -1;
+
+			/* othewrise, dequeue the packet */
+			if (recv(fd, buffer, sizeof(buffer) - 1, MSG_DONTWAIT) < 0) return -1;
 		}
+
+		/* wait for another packet */
 		pfd.revents = 0;
-		if ((n = poll(&pfd, 1, 1000)) < 0 || (n > 0 && !(pfd.revents & POLLIN))) return -1;
+		if ((n = poll(&pfd, 1, 1000)) < 0) return -1;
+		if (n > 0 && !(pfd.revents & POLLIN)) { errno = ECONNRESET; return -1; }
 	}
+
+	errno = ETIMEDOUT;
 	return 0;
 }
 
 
 static int do_guppy_download(URL *url, int *body, char **mime, const char *input, size_t inputlen, int ask) {
 	static char buffer[1024];
+	struct pollfd pfd = {.fd = -1, .events = POLLIN};
 	char *crlf, *space, *meta;
-	int fd = -1, len, received, ret = 1;
+	int len, timeout, i, n, received, ret = 1;
 
 	if ((len = strlen(url->url)) + 2 + inputlen > sizeof(buffer)) goto fail;
 
-	if ((fd = socket_connect(url, SOCK_DGRAM)) == -1) goto fail;
+	if ((pfd.fd = socket_connect(url, SOCK_DGRAM)) == -1) goto fail;
 
 	memcpy(buffer, url->url, len);
 	buffer[len] = '\r';
 	buffer[len + 1] = '\n';
 	memcpy(&buffer[len + 2], input, inputlen);
 
-	if (send(fd, buffer, len + 2 + inputlen, MSG_NOSIGNAL) != (ssize_t)(len + 2 + inputlen) || (received = recv(fd, buffer, sizeof(buffer), MSG_PEEK | MSG_NOSIGNAL)) <= 0) {
-		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
-		else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
+	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
+
+	for (i = 0; i < timeout; ++i) {
+		/* send or re-transmit the request */
+		if (send(pfd.fd, buffer, len + 2 + inputlen, 0) <= 0) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
+			else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
+			goto fail;
+		}
+
+		/* wait for the response packet */
+		pfd.revents = 0;
+		if ((n = poll(&pfd, 1, 1000)) == 0) continue;
+		if (n < 0 || (n > 0 && !(pfd.revents & POLLIN))) goto fail;
+
+		goto read;
+	}
+
+	error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
+	goto fail;
+
+read:
+	/* peek at the response: we ack it in guppy_read() */
+	if ((received = recv(pfd.fd, buffer, sizeof(buffer), MSG_PEEK)) < 0) {
+		error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
 		goto fail;
 	}
 	if (received < 5 || (space = memchr(buffer, ' ', received - 2)) == NULL || (crlf = memchr(space, '\r', received - (space - buffer) - 1)) == NULL || crlf <= (space + 1) || *(crlf + 1) != '\n') goto fail;
@@ -78,15 +120,15 @@ static int do_guppy_download(URL *url, int *body, char **mime, const char *input
 		if (!redirect(url, meta, received - 4, ask)) goto fail;
 	} else if (buffer[0] == '1' && buffer[1] == ' ') error(0, "cannot download `%s`: %s", url->url, meta);
 	else {
-		*body = fd;
-		fd = -1;
+		*body = pfd.fd;
+		pfd.fd = -1;
 		*mime = meta;
 	}
 
 	ret = buffer[0] - '0';
 
 fail:
-	if (fd != -1) close(fd);
+	if (pfd.fd != -1) close(pfd.fd);
 	return ret;
 }
 
@@ -107,6 +149,7 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 
 	do {
 		status = do_guppy_download(url, &fd, mime, input, inputlen, ask);
+		/* stop on success, on error or when the redirect limit is exhausted */
 		if (status > 1) break;
 	} while (status == 0 && ++redirs < 5);
 
@@ -124,12 +167,24 @@ static int guppy_read(void *c, void *buffer, int length) {
 	int received, skip;
 	char *crlf, *end;
 	long seq;
-	if ((received = (int)recv((int)(intptr_t)c, buffer, (size_t)length, 0)) <= 0 || (crlf = memchr(buffer, '\r', received - 1)) == NULL || crlf == buffer || *(crlf + 1) != '\n') return received;
+
+	/* dequeue the next packet */
+	if ((received = (int)recv((int)(intptr_t)c, buffer, (size_t)length, 0)) < 0) return -1;
+	if (received == 0) { errno = ECONNRESET; return 0; }
+
+	/* extract the sequence number */
+	if ((crlf = memchr(buffer, '\r', received - 1)) == NULL || crlf == buffer || *(crlf + 1) != '\n') { errno = EPROTO; return -1; }
 	*crlf = '\0';
-	if ((seq = strtol((char *)buffer, &end, 10)) == LONG_MIN || seq == LONG_MAX || end == NULL || (*end != ' ' && *end != '\0')) return -1;
+	if ((seq = strtol((char *)buffer, &end, 10)) == LONG_MIN || seq == LONG_MAX) return -1;
+	if (end == NULL || (*end != ' ' && *end != '\0')) { errno = EPROTO; return -1; }
 	skip = crlf - (char *)buffer + 2;
+
+	/* ack the packet and wait for the next one to confirm that ack is received */
 	if (!guppy_ack((int)(intptr_t)c, seq, received > skip)) return -1;
+
+	/* signal EOF if this is the EOF packet */
 	if (skip == received) return 0;
+
 	memmove(buffer, crlf + 2, received - skip);
 	return received - skip;
 }
