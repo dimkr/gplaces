@@ -63,7 +63,7 @@ all: $(BIN) gplacesrc gplaces.desktop
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)
 
-gplaces.o: gplaces.c gopher.c gophers.c spartan.c finger.c guppy.c socket.c
+gplaces.o: gplaces.c gopher.c gophers.c spartan.c finger.c guppy.c tcp.c socket.c
 
 gplaces.desktop: gplaces.desktop.in
 	@sed "s~^MimeType=.*~&$(MIMETYPES)~" $< > $@

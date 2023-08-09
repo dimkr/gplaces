@@ -142,4 +142,4 @@ fail:
 }
 
 
-const Protocol gopher = {"gopher", "70", socket_read, socket_peek, socket_error, socket_close, gopher_download};
+const Protocol gopher = {"gopher", "70", tcp_read, tcp_peek, socket_error, socket_close, gopher_download};

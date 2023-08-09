@@ -1114,6 +1114,9 @@ const Protocol gemini = {"gemini", "1965", ssl_read, ssl_peek, ssl_error, ssl_cl
 #if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN) || defined(GPLACES_WITH_FINGER) || defined(GPLACES_WITH_GUPPY)
 	#include "socket.c"
 #endif
+#if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN) || defined(GPLACES_WITH_FINGER)
+	#include "tcp.c"
+#endif
 #if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_GOPHERS)
 	#include "gopher.c"
 #endif
