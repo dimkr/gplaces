@@ -22,7 +22,7 @@
 #include <poll.h>
 
 
-static int guppy_ack(int fd, long seq, int more) {
+static int guppy_ack(int fd, int seq, int more) {
 	static char buffer[1024];
 	char ack[12];
 	int length;
@@ -32,7 +32,7 @@ static int guppy_ack(int fd, long seq, int more) {
 	int i, n, timeout;
 	ssize_t sent, pending;
 
-	length = sprintf(ack, "%ld\r\n", seq);
+	length = sprintf(ack, "%d\r\n", seq);
 	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
 
 	for (i = 0; i < timeout; ++i) {
@@ -43,6 +43,8 @@ static int guppy_ack(int fd, long seq, int more) {
 		/* if we acked the EOF packet, stop */
 		if (!more) return 1;
 
+		if (seq == INT_MAX) { errno = EPROTO; return -1; }
+
 		while (1) {
 			/* peek at the next packet we receive */
 			if ((pending = recv(fd, buffer, sizeof(buffer) - 1, MSG_PEEK | MSG_DONTWAIT)) == 0) continue;
@@ -50,7 +52,7 @@ static int guppy_ack(int fd, long seq, int more) {
 			else if (pending < 0) return -1;
 			buffer[pending] = '\0';
 
-			if ((nextseq = strtol(buffer, &end, 10)) == LONG_MIN || seq == LONG_MAX || end == NULL || (*end != ' ' && *end != '\r')) continue;
+			if ((nextseq = strtol(buffer, &end, 10)) == LONG_MIN || nextseq == LONG_MAX || end == NULL || (*end != ' ' && *end != '\r')) continue;
 
 			/* stop once the sequence number is current+1 */
 			if (nextseq == seq + 1) return 1;
@@ -76,7 +78,7 @@ static int do_guppy_download(URL *url, int *body, char **mime, int ask) {
 	char *crlf, *space, *meta;
 	int len, timeout, i, n, received, ret = 1;
 
-	if ((len = strlen(url->url)) + 2 > sizeof(buffer)) goto fail;
+	if ((len = strlen(url->url)) > (int)sizeof(buffer) - 2) goto fail;
 
 	if ((pfd.fd = socket_connect(url, SOCK_DGRAM)) == -1) goto fail;
 
@@ -167,11 +169,11 @@ static int guppy_read(void *c, void *buffer, int length) {
 	if ((crlf = memchr(buffer, '\r', received - 1)) == NULL || crlf == buffer || *(crlf + 1) != '\n') { errno = EPROTO; return -1; }
 	*crlf = '\0';
 	if ((seq = strtol((char *)buffer, &end, 10)) == LONG_MIN || seq == LONG_MAX) return -1;
-	if (end == NULL || (*end != ' ' && *end != '\0')) { errno = EPROTO; return -1; }
+	if (seq > INT_MAX || end == NULL || (*end != ' ' && *end != '\0')) { errno = EPROTO; return -1; }
 	skip = crlf - (char *)buffer + 2;
 
 	/* ack the packet and wait for the next one to confirm that ack is received */
-	if (!guppy_ack((int)(intptr_t)c, seq, received > skip)) return -1;
+	if (!guppy_ack((int)(intptr_t)c, (int)seq, received > skip)) return -1;
 
 	/* signal EOF if this is the EOF packet */
 	if (skip == received) return 0;
