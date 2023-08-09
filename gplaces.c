@@ -990,7 +990,7 @@ static int do_download(URL *url, SSL **body, char **mime, int ask) {
 	if (suffix[len - 1] == '_') --len; /* ignore trailing / */
 	suffix[len] = '\0';
 	memcpy(keypath, crtpath, off);
-	for (i = url->path[len - 1] == '/' ? len - 1 : len; i >= 0; --i) {
+	for (i = (len > 0 && url->path[len - 1] == '/') ? len - 1 : len; i >= 0; --i) {
 		if (i < len && url->path[i] != '/') continue;
 		snprintf(&crtpath[off], sizeof(crtpath) - off, "%.*s.crt", i, suffix);
 		snprintf(&keypath[off], sizeof(keypath) - off, "%.*s.key", i, suffix);
