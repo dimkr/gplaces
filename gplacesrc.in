@@ -14,10 +14,11 @@ set license							file://DOCDIR/LICENSE
 set authors							file://DOCDIR/AUTHORS
 set search							geminispace.info/search
 set gsearch							gopher://gopher.floodgap.com/7/v2/vs
-set home							gemini.circumlunar.space
+set home							geminiprotocol.net
 set capcom							gemini.circumlunar.space/capcom
 set spacewalk						rawtext.club/~sloum/spacewalk.gmi
 set gmisub							calcuode.com/gmisub-aggregate.gmi
+set bbs								bbs.geminispace.org
 set station							station.martinrue.com
 set geddit							geddit.glv.one
 set antenna							warmedal.se/~antenna/
