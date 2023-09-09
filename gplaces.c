@@ -642,9 +642,9 @@ static void reap(const char *command, pid_t pid, int silent) {
 }
 
 
-static pid_t start_handler(const char *handler, const char *filename, const Selector *sel, const URL *url, int stdin) {
-	static char command[1024], buffer[sizeof("/proc/self/fd/2147483647")];
-	size_t l;
+static pid_t start_handler(const char *handler, const char *filename, char *command, size_t length, const Selector *sel, const URL *url, int stdin) {
+	static char buffer[sizeof("/proc/self/fd/2147483647")];
+	size_t i;
 	pid_t pid;
 
 	if (stdin != -1) {
@@ -652,8 +652,8 @@ static pid_t start_handler(const char *handler, const char *filename, const Sele
 		filename = buffer;
 	}
 
-	for (l = 0; *handler && l < sizeof(command) - 1; ) {
-		if (handler[0] == '%' && handler[1] != '\0') {
+	for (i = 0; *handler && i < length - 1; ) {
+		if (handler[0] == '%' && handler[i] != '\0') {
 			const char *append = "";
 			switch (handler[1]) {
 				case '%': append = "%"; break;
@@ -666,10 +666,10 @@ static pid_t start_handler(const char *handler, const char *filename, const Sele
 				case 'f': append = filename; break;
 			}
 			handler += 2;
-			while (*append && l < sizeof(command) - 1) command[l++] = *append++;
-		} else command[l++] = *handler++;
+			while (*append && i < length - 1) command[i++] = *append++;
+		} else command[i++] = *handler++;
 	}
-	command[l] = '\0';
+	command[i] = '\0';
 
 	if ((pid = fork()) == 0) {
 #ifdef GPLACES_USE_FLATPAK_SPAWN
@@ -688,8 +688,9 @@ static pid_t start_handler(const char *handler, const char *filename, const Sele
 
 
 static void execute_handler(const char *handler, const char *filename, const Selector *sel, const URL *url) {
+	static char command[1024];
 	pid_t pid;
-	if ((pid = start_handler(handler, filename, sel, url, -1)) > 0) reap(handler, pid, 0);
+	if ((pid = start_handler(handler, filename, command, sizeof(command), sel, url, -1)) > 0) reap(command, pid, 0);
 }
 
 
@@ -1142,6 +1143,7 @@ static const char *get_filename(const URL *url, size_t *len) {
 
 
 static void stream_to_handler(const Selector *sel, URL *url, const char *filename) {
+	static char command[1024];
 	int fds[2];
 	char *mime = NULL;
 	void *c;
@@ -1154,12 +1156,12 @@ static void stream_to_handler(const Selector *sel, URL *url, const char *filenam
 	if (fcntl(fds[1], F_SETFD, FD_CLOEXEC) == 0 && (fp = fdopen(fds[1], "w")) != NULL) {
 		setbuf(fp, NULL);
 		if ((c = url->proto->download(sel, url, &mime, &parser, 1)) != NULL) {
-			if ((handler = find_mime_handler(mime)) != NULL && (pid = start_handler(handler, filename, sel, url, fds[0])) > 0) {
+			if ((handler = find_mime_handler(mime)) != NULL && (pid = start_handler(handler, filename, command, sizeof(command), sel, url, fds[0])) > 0) {
 				close(fds[0]); fds[0] = -1;
 				save_body(url, c, fp);
 				fclose(fp); fp = NULL;
 				url->proto->close(c); /* close the connection while the handler is running */
-				reap(handler, pid, 0);
+				reap(command, pid, 0);
 			} else url->proto->close(c);
 		}
 		if (fds[0] != -1) close(fds[0]);
