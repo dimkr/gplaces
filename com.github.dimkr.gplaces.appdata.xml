@@ -39,6 +39,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-09-09" version="0.17.11">
+      <description>
+        <ul>
+          <li>Updated aliases in the default configuration file</li>
+          <li>Nicer printing of the handler program exit code</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-08-10" version="0.17.10">
       <description>
         <ul>
