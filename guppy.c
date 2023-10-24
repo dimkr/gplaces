@@ -22,6 +22,27 @@
 #include <poll.h>
 
 
+typedef struct GuppySocket {
+	int fd;
+	struct {
+		long seq;
+		char buf[4096];
+	} chunks[8];
+} GuppySocket;
+
+
+/*============================================================================*/
+static int guppy_error(const URL *url, void *c, int err) {
+	return socket_error(url, &((GuppySocket *)c)->fd, err);
+}
+
+
+static void guppy_close(void *c) {
+	close(((GuppySocket *)c)->fd);
+	free(c);
+}
+
+
 static int guppy_ack(int fd, int seq, int more) {
 	static char buffer[1024];
 	char ack[12];
@@ -72,7 +93,7 @@ static int guppy_ack(int fd, int seq, int more) {
 }
 
 
-static int do_guppy_download(URL *url, int *body, char **mime, int ask) {
+static int do_guppy_download(URL *url, GuppySocket *s, char **mime, int ask) {
 	static char buffer[1024];
 	struct pollfd pfd = {.fd = -1, .events = POLLIN};
 	char *crlf, *space, *meta;
@@ -122,7 +143,7 @@ read:
 		error(0, "cannot download `%s`: %s", url->url, meta);
 		goto fail;
 	} else if ((buffer[0] != '0' && buffer[0] != '1') || buffer[1] != ' ') {
-		*body = pfd.fd;
+		s->fd = pfd.fd;
 		pfd.fd = -1;
 		*mime = meta;
 	}
@@ -136,33 +157,38 @@ fail:
 
 
 static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
-	int fd = -1;
+	GuppySocket *s = NULL;
 	int status, redirs = 0;
 
 	(void)sel;
 
+	if ((s = malloc(sizeof(GuppySocket))) == NULL) return NULL;
+	s->fd = -1;
+
 	do {
-		status = do_guppy_download(url, &fd, mime, ask);
+		status = do_guppy_download(url, s, mime, ask);
 		/* stop on success, on error or when the redirect limit is exhausted */
 		if (status > 1) break;
 	} while (status == 0 && ++redirs < 5);
 
-	if (fd != -1 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
-	else if (fd != -1 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
+	if (s->fd != -1 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
+	else if (s->fd != -1 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
 
 	if (redirs == 5) error(0, "too many redirects from `%s`", url->url);
 
-	return fd == -1 ? NULL : (void *)(intptr_t)fd;
+	if (s->fd == -1) { free(s); return NULL; }
+	return s;
 }
 
 
 static int guppy_read(void *c, void *buffer, int length) {
+	GuppySocket *s = (GuppySocket*)c;
 	int received, skip;
 	char *crlf, *end;
 	long seq;
 
 	/* dequeue the next packet */
-	if ((received = (int)recv((int)(intptr_t)c, buffer, (size_t)length, 0)) < 0) return -1;
+	if ((received = (int)recv(s->fd, buffer, (size_t)length, 0)) < 0) return -1;
 	if (received == 0) { errno = ECONNRESET; return 0; }
 
 	/* extract the sequence number */
@@ -173,7 +199,7 @@ static int guppy_read(void *c, void *buffer, int length) {
 	skip = crlf - (char *)buffer + 2;
 
 	/* ack the packet and wait for the next one to confirm that ack is received */
-	if (!guppy_ack((int)(intptr_t)c, (int)seq, received > skip)) return -1;
+	if (!guppy_ack(s->fd, (int)seq, received > skip)) return -1;
 
 	/* signal EOF if this is the EOF packet */
 	if (skip == received) return 0;
@@ -183,4 +209,4 @@ static int guppy_read(void *c, void *buffer, int length) {
 }
 
 
-const Protocol guppy = {"guppy", "6775", guppy_read, NULL, socket_error, socket_close, guppy_download};
+const Protocol guppy = {"guppy", "6775", guppy_read, NULL, guppy_error, guppy_close, guppy_download};
