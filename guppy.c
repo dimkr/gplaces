@@ -136,7 +136,7 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 
 	if ((s = malloc(sizeof(GuppySocket))) == NULL) return NULL;
 	s->fd = s->last = -1;
-	for (i = 0; i < (int)sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) s->chunks[i].seq = -1;
+	for (i = 0; i < (int)sizeof(s->chunks) / (int)sizeof(s->chunks[0]); ++i) s->chunks[i].seq = -1;
 
 	do {
 		status = do_guppy_download(url, s, mime, ask);
@@ -165,12 +165,12 @@ static int guppy_next(void *c, void *buffer, int length) {
 
 	do {
 		/* check if we have the packet already */
-		for (i = 0; i < (int)sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) {
+		for (i = 0; i < (int)sizeof(s->chunks) / (int)sizeof(s->chunks[0]); ++i) {
 			if ((s->last == -1 && s->chunks[i].seq != -1) || s->chunks[i].seq == s->last + 1) goto parse;
 		}
 
 		/* find a free slot */
-		for (i = 0; i < (int)sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) {
+		for (i = 0; i < (int)sizeof(s->chunks) / (int)sizeof(s->chunks[0]); ++i) {
 			if (s->chunks[i].seq <= s->last) goto wait;
 		}
 
