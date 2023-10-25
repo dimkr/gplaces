@@ -45,12 +45,12 @@ static void guppy_close(void *c) {
 }
 
 
-static int guppy_ack(int fd, int seq, int more) {
+static int guppy_ack(int fd, long seq) {
 	char ack[12];
 	int length;
 	ssize_t sent;
 
-	length = sprintf(ack, "%d\r\n", seq);
+	length = sprintf(ack, "%ld\r\n", seq);
 
 	if ((sent = send(fd, ack, length, 0)) < 0) return 0;
 	if (sent != (ssize_t)length) { errno = EPROTO; return 0; }
@@ -89,7 +89,7 @@ request:
 		if (n < 0 || (n > 0 && !(pfd.revents & POLLIN))) return -1;
 
 		while (1) {
-			j = (j == sizeof(s->chunks) / sizeof(s->chunks[0]) - 1) ? 0 : j + 1;
+			j = (j == (int)sizeof(s->chunks) / sizeof(s->chunks[0]) - 1) ? 0 : j + 1;
 
 			if ((s->chunks[j].length = recv(pfd.fd, s->chunks[j].buffer, sizeof(s->chunks[j].buffer), MSG_DONTWAIT)) < 0) {
 				if (errno == EAGAIN || errno == EWOULDBLOCK) goto request;
@@ -136,7 +136,7 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 
 	if ((s = malloc(sizeof(GuppySocket))) == NULL) return NULL;
 	s->fd = s->last = -1;
-	for (i = 0; i < sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) s->chunks[i].seq = -1;
+	for (i = 0; i < (int)sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) s->chunks[i].seq = -1;
 
 	do {
 		status = do_guppy_download(url, s, mime, ask);
@@ -165,12 +165,12 @@ static int guppy_next(void *c, void *buffer, int length) {
 
 	do {
 		/* check if we have the packet already */
-		for (i = 0; i < sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) {
+		for (i = 0; i < (int)sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) {
 			if ((s->last == -1 && s->chunks[i].seq != -1) || s->chunks[i].seq == s->last + 1) goto parse;
 		}
 
 		/* find a free slot */
-		for (i = 0; i < sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) {
+		for (i = 0; i < (int)sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) {
 			if (s->chunks[i].seq <= s->last) goto wait;
 		}
 
@@ -181,7 +181,7 @@ wait:
 		for (j = 0; j < timeout; ++j) {
 			/* wait for the response packet and resend ack for the previous packet on timeout */
 			pfd.revents = 0;
-			if ((n = poll(&pfd, 1, 1000)) == 0 && s->last != -1 && !guppy_ack(s->fd, (int)s->last, 1)) return -1;
+			if ((n = poll(&pfd, 1, 1000)) == 0 && s->last != -1 && !guppy_ack(s->fd, s->last)) return -1;
 			if (n < 0 || (n > 0 && !(pfd.revents & POLLIN))) return -1;
 			if (n > 0) goto receive;
 		}
@@ -205,7 +205,7 @@ parse:
 	} while (s->last != -1 && s->chunks[i].seq != s->last + 1); /* repeat until we have the next packet */
 
 	/* ack the packet */
-	if (!guppy_ack(s->fd, (int)s->chunks[i].seq, s->chunks[i].length > skip)) return -1;
+	if (!guppy_ack(s->fd, s->chunks[i].seq)) return -1;
 
 	/* signal EOF if this is the EOF packet */
 	if (skip == s->chunks[i].length) return 0;
