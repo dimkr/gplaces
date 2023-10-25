@@ -23,7 +23,7 @@
 
 
 typedef struct GuppySocket {
-	int fd;
+	int fd; /* must be first so socket_*() work */
 	long last;
 	struct {
 		long seq;
@@ -34,13 +34,8 @@ typedef struct GuppySocket {
 
 
 /*============================================================================*/
-static int guppy_error(const URL *url, void *c, int err) {
-	return socket_error(url, &((GuppySocket *)c)->fd, err);
-}
-
-
 static void guppy_close(void *c) {
-	close(((GuppySocket *)c)->fd);
+	socket_close(c);
 	free(c);
 }
 
@@ -156,7 +151,7 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 }
 
 
-static int guppy_next(void *c, void *buffer, int length) {
+static int guppy_read(void *c, void *buffer, int length) {
 	GuppySocket *s = (GuppySocket*)c;
 	struct pollfd pfd = {.fd = s->fd, .events = POLLIN};
 	int skip;
@@ -220,4 +215,4 @@ parse:
 }
 
 
-const Protocol guppy = {"guppy", "6775", guppy_next, NULL, guppy_error, guppy_close, guppy_download};
+const Protocol guppy = {"guppy", "6775", guppy_read, NULL, socket_error, guppy_close, guppy_download};
