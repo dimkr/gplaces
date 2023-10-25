@@ -63,7 +63,8 @@ static int do_guppy_download(URL *url, GuppySocket *s, char **mime, int ask) {
 	static char buffer[1024];
 	struct pollfd pfd = {.events = POLLIN};
 	char *crlf, *end;
-	int len, timeout, i, j = -1, n, ret = 1;
+	ssize_t j = -1;
+	int len, timeout, i, n, ret = 1;
 
 	if ((len = strlen(url->url)) > (int)sizeof(buffer) - 2) goto fail;
 
@@ -89,7 +90,7 @@ request:
 		if (n < 0 || (n > 0 && !(pfd.revents & POLLIN))) return -1;
 
 		while (1) {
-			j = (j == (int)sizeof(s->chunks) / sizeof(s->chunks[0]) - 1) ? 0 : j + 1;
+			j = (j == sizeof(s->chunks) / sizeof(s->chunks[0]) - 1) ? 0 : j + 1;
 
 			if ((s->chunks[j].length = recv(pfd.fd, s->chunks[j].buffer, sizeof(s->chunks[j].buffer), MSG_DONTWAIT)) < 0) {
 				if (errno == EAGAIN || errno == EWOULDBLOCK) goto request;
@@ -130,13 +131,14 @@ fail:
 
 static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
 	GuppySocket *s = NULL;
-	int i, status, redirs = 0;
+	size_t i;
+	int status, redirs = 0;
 
 	(void)sel;
 
 	if ((s = malloc(sizeof(GuppySocket))) == NULL) return NULL;
 	s->fd = s->last = -1;
-	for (i = 0; i < (int)sizeof(s->chunks) / (int)sizeof(s->chunks[0]); ++i) s->chunks[i].seq = -1;
+	for (i = 0; i < sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) s->chunks[i].seq = -1;
 
 	do {
 		status = do_guppy_download(url, s, mime, ask);
@@ -159,18 +161,19 @@ static int guppy_next(void *c, void *buffer, int length) {
 	struct pollfd pfd = {.fd = s->fd, .events = POLLIN};
 	int skip;
 	char *crlf, *end;
-	int timeout, i,j, n, ret;
+	size_t i;
+	int timeout, j, n, ret;
 
 	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
 
 	do {
 		/* check if we have the packet already */
-		for (i = 0; i < (int)sizeof(s->chunks) / (int)sizeof(s->chunks[0]); ++i) {
+		for (i = 0; i < sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) {
 			if ((s->last == -1 && s->chunks[i].seq != -1) || s->chunks[i].seq == s->last + 1) goto parse;
 		}
 
 		/* find a free slot */
-		for (i = 0; i < (int)sizeof(s->chunks) / (int)sizeof(s->chunks[0]); ++i) {
+		for (i = 0; i < sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) {
 			if (s->chunks[i].seq <= s->last) goto wait;
 		}
 
