@@ -202,10 +202,10 @@ parse:
 		if (s->chunks[i].seq > INT_MAX || end == NULL || (*end != ' ' && *end != '\0')) { errno = EPROTO; return -1; }
 		skip = crlf - s->chunks[i].buffer + 2;
 		*crlf = '\r';
-
-		/* ack the packet */
-		if (!guppy_ack(s->fd, (int)s->chunks[i].seq, s->chunks[i].length > skip)) return -1;
 	} while (s->last != -1 && s->chunks[i].seq != s->last + 1); /* repeat until we have the next packet */
+
+	/* ack the packet */
+	if (!guppy_ack(s->fd, (int)s->chunks[i].seq, s->chunks[i].length > skip)) return -1;
 
 	/* signal EOF if this is the EOF packet */
 	if (skip == s->chunks[i].length) return 0;
