@@ -39,6 +39,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-10-27" version="0.17.12">
+      <description>
+        <ul>
+          <li>Fix for crash handler ends with %u</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-09-09" version="0.17.11">
       <description>
         <ul>

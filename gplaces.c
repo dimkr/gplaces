@@ -663,7 +663,7 @@ static pid_t start_handler(const char *handler, const char *filename, char *comm
 	}
 
 	for (i = 0; *handler && i < length - 1; ) {
-		if (handler[0] == '%' && handler[i] != '\0') {
+		if (handler[0] == '%' && handler[1] != '\0') {
 			const char *append = "";
 			switch (handler[1]) {
 				case '%': append = "%"; break;
