@@ -59,7 +59,7 @@ static int do_guppy_download(URL *url, GuppySocket *s, char **mime, int ask) {
 	struct pollfd pfd = {.events = POLLIN};
 	char *crlf, *end;
 	ssize_t j = -1;
-	int len, timeout, i, n, ret = 1;
+	int len, timeout, i, n;
 
 	if ((len = strlen(url->url)) > (int)sizeof(buffer) - 2) goto fail;
 
@@ -82,7 +82,7 @@ request:
 
 		pfd.revents = 0;
 		if ((n = poll(&pfd, 1, 1000)) == 0) continue;
-		if (n < 0 || (n > 0 && !(pfd.revents & POLLIN))) return -1;
+		if (n < 0 || (n > 0 && !(pfd.revents & POLLIN))) goto fail;
 
 		while (1) {
 			j = (j == sizeof(s->chunks) / sizeof(s->chunks[0]) - 1) ? 0 : j + 1;
@@ -120,7 +120,7 @@ request:
 fail:
 	close(s->fd);
 	s->fd = -1;
-	return ret;
+	return -1;
 }
 
 
