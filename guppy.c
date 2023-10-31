@@ -55,9 +55,9 @@ static int guppy_ack(int fd, long seq) {
 
 
 static int do_guppy_download(URL *url, GuppySocket *s, char **mime, int ask) {
-	static char buffer[1024];
+	static char buffer[1024], prompt[1024];
 	struct pollfd pfd = {.events = POLLIN};
-	char *crlf, *end;
+	char *crlf, *end, *input;
 	ssize_t j = -1;
 	int len, timeout, i, n;
 
@@ -97,14 +97,30 @@ request:
 
 			*crlf = '\0';
 
-			if (s->chunks[j].buffer[0] == '0' && s->chunks[j].buffer[1] == ' ' && !redirect(url, &s->chunks[j].buffer[2], s->chunks[j].length - 4, ask)) goto fail;
-			else if (s->chunks[j].buffer[0] == '1' && s->chunks[j].buffer[1] == ' ') {
+			if (s->chunks[j].buffer[0] == '1' && s->chunks[j].buffer[1] == ' ') {
+				if (!ask) goto fail;
+				if (color) snprintf(prompt, sizeof(prompt), "\33[35m%.*s>\33[0m ", get_terminal_width() - 2, &s->chunks[j].buffer[2]);
+				else snprintf(prompt, sizeof(prompt), "%.*s> ", get_terminal_width() - 2, &s->chunks[j].buffer[2]);
+				if ((input = bestline(prompt)) == NULL) goto fail;
+				if (interactive) bestlineHistoryAdd(input);
+				if (!set_input(url, input)) { free(input); goto fail; }
+				free(input);
+				if (interactive) bestlineHistoryAdd(url->url);
+				close(s->fd);
+				s->fd = -1;
+				return 1;
+			} else if (s->chunks[j].buffer[0] == '3' && s->chunks[j].buffer[1] == ' ') {
+				if (!redirect(url, &s->chunks[j].buffer[2], s->chunks[j].length - 4, ask)) goto fail;
+				close(s->fd);
+				s->fd = -1;
+				return 3;
+			} else if (s->chunks[j].buffer[0] == '4' && s->chunks[j].buffer[1] == ' ') {
 				error(0, "cannot download `%s`: %s", url->url, &s->chunks[j].buffer[2]);
 				goto fail;
 			}
 
 			s->chunks[j].seq = strtol(s->chunks[j].buffer, &end, 10);
-			if (s->chunks[j].seq == LONG_MIN || s->chunks[j].seq == LONG_MAX) { s->chunks[j].seq = -1; continue; }
+			if (s->chunks[j].seq < 6 || s->chunks[j].seq == LONG_MAX) { s->chunks[j].seq = -1; continue; }
 			if (s->chunks[j].seq > INT_MAX || end == NULL || (*end != ' ' && *end != '\r')) { s->chunks[j].seq = -1; continue; }
 			if (*end != ' ') { *crlf = '\r'; continue; }
 
@@ -138,8 +154,8 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 	do {
 		status = do_guppy_download(url, s, mime, ask);
 		/* stop on success, on error or when the redirect limit is exhausted */
-		if (status > 1) break;
-	} while (status == 0 && ++redirs < 5);
+		if (status > 5) break;
+	} while (((status == 1) || (status == 3)) && ++redirs < 5);
 
 	if (s->fd != -1 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
 	else if (s->fd != -1 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
