@@ -127,7 +127,7 @@ request:
 			*crlf = '\r';
 			*mime = end + 1;
 
-			return s->chunks[j].buffer[0] - '0';
+			return 2;
 		}
 	}
 
