@@ -24,10 +24,10 @@
 
 typedef struct GuppySocket {
 	int fd; /* must be first so socket_*() work */
-	long last;
+	long first, last;
 	struct {
 		long seq;
-		ssize_t length;
+		ssize_t length, skip;
 		char buffer[4096];
 	} chunks[8];
 } GuppySocket;
@@ -35,13 +35,13 @@ typedef struct GuppySocket {
 
 /*============================================================================*/
 static void guppy_close(void *c) {
-	socket_close(c);
+	close(((GuppySocket *)c)->fd);
 	free(c);
 }
 
 
 static int guppy_ack(int fd, long seq) {
-	char ack[12];
+	char ack[23];
 	int length;
 	ssize_t sent;
 
@@ -56,14 +56,12 @@ static int guppy_ack(int fd, long seq) {
 
 static int do_guppy_download(URL *url, GuppySocket *s, char **mime, int ask) {
 	static char buffer[1024], prompt[1024];
-	struct pollfd pfd = {.events = POLLIN};
+	struct pollfd pfd = {.fd = s->fd, .events = POLLIN};
 	char *crlf, *end, *input;
 	ssize_t j = -1;
 	int len, timeout, i, n;
 
-	if ((len = strlen(url->url)) > (int)sizeof(buffer) - 2) goto fail;
-
-	if ((s->fd = pfd.fd = socket_connect(url, SOCK_DGRAM)) == -1) goto fail;
+	if ((len = strlen(url->url)) > (int)sizeof(buffer) - 2) return 4;
 
 	memcpy(buffer, url->url, len);
 	buffer[len] = '\r';
@@ -77,66 +75,58 @@ request:
 		if (send(pfd.fd, buffer, len + 2, 0) <= 0) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
 			else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
-			goto fail;
+			return 4;
 		}
 
 		pfd.revents = 0;
 		if ((n = poll(&pfd, 1, 1000)) == 0) continue;
-		if (n < 0 || (n > 0 && !(pfd.revents & POLLIN))) goto fail;
+		if (n < 0) return 4;
 
 		while (1) {
 			j = (j == sizeof(s->chunks) / sizeof(s->chunks[0]) - 1) ? 0 : j + 1;
 
-			if ((s->chunks[j].length = recv(pfd.fd, s->chunks[j].buffer, sizeof(s->chunks[j].buffer), MSG_DONTWAIT)) < 0) {
+			if ((s->chunks[j].length = recv(pfd.fd, s->chunks[j].buffer, sizeof(s->chunks[j].buffer) - 1, MSG_DONTWAIT)) < 0) {
 				if (errno == EAGAIN || errno == EWOULDBLOCK) goto request;
 				error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
-				goto fail;
+				return 4;
 			}
 
 			if (s->chunks[j].length < 5 || (crlf = memchr(s->chunks[j].buffer, '\r', s->chunks[j].length - 1)) == NULL || *(crlf + 1) != '\n') continue;
-
 			*crlf = '\0';
 
-			if (s->chunks[j].buffer[0] == '1' && s->chunks[j].buffer[1] == ' ') {
-				if (!ask) goto fail;
-				if (color) snprintf(prompt, sizeof(prompt), "\33[35m%.*s>\33[0m ", get_terminal_width() - 2, &s->chunks[j].buffer[2]);
-				else snprintf(prompt, sizeof(prompt), "%.*s> ", get_terminal_width() - 2, &s->chunks[j].buffer[2]);
-				if ((input = bestline(prompt)) == NULL) goto fail;
-				if (interactive) bestlineHistoryAdd(input);
-				if (!set_input(url, input)) { free(input); goto fail; }
-				free(input);
-				if (interactive) bestlineHistoryAdd(url->url);
-				close(s->fd);
-				s->fd = -1;
-				return 1;
-			} else if (s->chunks[j].buffer[0] == '3' && s->chunks[j].buffer[1] == ' ') {
-				if (!redirect(url, &s->chunks[j].buffer[2], s->chunks[j].length - 4, ask)) goto fail;
-				close(s->fd);
-				s->fd = -1;
-				return 3;
-			} else if (s->chunks[j].buffer[0] == '4' && s->chunks[j].buffer[1] == ' ') {
-				error(0, "cannot download `%s`: %s", url->url, &s->chunks[j].buffer[2]);
-				goto fail;
+			if (s->chunks[j].buffer[1] == ' ') {
+				if (s->chunks[j].buffer[0] == '1') {
+					if (!ask) return 4;
+					if (color) snprintf(prompt, sizeof(prompt), "\33[35m%.*s>\33[0m ", get_terminal_width() - 2, &s->chunks[j].buffer[2]);
+					else snprintf(prompt, sizeof(prompt), "%.*s> ", get_terminal_width() - 2, &s->chunks[j].buffer[2]);
+					if ((input = bestline(prompt)) == NULL) return 4;
+					if (interactive) bestlineHistoryAdd(input);
+					if (!set_input(url, input)) { free(input); return 4; }
+					free(input);
+					if (interactive) bestlineHistoryAdd(url->url);
+				} else if (s->chunks[j].buffer[0] == '3') {
+					if (!redirect(url, &s->chunks[j].buffer[2], s->chunks[j].length - 4, ask)) return 4;
+				} else if (s->chunks[j].buffer[0] == '4') error(0, "cannot download `%s`: %s", url->url, &s->chunks[j].buffer[2]);
+				return s->chunks[j].buffer[0] - '0';
 			}
 
 			s->chunks[j].seq = strtol(s->chunks[j].buffer, &end, 10);
-			if (s->chunks[j].seq < 6 || s->chunks[j].seq == LONG_MAX) { s->chunks[j].seq = -1; continue; }
-			if (s->chunks[j].seq > INT_MAX || end == NULL || (*end != ' ' && *end != '\r')) { s->chunks[j].seq = -1; continue; }
-			if (*end != ' ') { *crlf = '\r'; continue; }
-
+			if (s->chunks[j].seq < 6 || s->chunks[j].seq > INT_MAX || end == NULL || (*end != ' ' && (*end != '\r' || *(end + 1) != '\n'))) { s->chunks[j].seq = -1; continue; }
 			*crlf = '\r';
-			*mime = end + 1;
+			s->chunks[j].skip = crlf - s->chunks[j].buffer + 2;
 
-			return 2;
+			guppy_ack(s->fd, s->chunks[j].seq);
+
+			if (*end != ' ') continue;
+
+			s->first = s->chunks[j].seq;
+			*mime = end + 1;
+			return s->chunks[j].seq;
 		}
 	}
 
 	error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
-
-fail:
-	close(s->fd);
-	s->fd = -1;
-	return -1;
+	return 4;
 }
 
 
@@ -148,7 +138,8 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 	(void)sel;
 
 	if ((s = malloc(sizeof(GuppySocket))) == NULL) return NULL;
-	s->fd = s->last = -1;
+	if ((s->fd = socket_connect(url, SOCK_DGRAM)) == -1) { free(s); return NULL; }
+	s->last = -1;
 	for (i = 0; i < sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) s->chunks[i].seq = -1;
 
 	do {
@@ -157,12 +148,11 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 		if (status > 5) break;
 	} while (((status == 1) || (status == 3)) && ++redirs < 5);
 
-	if (s->fd != -1 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
-	else if (s->fd != -1 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
+	if (status > 6 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
+	else if (status > 6 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
+	else if (redirs == 5) error(0, "too many redirects from `%s`", url->url);
 
-	if (redirs == 5) error(0, "too many redirects from `%s`", url->url);
-
-	if (s->fd == -1) { free(s); return NULL; }
+	if (status <= 6) { close(s->fd); free(s); return NULL; }
 	return s;
 }
 
@@ -170,63 +160,58 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 static int guppy_read(void *c, void *buffer, int length) {
 	GuppySocket *s = (GuppySocket*)c;
 	struct pollfd pfd = {.fd = s->fd, .events = POLLIN};
-	int skip;
-	char *crlf, *end;
-	size_t i;
-	int timeout, j, n, ret;
+	char *end;
+	size_t j;
+	int timeout, i, n, ret;
+
+	/* check if we have the packet already */
+	for (j = 0; j < sizeof(s->chunks) / sizeof(s->chunks[0]); ++j) {
+		if ((s->last == -1 && s->chunks[j].seq == s->first) || s->chunks[j].seq == s->last + 1) goto have;
+	}
 
 	if ((timeout = get_var_integer("TIMEOUT", 15)) < 1) timeout = 15;
 
-	do {
-		/* check if we have the packet already */
-		for (i = 0; i < sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) {
-			if ((s->last == -1 && s->chunks[i].seq != -1) || s->chunks[i].seq == s->last + 1) goto parse;
+	for (i = 0; i < timeout; ++i) {
+		while (1) {
+			/* find a free slot or just use the first if all slots are used and we don't have the next chunk */
+			for (j = 0; j < sizeof(s->chunks) / sizeof(s->chunks[0]) && s->chunks[j].seq > s->last; ++j);
+			if (j == sizeof(s->chunks) / sizeof(s->chunks[0])) j = 0;
+
+			if ((s->chunks[j].length = recv(s->fd, s->chunks[j].buffer, sizeof(s->chunks[j].buffer) - 1, MSG_DONTWAIT)) < 0) {
+				if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+				return -1;
+			}
+			if (s->chunks[j].length == 0) { errno = ECONNRESET; return 0; }
+
+			/* extract the sequence number */
+			s->chunks[j].buffer[s->chunks[j].length] = '\0';
+			if ((s->chunks[j].seq = strtol(s->chunks[j].buffer, &end, 10)) < s->first || s->chunks[j].seq > INT_MAX || end == NULL || *end != '\r' || *(end + 1) != '\n') { s->chunks[j].seq = -1; continue; }
+			s->chunks[j].skip = end - s->chunks[j].buffer + 2;
+
+			/* ack the packet */
+			if (!guppy_ack(s->fd, s->chunks[j].seq)) return -1;
+
+			if (s->last != -1 && s->chunks[j].seq <= s->last) s->chunks[j].seq = -1;
+			else if (s->chunks[j].seq == s->last + 1) goto have;
 		}
 
-		/* find a free slot */
-		for (i = 0; i < sizeof(s->chunks) / sizeof(s->chunks[0]); ++i) {
-			if (s->chunks[i].seq <= s->last) goto wait;
-		}
+		/* wait for the next chunk and resend ack for the previous on timeout */
+		pfd.revents = 0;
+		if ((n = poll(&pfd, 1, 1000)) < 0) return -1;
+		else if (n == 0 && s->last != -1 && !guppy_ack(s->fd, s->last)) return -1;
+		else if (n == 0) continue;
+	}
 
-		/* use the first slot if all slots are used and we don't have the packet */
-		i = 0;
+	errno = ETIMEDOUT;
+	return -1;
 
-wait:
-		for (j = 0; j < timeout; ++j) {
-			/* wait for the response packet and resend ack for the previous packet on timeout */
-			pfd.revents = 0;
-			if ((n = poll(&pfd, 1, 1000)) == 0 && s->last != -1 && !guppy_ack(s->fd, s->last)) return -1;
-			if (n < 0 || (n > 0 && !(pfd.revents & POLLIN))) return -1;
-			if (n > 0) goto receive;
-		}
-
-		errno = ETIMEDOUT;
-		return -1;
-
-receive:
-		/* receive a packet */
-		if ((s->chunks[i].length = recv(s->fd, s->chunks[i].buffer, sizeof(s->chunks[i].buffer), 0)) < 0) return -1;
-		if (s->chunks[i].length == 0) { errno = ECONNRESET; return 0; }
-
-parse:
-		/* extract the sequence number */
-		if ((crlf = memchr(s->chunks[i].buffer, '\r', s->chunks[i].length - 1)) == NULL || crlf == s->chunks[i].buffer || *(crlf + 1) != '\n') { errno = EPROTO; return -1; }
-		*crlf = '\0';
-		if ((s->chunks[i].seq = strtol(s->chunks[i].buffer, &end, 10)) == LONG_MIN || s->chunks[i].seq == LONG_MAX) { *crlf = '\r'; s->chunks[i].seq = -1; return -1; }
-		if (s->chunks[i].seq > INT_MAX || end == NULL || (*end != ' ' && *end != '\0')) { errno = EPROTO; return -1; }
-		skip = crlf - s->chunks[i].buffer + 2;
-		*crlf = '\r';
-	} while (s->last != -1 && s->chunks[i].seq != s->last + 1); /* repeat until we have the next packet */
-
-	/* ack the packet */
-	if (!guppy_ack(s->fd, s->chunks[i].seq)) return -1;
-
+have:
 	/* signal EOF if this is the EOF packet */
-	if (skip == s->chunks[i].length) return 0;
+	if (s->chunks[j].skip == s->chunks[j].length) return 0;
 
-	s->last = s->chunks[i].seq;
-	ret = (length > s->chunks[i].length - skip ? s->chunks[i].length - skip : length);
-	memmove(buffer, crlf + 2, ret);
+	s->last = s->chunks[j].seq;
+	ret = (length > s->chunks[j].length - s->chunks[j].skip ? s->chunks[j].length - s->chunks[j].skip : length);
+	memmove(buffer, s->chunks[j].buffer + s->chunks[j].skip, ret);
 	return ret;
 }
 
