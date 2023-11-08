@@ -29,6 +29,11 @@ static int tcp_peek(void *c, void *buffer, int length) {
 }
 
 
+static void tcp_close(void *c) {
+	close((int)(intptr_t)c);
+}
+
+
 static ssize_t sendall(int sockfd, const void *buf, size_t len, int flags) {
 	ssize_t sent = 0, total;
 	for (total = 0; total < (ssize_t)len && (sent = send(sockfd, (char *)buf + total, len - total, flags)) > 0; total += sent);

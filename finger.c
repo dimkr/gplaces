@@ -48,4 +48,4 @@ static void *finger_download(const Selector *sel, URL *url, char **mime, Parser 
 }
 
 
-const Protocol finger = {"finger", "79", tcp_read, tcp_peek, socket_error, socket_close, finger_download};
+const Protocol finger = {"finger", "79", tcp_read, tcp_peek, socket_error, tcp_close, finger_download};

@@ -26,8 +26,3 @@ static int socket_error(const URL *url, void *c, int err) {
 	else error(0, "failed to download `%s`: %s", url->url, strerror(errno));
 	return 1;
 }
-
-
-static void socket_close(void *c) {
-	close((int)(intptr_t)c);
-}
