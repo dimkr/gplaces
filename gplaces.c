@@ -530,6 +530,8 @@ static int socket_connect(const URL *url, int socktype) {
 static int tcp_connect(const URL *url) {
 	return socket_connect(url, SOCK_STREAM);
 }
+
+
 /*============================================================================*/
 static void parse_plaintext_line(char *line, int *pre, Selector **sel, SelectorList *list) {
 	(void)pre;
