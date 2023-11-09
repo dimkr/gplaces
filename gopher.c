@@ -128,7 +128,7 @@ static void *gopher_download(const Selector *sel, URL *url, char **mime, Parser 
 	char *buffer;
 	int fd = -1, len;
 
-	if ((buffer = gopher_request(sel, url, ask, &len, 9)) == NULL || (fd = tcp_connect(url)) == -1) goto fail;
+	if ((buffer = gopher_request(sel, url, ask, &len, 9)) == NULL || (fd = socket_connect(url, SOCK_STREAM)) == -1) goto fail;
 	if (sendall(fd, buffer, len, MSG_NOSIGNAL) != len) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
 		else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
@@ -142,4 +142,4 @@ fail:
 }
 
 
-const Protocol gopher = {"gopher", "70", tcp_read, tcp_peek, tcp_error, tcp_close, gopher_download};
+const Protocol gopher = {"gopher", "70", tcp_read, tcp_peek, socket_error, tcp_close, gopher_download};

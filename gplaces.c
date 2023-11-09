@@ -139,6 +139,9 @@ const Protocol spartan;
 #ifdef GPLACES_WITH_FINGER
 const Protocol finger;
 #endif
+#ifdef GPLACES_WITH_GUPPY
+const Protocol guppy;
+#endif
 
 
 /*============================================================================*/
@@ -364,6 +367,10 @@ valid:
 	} else if (strcmp(url->scheme, "finger") == 0) {
 		url->proto = &finger;
 #endif
+#ifdef GPLACES_WITH_GUPPY
+	} else if (strcmp(url->scheme, "guppy") == 0) {
+		url->proto = &guppy;
+#endif
 	}
 
 	switch (curl_url_get(url->cu, CURLUPART_PORT, &url->port, 0)) {
@@ -492,8 +499,8 @@ static Page *history_lookup(const char *url) {
 
 
 /*============================================================================*/
-static int tcp_connect(const URL *url) {
-	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_protocol = IPPROTO_TCP}, *result, *it;
+static int socket_connect(const URL *url, int socktype) {
+	struct addrinfo hints = {.ai_family = AF_UNSPEC, .ai_socktype = socktype}, *result, *it;
 	struct timeval tv = {0};
 	int timeout, err, fd = -1;
 
@@ -517,6 +524,11 @@ static int tcp_connect(const URL *url) {
 	if (fd == -1 && err == EINPROGRESS) error(0, "cannot connect to `%s`:`%s`: cancelled", url->host, url->port);
 	else if (fd == -1 && err != 0) error(0, "cannot connect to `%s`:`%s`: %s", url->host, url->port, strerror(err));
 	return fd;
+}
+
+
+static int tcp_connect(const URL *url) {
+        return socket_connect(url, SOCK_STREAM);
 }
 
 
@@ -1102,6 +1114,9 @@ const Protocol gemini = {"gemini", "1965", ssl_read, ssl_peek, ssl_error, ssl_cl
 
 
 /*============================================================================*/
+#if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN) || defined(GPLACES_WITH_FINGER) || defined(GPLACES_WITH_GUPPY)
+	#include "socket.c"
+#endif
 #if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN) || defined(GPLACES_WITH_FINGER)
 	#include "tcp.c"
 #endif
@@ -1116,6 +1131,9 @@ const Protocol gemini = {"gemini", "1965", ssl_read, ssl_peek, ssl_error, ssl_cl
 #endif
 #ifdef GPLACES_WITH_FINGER
 	#include "finger.c"
+#endif
+#ifdef GPLACES_WITH_GUPPY
+	#include "guppy.c"
 #endif
 
 

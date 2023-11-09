@@ -19,23 +19,10 @@
 
 ================================================================================
 */
-static int tcp_read(void *c, void *buffer, int length) {
-	return (int)recv((int)(intptr_t)c, buffer, (size_t)length, 0);
-}
-
-
-static int tcp_peek(void *c, void *buffer, int length) {
-	return (int)recv((int)(intptr_t)c, buffer, (size_t)length, MSG_PEEK);
-}
-
-
-static void tcp_close(void *c) {
-	close((int)(intptr_t)c);
-}
-
-
-static ssize_t sendall(int sockfd, const void *buf, size_t len, int flags) {
-	ssize_t sent = 0, total;
-	for (total = 0; total < (ssize_t)len && (sent = send(sockfd, (char *)buf + total, len - total, flags)) > 0; total += sent);
-	return sent <= 0 ? sent : total;
+static int socket_error(const URL *url, void *c, int err) {
+	(void)c;
+	if (err == 0) return 0;
+	if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "failed to download `%s`: cancelled", url->url);
+	else error(0, "failed to download `%s`: %s", url->url, strerror(errno));
+	return 1;
 }

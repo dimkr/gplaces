@@ -35,7 +35,7 @@ static int do_spartan_download(URL *url, int *body, char **mime, const char *inp
 	int fd = -1, len, total, received, ret = 40;
 
 	len = snprintf(buffer, sizeof(buffer), "%s %s %zu\r\n", url->host, url->path, inputlen);
-	if ((fd = tcp_connect(url)) == -1) goto fail;
+	if ((fd = socket_connect(url, SOCK_STREAM)) == -1) goto fail;
 	if (sendall(fd, buffer, len, MSG_NOSIGNAL) != len || (inputlen > 0 && sendall(fd, input, inputlen, MSG_NOSIGNAL) != (ssize_t)inputlen)) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
 		else error(0, "cannot send request to `%s`:`%s`: %s", url->host, url->port, strerror(errno));
@@ -110,4 +110,4 @@ fail:
 }
 
 
-const Protocol spartan = {"spartan", "300", tcp_read, tcp_peek, tcp_error, tcp_close, spartan_download};
+const Protocol spartan = {"spartan", "300", tcp_read, tcp_peek, socket_error, tcp_close, spartan_download};
