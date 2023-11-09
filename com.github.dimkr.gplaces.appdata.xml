@@ -18,7 +18,7 @@
        <li>Slightly prettified Gemtext output</li>
        <li>Configurable handlers for various file types</li>
        <li>Quick navigation to recently viewed pages</li>
-       <li>Support for other "small internet" protocols: Spartan, Gopher and Finger</li>
+       <li>Support for other "small internet" protocols: Spartan, Gopher, Finger and Guppy</li>
     </ul>
     <p>
        gplaces should be fairly straightforward to use for anyone used to the command-line and man pages. Type "readme" for a short introduction.
@@ -39,10 +39,18 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2023-11-10" version="0.18.0">
+      <description>
+        <ul>
+          <li>Support for an additional protocol: Guppy</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2023-10-27" version="0.17.12">
       <description>
         <ul>
-          <li>Fix for crash handler ends with %u</li>
+          <li>Fix for crash when handler ends with %u</li>
         </ul>
       </description>
     </release>
