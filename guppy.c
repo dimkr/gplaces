@@ -130,7 +130,6 @@ request:
 
 			chunk->seq = strtol(chunk->buffer, &end, 10);
 			if (chunk->seq < 6 || chunk->seq > INT_MAX || end == NULL || (*end != ' ' && (*end != '\r' || *(end + 1) != '\n'))) continue;
-			*crlf = '\r';
 			chunk->skip = crlf - chunk->buffer + 2;
 
 			/* ack the chunk */
