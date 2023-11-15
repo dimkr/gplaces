@@ -39,7 +39,7 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
-    <release date="2023-11-10" version="0.18.0">
+    <release date="2023-11-15" version="0.18.0">
       <description>
         <ul>
           <li>Support for an additional protocol: Guppy</li>
