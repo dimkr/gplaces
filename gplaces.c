@@ -1201,6 +1201,7 @@ static void download_to_file(const Selector *sel, URL *url, const char *def) {
 	size_t len;
 	int ret = 0;
 
+	if (url->proto == NULL) return;
 	if (def != NULL && strcmp(def, "-") == 0) { stream_to_handler(sel, url, def); return; }
 
 	if (def == NULL) {
@@ -1264,7 +1265,7 @@ static SelectorList download_text(const Selector *sel, URL *url, int ask, int ha
 	size_t parsed, length = 0, total = 0, prog = 0;
 	int received, pre = 0, width, ok = 0, links = 0;
 
-	if ((c = url->proto->download(sel, url, &mime, &parser, ask)) == NULL) goto out;
+	if (url->proto == NULL || (c = url->proto->download(sel, url, &mime, &parser, ask)) == NULL) goto out;
 	if (parser == NULL) {
 		if (handle) save_and_handle(sel, url, c, mime);
 		goto out;
