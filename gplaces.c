@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2022, 2023  Dima Krasner
+    Copyright (C) 2022 - 2024  Dima Krasner
     Copyright (C) 2019  Sebastian Steinhauer
 
     This program is free software: you can redistribute it and/or modify
@@ -1779,7 +1779,7 @@ int main(int argc, char **argv) {
 	load_rc_files(parse_arguments(argc, argv));
 
 	if (interactive) puts(
-		"gplaces - "GPLACES_VERSION"  Copyright (C) 2022, 2023  Dima Krasner\n" \
+		"gplaces - "GPLACES_VERSION"  Copyright (C) 2022 - 2024  Dima Krasner\n" \
 		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"This program is free software and comes with ABSOLUTELY NO WARRANTY;\n" \
 		"see "PREFIX"/share/doc/gplaces/LICENSE for details.\n"
