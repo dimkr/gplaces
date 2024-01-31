@@ -800,10 +800,10 @@ static void print_text(FILE *fp, const SelectorList list, const char *filter) {
 
 
 /*============================================================================*/
-static int tofu(X509 *cert, const char *host, int ask) {
+static int tofu(X509 *cert, const URL *url, int ask) {
 	static char buffer[1024], hex[EVP_MAX_MD_SIZE * 2 + 1];
 	static unsigned char md[EVP_MAX_MD_SIZE];
-	size_t size = 1, hlen;
+	size_t size = 1, hlen, plen;
 	const char *p, *end;
 	char *line, *start;
 	unsigned int mdlen, i;
@@ -817,19 +817,19 @@ static int tofu(X509 *cert, const char *host, int ask) {
 	}
 	hex[mdlen * 2] = '\0';
 
-	hlen = strlen(host);
+	hlen = strlen(url->host);
+	plen = strlen(url->port);
 
 	if ((p = map_file("hosts", &fd, &size)) == NULL && size > 0) return 0;
 	else if (p != NULL) {
-		for (end = p; !found && (start = memmem(end, size - (end - p), host, hlen)) != NULL; end = start + hlen + 1) {
-			if (!(found = ((start == p || *(start - 1) == '\n') && size - (start - p) >= hlen + 2 && start[hlen] == ' ' && start[hlen + 1] != '\n'))) continue;
-			if (size - (start - p) < hlen + 1 + mdlen * 2 + 1 || start[hlen + 1 + mdlen * 2] != '\n') break;
-			if ((trust = memcmp(&start[hlen + 1], hex, mdlen * 2) == 0) || !ask) break;
-			if (color) snprintf(buffer, sizeof(buffer), "\33[35mTrust new certificate for `%s`? (y/n)>\33[0m ", host);
-			else snprintf(buffer, sizeof(buffer), "Trust new certificate for `%s`? (y/n)> ", host);
+		for (end = p; !found && (start = memmem(end, size - (end - p), url->host, hlen)) != NULL; end = start + hlen + 1) {
+			if (!(found = ((start == p || *(start - 1) == '\n') && size - (start - p) >= hlen + 1 + plen + 1 + mdlen * 2 + 1 && start[hlen] == ':' && memcmp(&start[hlen + 1], url->port, plen) == 0 && start[hlen + 1 + plen] == ' ' && start[hlen + 1 + plen + 1 + mdlen * 2 + 1] != '\n'))) continue;
+			if ((trust = memcmp(&start[hlen + 1 + plen + 1], hex, mdlen * 2) == 0) || !ask) break;
+			if (color) snprintf(buffer, sizeof(buffer), "\33[35mTrust new certificate for `%s:%s`? (y/n)>\33[0m ", url->host, url->port);
+			else snprintf(buffer, sizeof(buffer), "Trust new certificate for `%s:%s`? (y/n)> ", url->host, url->port);
 			if ((line = bestline(buffer)) != NULL) {
 				if (*line == 'y' || *line == 'Y') {
-					memcpy(&start[hlen + 1], hex, mdlen * 2);
+					memcpy(&start[hlen + 1 + plen + 1], hex, mdlen * 2);
 					trust = 1;
 				}
 				free(line);
@@ -837,7 +837,7 @@ static int tofu(X509 *cert, const char *host, int ask) {
 			munmap((void *)p, size);
 		}
 	}
-	if (!found) trust = append_line(fd, "%s %s\n", host, hex);
+	if (!found) trust = append_line(fd, "%s:%s %s\n", url->host, url->port, hex);
 	close(fd);
 	return trust;
 }
@@ -869,7 +869,7 @@ static SSL *ssl_connect(const URL *url, SSL_CTX *ctx, int ask) {
 		goto out;
 	}
 
-	if (!(ok = tofu(cert, url->host, ask))) error(0, "cannot establish secure connection to `%s`:`%s`: bad certificate", url->host, url->port);
+	if (!(ok = tofu(cert, url, ask))) error(0, "cannot establish secure connection to `%s`:`%s`: bad certificate", url->host, url->port);
 
 out:
 	if (cert) X509_free(cert);
@@ -972,8 +972,8 @@ static int do_download(URL *url, SSL **body, char **mime, int ask) {
 	else if (redir == 40) goto fail;
 
 	if ((home = getenv("XDG_DATA_HOME")) != NULL) {
-		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s", home, url->host)) >= (int)sizeof(crtpath)) goto fail;;
-	} else if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s", home, url->host)) >= (int)sizeof(crtpath)) goto fail;
+		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s_%s", home, url->host, url->port)) >= (int)sizeof(crtpath)) goto fail;;
+	} else if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s_%s", home, url->host, url->port)) >= (int)sizeof(crtpath)) goto fail;
 
 	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) goto fail;
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
