@@ -823,7 +823,7 @@ static int tofu(X509 *cert, const URL *url, int ask) {
 	if ((p = map_file("hosts", &fd, &size)) == NULL && size > 0) return 0;
 	else if (p != NULL) {
 		for (end = p; !found && (start = memmem(end, size - (end - p), url->host, hlen)) != NULL; end = start + hlen + 1) {
-			if (!(found = ((start == p || *(start - 1) == '\n') && size - (start - p) >= hlen + 1 + plen + 1 + mdlen * 2 + 1 && start[hlen] == ':' && memcmp(&start[hlen + 1], url->port, plen) == 0 && start[hlen + 1 + plen] == ' ' && start[hlen + 1 + plen + 1 + mdlen * 2 + 1] != '\n'))) continue;
+			if (!(found = ((start == p || *(start - 1) == '\n') && size - (start - p) >= hlen + 1 + plen + 1 + mdlen * 2 + 1 && start[hlen] == ':' && memcmp(&start[hlen + 1], url->port, plen) == 0 && start[hlen + 1 + plen] == ' ' && start[hlen + 1 + plen + 1 + mdlen * 2 + 1] == '\n'))) continue;
 			if ((trust = memcmp(&start[hlen + 1 + plen + 1], hex, mdlen * 2) == 0) || !ask) break;
 			if (color) snprintf(buffer, sizeof(buffer), "\33[35mTrust new certificate for `%s:%s`? (y/n)>\33[0m ", url->host, url->port);
 			else snprintf(buffer, sizeof(buffer), "Trust new certificate for `%s:%s`? (y/n)> ", url->host, url->port);
