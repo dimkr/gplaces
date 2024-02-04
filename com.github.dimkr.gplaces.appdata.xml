@@ -39,6 +39,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2024-02-04" version="0.18.2">
+      <description>
+        <ul>
+          <li>Disruptive change: certificate scope is determined by host and port, not host alone</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2024-01-12" version="0.18.1">
       <description>
         <ul>
