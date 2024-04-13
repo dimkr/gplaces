@@ -81,7 +81,8 @@ typedef struct Protocol {
 	int (*peek)(void *, void *, int);
 	int (*error)(const URL *, void *, int);
 	void (*close)(void *);
-	void *(*download)(const Selector *, URL *, char **mime, Parser *, int ask);
+	void *(*download)(const Selector *, URL *, char **mime, Parser *, unsigned int redirs, int ask);
+	int (*set_input)(URL *url, const char *input);
 } Protocol;
 
 struct Selector {
@@ -128,6 +129,9 @@ typedef struct Help {
 
 /*============================================================================*/
 const Protocol gemini;
+#ifdef GPLACES_WITH_TITAN
+const Protocol titan;
+#endif
 #ifdef GPLACES_WITH_GOPHERS
 const Protocol gophers;
 #endif
@@ -288,7 +292,7 @@ static void free_selectors(SelectorList *list) {
 }
 
 
-static int set_input(URL *url, const char *input) {
+static int set_query(URL *url, const char *input) {
 	char *query, *tmp;
 	if ((query = curl_easy_escape(NULL, input, 0)) == NULL) return 0;
 	if (curl_url_set(url->cu, CURLUPART_QUERY, query, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(url->cu, CURLUPART_URL, &tmp, 0) != CURLUE_OK) { curl_free(query); return 0; }
@@ -296,6 +300,16 @@ static int set_input(URL *url, const char *input) {
 	curl_free(query);
 	return 1;
 }
+
+
+#if defined(GPLACES_WITH_TITAN) || defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_GOPHERS) || defined(GPLACSE_WITH_FINGER)
+static int set_fragment(URL *url, const char *input) {
+	char *tmp;
+	if (curl_url_set(url->cu, CURLUPART_FRAGMENT, input, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK || curl_url_get(url->cu, CURLUPART_URL, &tmp, 0) != CURLUE_OK) return 0;
+	curl_free(url->url); url->url = tmp;
+	return 1;
+}
+#endif
 
 
 static int parse_url(URL *url, const char *rawurl, const char *from, const char *input) {
@@ -328,30 +342,14 @@ static int parse_url(URL *url, const char *rawurl, const char *from, const char 
 valid:
 #endif
 
-	if (input != NULL && input[0] != '\0' && !set_input(url, input)) return 0;
-	else if ((input == NULL || input[0] == '\0') && curl_url_get(url->cu, CURLUPART_URL, &url->url, 0) != CURLUE_OK) return 0;
-
-	if (curl_url_get(url->cu, CURLUPART_SCHEME, &url->scheme, 0) != CURLUE_OK || (!(file = (strcmp(url->scheme, "file") == 0)) && curl_url_get(url->cu, CURLUPART_HOST, &url->host, 0) != CURLUE_OK)) return 0;
-
-#if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
-	#ifdef GPLACES_USE_LIBIDN2
-	if (!file && (idn2_to_ascii_8z(url->host, &host, IDN2_NONTRANSITIONAL) == IDN2_OK || idn2_to_ascii_8z(url->host, &host, IDN2_TRANSITIONAL) == IDN2_OK)) {
-	#elif defined(GPLACES_USE_LIBIDN)
-	if (!file && idna_to_ascii_8z(url->host, &host, 0) == IDNA_SUCCESS) {
-	#endif
-		if (curl_url_set(url->cu, CURLUPART_HOST, host, 0) != CURLUE_OK) { free(host); return 0; }
-		free(host);
-		curl_free(url->host); url->host = NULL;
-		if (curl_url_get(url->cu, CURLUPART_HOST, &url->host, 0) != CURLUE_OK) return 0;
-	}
-#endif
-
-	if (curl_url_get(url->cu, CURLUPART_PATH, &url->path, 0) != CURLUE_OK) return 0;
-
-	if (file) return 1;
+	if (curl_url_get(url->cu, CURLUPART_SCHEME, &url->scheme, 0) != CURLUE_OK) return 0;
 
 	if (strcmp(url->scheme, "gemini") == 0) {
 		url->proto = &gemini;
+#ifdef GPLACES_WITH_TITAN
+	} else if (strcmp(url->scheme, "titan") == 0) {
+		url->proto = &titan;
+#endif
 #ifdef GPLACES_WITH_GOPHER
 	} else if (strcmp(url->scheme, "gopher") == 0) {
 		url->proto = &gopher;
@@ -373,6 +371,28 @@ valid:
 		url->proto = &guppy;
 #endif
 	}
+
+	if (input != NULL && input[0] != '\0' && !url->proto->set_input(url, input)) return 0;
+	else if ((input == NULL || input[0] == '\0') && curl_url_get(url->cu, CURLUPART_URL, &url->url, 0) != CURLUE_OK) return 0;
+
+	if (!(file = (strcmp(url->scheme, "file")) == 0) && curl_url_get(url->cu, CURLUPART_HOST, &url->host, 0) != CURLUE_OK) return 0;
+
+#if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
+	#ifdef GPLACES_USE_LIBIDN2
+	if (!file && (idn2_to_ascii_8z(url->host, &host, IDN2_NONTRANSITIONAL) == IDN2_OK || idn2_to_ascii_8z(url->host, &host, IDN2_TRANSITIONAL) == IDN2_OK)) {
+	#elif defined(GPLACES_USE_LIBIDN)
+	if (!file && idna_to_ascii_8z(url->host, &host, 0) == IDNA_SUCCESS) {
+	#endif
+		if (curl_url_set(url->cu, CURLUPART_HOST, host, 0) != CURLUE_OK) { free(host); return 0; }
+		free(host);
+		curl_free(url->host); url->host = NULL;
+		if (curl_url_get(url->cu, CURLUPART_HOST, &url->host, 0) != CURLUE_OK) return 0;
+	}
+#endif
+
+	if (curl_url_get(url->cu, CURLUPART_PATH, &url->path, 0) != CURLUE_OK) return 0;
+
+	if (file) return 1;
 
 	switch (curl_url_get(url->cu, CURLUPART_PORT, &url->port, 0)) {
 		case CURLUE_OK: break;
@@ -960,7 +980,7 @@ static int save_body(const URL *url, void *c, FILE *fp) {
 }
 
 
-static int do_download(URL *url, SSL **body, char **mime, int ask) {
+static int ssl_download(URL *url, SSL **body, char **mime, int request(const URL *, SSL *, void *), void *p, int ask) {
 	static char crtpath[1024], keypath[1024], suffix[1024], buffer[1024], data[2 + 1 + 1024 + 2 + 1]; /* 99 meta\r\n\0 */
 	struct stat stbuf;
 	const char *home;
@@ -1015,8 +1035,7 @@ loaded:
 
 	if ((ssl = ssl_connect(url, ctx, ask)) == NULL) goto fail;
 
-	len = snprintf(buffer, sizeof(buffer), "%s\r\n", url->url);
-	if ((err = SSL_get_error(ssl, SSL_write(ssl, buffer, len >= (int)sizeof(buffer) ? (int)sizeof(buffer) - 1 : len))) != SSL_ERROR_NONE) {
+	if ((err = request(url, ssl, p)) != SSL_ERROR_NONE) {
 		if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "cannot send request to `%s`:`%s`: cancelled", url->host, url->port);
 		else error(0, "cannot send request to `%s`:`%s`: error %d", url->host, url->port, err);
 		goto fail;
@@ -1047,7 +1066,7 @@ loaded:
 			if ((line = bestline(buffer)) == NULL) goto fail;
 			if (data[1] != '1' && interactive) bestlineHistoryAdd(line);
 			if (data[1] == '1') bestlineMaskModeDisable();
-			if (!set_input(url, line)) { free(line); goto fail; }
+			if (!set_query(url, line)) { free(line); goto fail; }
 			free(line);
 			if (data[1] != '1' && interactive) bestlineHistoryAdd(url->url);
 			break;
@@ -1087,21 +1106,30 @@ fail:
 }
 
 
-static void sigint(int sig) {
-	(void)sig;
+/*============================================================================*/
+static int gemini_request(const URL *url, SSL *ssl, void *p) {
+	static char buffer[1024];
+	int len;
+
+	(void)p;
+
+	len = snprintf(buffer, sizeof(buffer), "%s\r\n", url->url);
+	return SSL_get_error(ssl, SSL_write(ssl, buffer, len >= (int)sizeof(buffer) ? (int)sizeof(buffer) - 1 : len));
 }
 
 
-static void *gemini_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
+static void *gemini_download(const Selector *sel, URL *url, char **mime, Parser *parser, unsigned int redirs, int ask) {
 	SSL *ssl = NULL;
-	int status, redirs = 0;
+	int status = -1;
 
 	(void)sel;
 
 	do {
-		status = do_download(url, &ssl, mime, ask);
+		status = ssl_download(url, &ssl, mime, gemini_request, NULL, ask);
 		if (status >= 20 && status <= 29) break;
-	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69) || (status >= 30 && status <= 39 && ++redirs < 5));
+	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69) || (status >= 30 && status <= 39 && ++redirs < 5 && url->proto->download == gemini_download));
+
+	if (redirs < 5 && url->proto->download != gemini_download) return url->proto->download(sel, url, mime, parser, redirs, ask);
 
 	if (ssl != NULL && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
 	else if (ssl != NULL && (!interactive || strncmp(*mime, "text/plain", 10) == 0)) *parser = parse_plaintext_line;
@@ -1111,10 +1139,13 @@ static void *gemini_download(const Selector *sel, URL *url, char **mime, Parser 
 }
 
 
-const Protocol gemini = {"gemini", "1965", ssl_read, ssl_peek, ssl_error, ssl_close, gemini_download};
+const Protocol gemini = {"gemini", "1965", ssl_read, ssl_peek, ssl_error, ssl_close, gemini_download, set_query};
 
 
 /*============================================================================*/
+#ifdef GPLACES_WITH_TITAN
+	#include "titan.c"
+#endif
 #if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN) || defined(GPLACES_WITH_FINGER) || defined(GPLACES_WITH_GUPPY)
 	#include "socket.c"
 #endif
@@ -1174,7 +1205,7 @@ static void stream_to_handler(const Selector *sel, URL *url, const char *filenam
 	if (pipe(fds) == -1) return;
 	if (fcntl(fds[1], F_SETFD, FD_CLOEXEC) == 0 && (fp = fdopen(fds[1], "w")) != NULL) {
 		setbuf(fp, NULL);
-		if ((c = url->proto->download(sel, url, &mime, &parser, 1)) != NULL) {
+		if ((c = url->proto->download(sel, url, &mime, &parser, 0, 1)) != NULL) {
 			if ((handler = find_mime_handler(mime)) != NULL && (pid = start_handler(handler, filename, command, sizeof(command), sel, url, fds[0])) > 0) {
 				close(fds[0]); fds[0] = -1;
 				save_body(url, c, fp);
@@ -1219,7 +1250,7 @@ static void download_to_file(const Selector *sel, URL *url, const char *def) {
 	}
 	if ((fp = fopen(filename, "wb")) == NULL) error(0, "cannot create file `%s`: %s", filename, strerror(errno));
 	else {
-		if ((c = url->proto->download(sel, url, &mime, &parser, 1)) != NULL) {
+		if ((c = url->proto->download(sel, url, &mime, &parser, 0, 1)) != NULL) {
 			ret = save_body(url, c, fp);
 			url->proto->close(c);
 		}
@@ -1266,7 +1297,7 @@ static SelectorList download_text(const Selector *sel, URL *url, int ask, int ha
 	size_t parsed, length = 0, total = 0, prog = 0;
 	int received, pre = 0, width, ok = 0, links = 0;
 
-	if (url->proto == NULL || (c = url->proto->download(sel, url, &mime, &parser, ask)) == NULL) goto out;
+	if (url->proto == NULL || (c = url->proto->download(sel, url, &mime, &parser, 0, ask)) == NULL) goto out;
 	if (parser == NULL) {
 		if (handle) save_and_handle(sel, url, c, mime);
 		goto out;
@@ -1792,6 +1823,11 @@ static void quit_client() {
 	free_selectors(&subscriptions);
 	free_history(&history);
 	if (interactive) puts("\33[0m");
+}
+
+
+static void sigint(int sig) {
+	(void)sig;
 }
 
 

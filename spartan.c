@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2022, 2023  Dima Krasner
+    Copyright (C) 2022 - 2024  Dima Krasner
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -76,11 +76,11 @@ fail:
 }
 
 
-static void *spartan_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
+static void *spartan_download(const Selector *sel, URL *url, char **mime, Parser *parser, unsigned int redirs, int ask) {
 	char *input = NULL, *query = NULL;
 	size_t inputlen = 0;
 	static int fd = -1;
-	int status, redirs = 0;
+	int status;
 
 	switch (curl_url_get(url->cu, CURLUPART_QUERY, &query, 0)) {
 	case CURLUE_OK: input = query; break;
@@ -88,7 +88,7 @@ static void *spartan_download(const Selector *sel, URL *url, char **mime, Parser
 	default: return NULL;
 	}
 	if (sel->prompt && (input == NULL || *input == '\0')) {
-		if (!ask || (input = bestline(color ? "\33[35mData>\33[0m " : "Data> ")) == NULL || !set_input(url, input)) goto fail;
+		if (!ask || (input = bestline(color ? "\33[35mData>\33[0m " : "Data> ")) == NULL || !set_query(url, input)) goto fail;
 		if (interactive) { bestlineHistoryAdd(input); bestlineHistoryAdd(url->url); }
 	}
 	if (input != NULL) inputlen = strlen(input);
@@ -96,7 +96,9 @@ static void *spartan_download(const Selector *sel, URL *url, char **mime, Parser
 	do {
 		status = do_spartan_download(url, &fd, mime, input, inputlen, ask);
 		if (status == 2) break;
-	} while (status == 3 && ++redirs < 5);
+	} while (status == 3 && ++redirs < 5 && url->proto->download == spartan_download);
+
+	if (redirs < 5 && url->proto->download != spartan_download) return url->proto->download(sel, url, mime, parser, redirs, ask);
 
 	if (fd != -1 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_spartan_line;
 	else if (fd != -1 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
@@ -110,4 +112,4 @@ fail:
 }
 
 
-const Protocol spartan = {"spartan", "300", tcp_read, tcp_peek, socket_error, tcp_close, spartan_download};
+const Protocol spartan = {"spartan", "300", tcp_read, tcp_peek, socket_error, tcp_close, spartan_download, set_query};

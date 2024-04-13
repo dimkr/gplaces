@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2022, 2023  Dima Krasner
+    Copyright (C) 2022 - 2024  Dima Krasner
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -19,12 +19,13 @@
 
 ================================================================================
 */
-static void *finger_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
+static void *finger_download(const Selector *sel, URL *url, char **mime, Parser *parser, unsigned int redirs, int ask) {
 	static char buffer[1024 + 3]; /* path\r\n\0 */
 	char *user = NULL;
 	int fd = -1, len = 0;
 
 	(void)sel;
+	(void)redirs;
 	(void)ask;
 
 	switch (curl_url_get(url->cu, CURLUPART_USER, &user, 0)) {
@@ -48,4 +49,4 @@ static void *finger_download(const Selector *sel, URL *url, char **mime, Parser 
 }
 
 
-const Protocol finger = {"finger", "79", tcp_read, tcp_peek, socket_error, tcp_close, finger_download};
+const Protocol finger = {"finger", "79", tcp_read, tcp_peek, socket_error, tcp_close, finger_download, set_fragment};

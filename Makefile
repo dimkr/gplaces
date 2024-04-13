@@ -11,6 +11,11 @@ CFLAGS += -D_GNU_SOURCE  -DPREFIX=\"$(PREFIX)\" -DCONFDIR=\"$(CONFDIR)\" -DGPLAC
 LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
 MIMETYPES =
+WITH_TITAN ?= 1
+ifeq ($(WITH_TITAN),1)
+	CFLAGS += -DGPLACES_WITH_TITAN
+	MIMETYPES := $(MIMETYPES);x-scheme-handler/titan
+endif
 WITH_GOPHER ?= 1
 ifeq ($(WITH_GOPHER),1)
 	CFLAGS += -DGPLACES_WITH_GOPHER
@@ -63,7 +68,7 @@ all: $(BIN) gplacesrc gplaces.desktop
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)
 
-gplaces.o: gplaces.c gopher.c gophers.c spartan.c finger.c guppy.c tcp.c socket.c
+gplaces.o: gplaces.c titan.c gopher.c gophers.c spartan.c finger.c guppy.c tcp.c socket.c
 
 gplaces.desktop: gplaces.desktop.in
 	@sed "s~^MimeType=.*~&$(MIMETYPES)~" $< > $@

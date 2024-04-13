@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2022, 2023  Dima Krasner
+    Copyright (C) 2022 - 2024  Dima Krasner
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -115,7 +115,7 @@ request:
 					free(chunk);
 					if ((input = bestline(prompt)) == NULL) return 4;
 					if (interactive) bestlineHistoryAdd(input);
-					if (!set_input(url, input)) { free(input); return 4; }
+					if (!set_query(url, input)) { free(input); return 4; }
 					free(input);
 					if (interactive) bestlineHistoryAdd(url->url);
 				} else if (chunk->buffer[0] == '3') {
@@ -170,9 +170,9 @@ request:
 }
 
 
-static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
+static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *parser, unsigned int redirs, int ask) {
 	GuppySocket *s = NULL;
-	int status, redirs = 0;
+	int status;
 
 	(void)sel;
 
@@ -186,7 +186,9 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 		status = do_guppy_download(url, s, mime, ask);
 		/* stop on success, on error or when the redirect limit is exhausted */
 		if (status > 5) break;
-	} while (((status == 1) || (status == 3)) && ++redirs < 5);
+	} while (status == 1 || ((status == 3 && ++redirs < 5 && url->proto->download == guppy_download)));
+
+	if (redirs < 5 && url->proto->download != guppy_download) { guppy_close(s); return url->proto->download(sel, url, mime, parser, redirs, ask); }
 
 	if (status > 6 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
 	else if (status > 6 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;
@@ -270,4 +272,4 @@ have:
 }
 
 
-const Protocol guppy = {"guppy", "6775", guppy_read, NULL, socket_error, guppy_close, guppy_download};
+const Protocol guppy = {"guppy", "6775", guppy_read, NULL, socket_error, guppy_close, guppy_download, set_query};

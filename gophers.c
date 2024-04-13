@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2022, 2023  Dima Krasner
+    Copyright (C) 2022 - 2024  Dima Krasner
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -19,11 +19,13 @@
 
 ================================================================================
 */
-static void *gophers_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
+static void *gophers_download(const Selector *sel, URL *url, char **mime, Parser *parser, unsigned int redirs, int ask) {
 	char *buffer;
 	SSL_CTX *ctx = NULL;
 	SSL *ssl = NULL;
 	int len, err;
+
+	(void)redirs;
 
 	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) return NULL;
 	SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
@@ -43,4 +45,4 @@ fail:
 }
 
 
-const Protocol gophers = {"gophers", "70", ssl_read, ssl_peek, ssl_error, ssl_close, gophers_download};
+const Protocol gophers = {"gophers", "70", ssl_read, ssl_peek, ssl_error, ssl_close, gophers_download, set_fragment};

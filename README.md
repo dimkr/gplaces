@@ -27,6 +27,7 @@ gplaces is originally a Gemini port of the delve Gopher client by Sebastian Stei
 * sh-style history with $XDG_DATA_HOME/gplaces_history or ~/.gplaces_history
 * UTF-8 word wrapping
 * configurable external pager
+* optional Titan support
 * optional Gopher support
 * optional gophers:// (Gopher+TLS+TOFU) support
 * optional Spartan support

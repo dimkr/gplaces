@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2022, 2023  Dima Krasner
+    Copyright (C) 2022 - 2024  Dima Krasner
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -58,17 +58,17 @@ fail:
 /*============================================================================*/
 static char *gopher_request(const Selector *sel, URL *url, int ask, int *len, size_t skip) {
 	static char buffer[1024 + 3]; /* path\r\n\0 */
-	char *input = NULL, *query = NULL;
+	char *input = NULL, *fragment = NULL;
 	const char *path, *end;
 
 	if (url->path[0] == '/' && url->path[1] == '7') {
-		switch (curl_url_get(url->cu, CURLUPART_QUERY, &query, CURLU_URLDECODE)) {
-		case CURLUE_OK: input = query; break;
-		case CURLUE_NO_QUERY: break;
+		switch (curl_url_get(url->cu, CURLUPART_FRAGMENT, &fragment, 0)) {
+		case CURLUE_OK: input = fragment; break;
+		case CURLUE_NO_FRAGMENT: break;
 		default: return NULL;
 		}
 		if (input == NULL) {
-			if (!ask || (input = bestline(color ? "\33[35mQuery>\33[0m " : "Query> ")) == NULL || !set_input(url, input)) return NULL;
+			if (!ask || (input = bestline(color ? "\33[35mQuery>\33[0m " : "Query> ")) == NULL || !set_fragment(url, input)) return NULL;
 			if (interactive) { bestlineHistoryAdd(input); bestlineHistoryAdd(url->url); }
 			*len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2, input);
 		} else {
@@ -76,8 +76,8 @@ static char *gopher_request(const Selector *sel, URL *url, int ask, int *len, si
 			if ((end = strrchr(path, '?')) == NULL) *len = snprintf(buffer, sizeof(buffer), "%s\t%s\r\n", path, input);
 			else *len = snprintf(buffer, sizeof(buffer), "%.*s\t%s\r\n", (int)(end - path), path, input);
 		}
-		if (input != query) free(input);
-		curl_free(query);
+		if (input != fragment) free(input);
+		curl_free(fragment);
 	} else if (url->path[0] == '/' && url->path[1] != '\0') *len = snprintf(buffer, sizeof(buffer), "%s\r\n", sel->rawurl + skip + strcspn(sel->rawurl + skip, "/") + 2);
 	else *len = snprintf(buffer, sizeof(buffer), "%s\r\n", sel->rawurl + skip + strcspn(sel->rawurl + skip, "/"));
 
@@ -124,9 +124,11 @@ unk:
 }
 
 
-static void *gopher_download(const Selector *sel, URL *url, char **mime, Parser *parser, int ask) {
+static void *gopher_download(const Selector *sel, URL *url, char **mime, Parser *parser, unsigned int redirs, int ask) {
 	char *buffer;
 	int fd = -1, len;
+
+	(void)redirs;
 
 	if ((buffer = gopher_request(sel, url, ask, &len, 9)) == NULL || (fd = socket_connect(url, SOCK_STREAM)) == -1) goto fail;
 	if (sendall(fd, buffer, len, MSG_NOSIGNAL) != len) {
@@ -142,4 +144,4 @@ fail:
 }
 
 
-const Protocol gopher = {"gopher", "70", tcp_read, tcp_peek, socket_error, tcp_close, gopher_download};
+const Protocol gopher = {"gopher", "70", tcp_read, tcp_peek, socket_error, tcp_close, gopher_download, set_fragment};

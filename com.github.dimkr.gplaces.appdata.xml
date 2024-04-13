@@ -18,7 +18,7 @@
        <li>Slightly prettified Gemtext output</li>
        <li>Configurable handlers for various file types</li>
        <li>Quick navigation to recently viewed pages</li>
-       <li>Support for other "small internet" protocols: Spartan, Gopher, Finger and Guppy</li>
+       <li>Support for other "small internet" protocols: Titan, Spartan, Gopher, Finger and Guppy</li>
     </ul>
     <p>
        gplaces should be fairly straightforward to use for anyone used to the command-line and man pages. Type "readme" for a short introduction.
