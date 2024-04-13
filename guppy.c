@@ -177,11 +177,12 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 	(void)sel;
 
 	if ((s = malloc(sizeof(GuppySocket))) == NULL) return NULL;
-	if ((s->fd = socket_connect(url, SOCK_DGRAM)) == -1) { free(s); return NULL; }
-	s->last = -1;
+	s->fd = s->last = -1;
 	LIST_INIT(&s->chunks);
 
 	do {
+		if (s->fd != -1) close(s->fd);
+		if ((s->fd = socket_connect(url, SOCK_DGRAM)) == -1) { guppy_close(s); return NULL; }
 		status = do_guppy_download(url, s, mime, ask);
 		/* stop on success, on error or when the redirect limit is exhausted */
 		if (status > 5) break;
