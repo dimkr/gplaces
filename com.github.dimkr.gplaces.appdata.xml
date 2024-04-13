@@ -39,6 +39,16 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2024-04-13" version="0.19.0">
+      <description>
+        <ul>
+          <li>Support for an additional protocol: Titan</li>
+          <li>Tab completion for paths</li>
+          <li>Fix for broken guppy:// redirects</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2024-02-04" version="0.18.2">
       <description>
         <ul>
