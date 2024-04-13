@@ -43,6 +43,7 @@
 #include <fcntl.h>
 #include <regex.h>
 #include <sys/mman.h>
+#include <dirent.h>
 #include "queue.h"
 
 #include <openssl/ssl.h>
@@ -1614,13 +1615,19 @@ static void eval(const char *input, const char *filename, int line_no) {
 
 
 static void shell_name_completion(const char *text, bestlineCompletions *lc) {
+	static char buffer[1024];
+	struct stat stbuf;
 	URL url = {0};
 	const Command *cmd;
 	const Variable *var;
 	const Selector *sel;
 	long index;
 	char *end;
-	int len;
+	int len, fd;
+	size_t namelen;
+	char *sep;
+	DIR *dir;
+	struct dirent *ent;
 
 	if ((index = strtol(text, &end, 10)) > 0 && index < INT_MAX && *end == '\0' && (sel = find_selector(currentmenu, (int)index)) != NULL) {
 		if (parse_url(&url, sel->rawurl, currenturl, NULL)) bestlineAddCompletion(lc, url.url);
@@ -1634,6 +1641,33 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 
 	LIST_FOREACH(var, &variables, next)
 		if (!strncasecmp(var->name, text, len)) bestlineAddCompletion(lc, var->name);
+
+	if ((sep = strrchr(text, '/')) == NULL || (size_t)(sep - text) >= sizeof(buffer)) return;
+	if (sep == text) {
+		buffer[0] = '/';
+		buffer[1] = '\0';
+	} else {
+		memcpy(buffer, text, sep - text);
+		buffer[sep - text] = '\0';
+	}
+
+	if ((dir = opendir(buffer)) == NULL) return;
+	if ((fd = dirfd(dir)) == -1) { closedir(dir); return; }
+	if (sep > text) buffer[sep - text] = '/';
+	while ((ent = readdir(dir)) != NULL) {
+		if (ent->d_name[0] == '.') continue;
+		if (fstatat(fd, ent->d_name, &stbuf, 0) == -1) continue;
+		if (strncmp(ent->d_name, sep + 1, len - (sep - text) - 1) != 0) continue;
+		namelen = strlen(ent->d_name);
+		if (sizeof(buffer) <= (size_t)(sep - text + 1 + namelen + (S_ISDIR(stbuf.st_mode) ? 1 : 0))) continue;
+		memcpy(&buffer[sep - text + 1], ent->d_name, namelen);
+		if (S_ISDIR(stbuf.st_mode)) {
+			buffer[sep - text + 1 + namelen] = '/';
+			buffer[sep - text + 1 + namelen + 1] = '\0';
+		} else buffer[sep - text + 1 + namelen] = '\0';
+		bestlineAddCompletion(lc, buffer);
+	}
+	closedir(dir);
 }
 
 
