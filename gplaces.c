@@ -1647,15 +1647,14 @@ static void eval(const char *input, const char *filename, int line_no) {
 
 static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	static char buffer[1024];
-	struct stat stbuf;
 	URL url = {0};
 	const Command *cmd;
 	const Variable *var;
 	const Selector *sel;
 	long index;
 	char *end;
-	int len, fd;
-	size_t namelen;
+	int fd;
+	size_t len, namelen;
 	char *sep;
 	DIR *dir;
 	struct dirent *ent;
@@ -1687,15 +1686,11 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	if (sep > text) buffer[sep - text] = '/';
 	while ((ent = readdir(dir)) != NULL) {
 		if (ent->d_name[0] == '.') continue;
-		if (fstatat(fd, ent->d_name, &stbuf, 0) == -1) continue;
 		if (strncmp(ent->d_name, sep + 1, len - (sep - text) - 1) != 0) continue;
 		namelen = strlen(ent->d_name);
-		if (sizeof(buffer) <= (size_t)(sep - text + 1 + namelen + (S_ISDIR(stbuf.st_mode) ? 1 : 0))) continue;
+		if (sizeof(buffer) <= (size_t)(sep - text + 1 + namelen)) continue;
 		memcpy(&buffer[sep - text + 1], ent->d_name, namelen);
-		if (S_ISDIR(stbuf.st_mode)) {
-			buffer[sep - text + 1 + namelen] = '/';
-			buffer[sep - text + 1 + namelen + 1] = '\0';
-		} else buffer[sep - text + 1 + namelen] = '\0';
+		buffer[sep - text + 1 + namelen] = '\0';
 		bestlineAddCompletion(lc, buffer);
 	}
 	closedir(dir);
@@ -1704,6 +1699,7 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 
 static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2) {
 	static char hint[1024];
+	struct stat stbuf;
 	const SelectorList list = currentmenu;
 	const Selector *sel;
 	const char *val, *pos;
@@ -1728,7 +1724,8 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 		if (strncmp(val, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &val[9]);
 		else if (strncmp(val, "file://", 7) == 0) snprintf(hint, sizeof(hint), " %s", &val[7]);
 		else snprintf(hint, sizeof(hint), " %s", val);
-	} else return NULL;
+	} else if (buf[0] == '/' && stat(buf, &stbuf) == 0 && S_ISDIR(stbuf.st_mode)) return "/";
+	else return NULL;
 	return hint;
 }
 
