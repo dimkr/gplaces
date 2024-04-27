@@ -121,11 +121,6 @@ typedef struct Command {
 	void (*func)(char *line);
 } Command;
 
-typedef struct Help {
-	const char *name;
-	const char *text;
-} Help;
-
 
 /*============================================================================*/
 const Protocol gemini;
@@ -1480,28 +1475,14 @@ handle:
 
 
 /*============================================================================*/
-static const Help gemini_help[] = {
-	{
-		"save",
-		"SAVE <item-id|url> [<path>]" \
-	},
-	{
-		"set",
-		"SET <name> <value>" \
-	},
-	{
-		"show",
-		"SHOW [<filter>]" \
-	},
-	{
-		"sub",
-		"SUB [<url>]" \
-	},
-	{
-		"get",
-		"GET" \
-	},
-	{ NULL, NULL }
+static const char *help[] = {
+	"save <item-id|url> [<path>]",
+	"set <name> <value>",
+	"show [<filter>]",
+	"sub [<url>]",
+	"get",
+	"help",
+	"version"
 };
 
 
@@ -1553,26 +1534,12 @@ static void cmd_get(char *line) {
 
 
 static void cmd_help(char *line) {
-	int i;
-	const Help *help;
-	char *topic = next_token(&line);
+	size_t i;
 
-	if (topic) {
-		for (help = gemini_help; help->name; ++help) {
-			if (!strcasecmp(help->name, topic)) {
-				if (help->text) puts(help->text);
-				return;
-			}
-		}
-		return;
-	}
+	(void)line;
 
-	puts("available commands, type `help <command>` to get more information");
-	for (i = 1, help = gemini_help; help->name; ++help, ++i) {
-		printf("%-13s ", help->name);
-		if (i % 5 == 0) puts("");
-	}
-	puts("");
+	puts("available commands:");
+	for (i = 0; i < sizeof(help) / sizeof(help[0]); ++i) puts(help[i]);
 }
 
 
@@ -1595,13 +1562,26 @@ static void cmd_set(char *line) {
 }
 
 
-static const Command gemini_commands[] = {
+static void cmd_version(char *line) {
+	(void) line;
+
+	puts(
+		"gplaces - "GPLACES_VERSION"  Copyright (C) 2022 - 2024  Dima Krasner\n" \
+		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
+		"This program is free software and comes with ABSOLUTELY NO WARRANTY;\n" \
+		"see "PREFIX"/share/doc/gplaces/LICENSE for details."
+	);
+}
+
+
+static const Command commands[] = {
 	{ "show", cmd_show },
 	{ "save", cmd_save },
 	{ "get", cmd_get },
 	{ "help", cmd_help },
 	{ "sub", cmd_sub },
 	{ "set", cmd_set },
+	{ "version", cmd_version },
 	{ NULL, NULL }
 };
 
@@ -1627,7 +1607,7 @@ static void eval(const char *input, const char *filename, int line_no) {
 	copy = line = str_copy(input); /* copy input as it will be modified */
 
 	if ((token = rawurl = next_token(&line)) != NULL && *token != '\0') {
-		for (cmd = gemini_commands; cmd->name; ++cmd) {
+		for (cmd = commands; cmd->name; ++cmd) {
 			if (!strcasecmp(cmd->name, token)) {
 				cmd->func(line);
 				free(copy);
@@ -1667,7 +1647,7 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 
 	len = strlen(text);
 
-	for (cmd = gemini_commands; cmd->name; ++cmd)
+	for (cmd = commands; cmd->name; ++cmd)
 		if (!strncasecmp(cmd->name, text, len)) bestlineAddCompletion(lc, cmd->name);
 
 	LIST_FOREACH(var, &variables, next)
@@ -1847,13 +1827,6 @@ int main(int argc, char **argv) {
 	color = interactive && (getenv("NO_COLOR") == NULL);
 
 	load_rc_files(parse_arguments(argc, argv));
-
-	if (interactive) puts(
-		"gplaces - "GPLACES_VERSION"  Copyright (C) 2022 - 2024  Dima Krasner\n" \
-		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
-		"This program is free software and comes with ABSOLUTELY NO WARRANTY;\n" \
-		"see "PREFIX"/share/doc/gplaces/LICENSE for details.\n"
-	);
 
 	shell(argc, argv);
 
