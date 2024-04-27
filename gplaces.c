@@ -160,6 +160,7 @@ SelectorList blank = SIMPLEQ_HEAD_INITIALIZER(blank);
 static int depth;
 static int interactive;
 static int color;
+static int inshell;
 
 
 /*============================================================================*/
@@ -1707,7 +1708,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 	long index;
 	int links = 0;
 	if (!color) *ansi1 = *ansi2 = "";
-	if (strcspn(buf, " ") == 0) {
+	if (inshell && strcspn(buf, " ") == 0) {
 		SIMPLEQ_FOREACH(sel, &list, next) if (sel->type == 'l') ++links;
 		if (links > 1) {
 			snprintf(hint, sizeof(hint), "1-%d, URL, variable or command", links);
@@ -1744,14 +1745,15 @@ static void shell(int argc, char **argv) {
 			snprintf(path, sizeof(path), "%s/.gplaces_history", home);
 			bestlineHistoryLoad(path);
 		}
+		bestlineSetHintsCallback(shell_hints);
 	}
 
 	if (optind < argc) eval(argv[optind], NULL, 0);
 
 	for (prompt = color ? "\33[35m>\33[0m " : "> "; ; prompt = TAILQ_EMPTY(&history) ? prompt : TAILQ_FIRST(&history)->prompt) {
-		bestlineSetHintsCallback(shell_hints);
+		inshell = 1;
 		if ((line = bestline(prompt)) == NULL) break;
-		bestlineSetHintsCallback(NULL);
+		inshell = 0;
 		eval(line, NULL, 0);
 		free(line);
 	}
