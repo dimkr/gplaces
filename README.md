@@ -17,11 +17,12 @@ gplaces is originally a Gemini port of the delve Gopher client by Sebastian Stei
 ## Features
 
 * SSH-style TOFU with $XDG_DATA_HOME/gplaces_hosts or ~/.gplaces_hosts
-* client certificates support via $XDG_DATA_HOME/gplaces_$host$path.{crt,key} or ~/.gplaces_$host$path.{crt,key}
+* client certificates support via $XDG_DATA_HOME/gplaces_$host_$port_$path.{crt,key} or ~/.gplaces_$host_$port_$path.{crt,key}
 * subscriptions
 * permanent redirects with $XDG_DATA_HOME/gplaces_redirects or ~/.gplaces_redirects
 * support for non-interactive operation
-* configurable MIME type handlers
+* single configuration file: $XDG_DATA_HOME/gplacesrc, ~/.gplacesrc or /etc/gplacesrc
+* configurable MIME type handlers, with support for streaming to stdin
 * "powerful" shell with tab completion, hints and aliases
 * VT100 compatible with ANSI escape sequences and NO_COLOR support
 * sh-style history with $XDG_DATA_HOME/gplaces_history or ~/.gplaces_history
@@ -48,7 +49,7 @@ gplaces is originally a Gemini port of the delve Gopher client by Sebastian Stei
 
 * clone this repo: `git clone --recursive https://github.com/dimkr/gplaces`
 * type `cd gplaces`
-* type `make` or `make WITH_LIBIDN2=0 WITH_LIBIDN=0 WITH_LIBMAGIC=0`
+* type `make PREFIX=/usr CONFDIR=/etc`, or `make WITH_TITAN=0 WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0 WITH_GUPPY=0 WITH_LIBIDN2=0 WITH_LIBIDN=0 WITH_LIBMAGIC=0` to disable all optional dependencies and features
 * type `make install` to install it on the system (defaults to /usr/local)
 
 ## How to use?
@@ -74,7 +75,7 @@ use the arrow keys to scroll, `/` to search and `q` to exit less and return to t
     (reverse-i-search `g') gemini.circumlunar.space
 ```
 
-in addition, gplaces adds the page URL to the history: use the `Up` and `Down` keys to navigate through the history, or `CTRL+r` to search through it. these are only three examples of key bindings from shells like bash(1) which work in gplaces, too.
+in addition, gplaces adds the page URL to the history: use the `Up` and `Down` keys to navigate through the history, or `CTRL+r` to search through it. these are only three examples of key bindings from shells like bash(1) which work in gplaces, too: see bestline/README.md for a list of navigation and editing shortcuts.
 
 ```
     cached 2023-04-29 19:41:44
@@ -150,6 +151,24 @@ to show a feed of new posts, type `sub`, then press `ENTER`. the list of URLs gp
 to exit gplaces, press `CTRL+d`.
 
 additional documentation and more details are available in `man gplaces`. type `help` and press `ENTER` to see short descriptions of available commands.
+
+## How to configure?
+
+if installed through Flatpak, copy the read-only configuration file to your home directory so you can edit:
+
+```
+    ~$ flatpak run --command=sh com.github.dimkr.gplaces
+    ~$ cp /app/etc/gplacesrc $XDG_CONFIG_HOME/
+    ~$ exit
+    ~$ xdg-open ~/.var/app/com.github.dimkr.gplaces/config
+```
+
+otherwise, you can edit /etc/gplacesrc directly or edit a copy under your home directory:
+
+```
+    ~$ cp /etc/gplacesrc $XDG_CONFIG_HOME/
+    ~$ xdg-open $XDG_CONFIG_HOME/gplacesrc
+```
 
 ## License
 

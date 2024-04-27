@@ -38,7 +38,7 @@ jobs:
           make clean
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBMAGIC=0
           make clean
-          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_TITAN=0 WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0 WITH_GUPPY=0
           make clean
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=1
   alpine:
@@ -76,7 +76,7 @@ jobs:
           make clean
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBMAGIC=0
           make clean
-          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0 WITH_GUPPY=0
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_TITAN=0 WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0 WITH_GUPPY=0
           make clean
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=1
   arch:
@@ -106,6 +106,6 @@ jobs:
           make clean
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBMAGIC=0
           make clean
-          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0 WITH_GUPPY=0
+          CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_TITAN=0 WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0 WITH_GUPPY=0
           make clean
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=1
