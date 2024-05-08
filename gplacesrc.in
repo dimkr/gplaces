@@ -12,7 +12,7 @@ set application/pdf					"xdg-open %f"
 set readme							file://DOCDIR/README.gmi
 set license							file://DOCDIR/LICENSE
 set authors							file://DOCDIR/AUTHORS
-set search							geminispace.info/search
+set search							tlgs.one/search
 set gsearch							gopher://gopher.floodgap.com/7/v2/vs
 set home							geminiprotocol.net
 set capcom							gemini.circumlunar.space/capcom
