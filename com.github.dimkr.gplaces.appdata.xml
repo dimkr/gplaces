@@ -39,6 +39,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2024-05-08" version="0.19.3">
+      <description>
+        <ul>
+          <li>Version and legal information are moved to a command</li>
+          <li>Updated default aliases</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2024-04-27" version="0.19.2">
       <description>
         <ul>
