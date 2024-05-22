@@ -11,35 +11,42 @@ CFLAGS += -D_GNU_SOURCE  -DPREFIX=\"$(PREFIX)\" -DCONFDIR=\"$(CONFDIR)\" -DGPLAC
 LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
 MIMETYPES =
+KEYWORDS =
 WITH_TITAN ?= 1
 ifeq ($(WITH_TITAN),1)
 	CFLAGS += -DGPLACES_WITH_TITAN
 	MIMETYPES := $(MIMETYPES);x-scheme-handler/titan
+	KEYWORDS := $(KEYWORDS);titan
 endif
 WITH_GOPHER ?= 1
 ifeq ($(WITH_GOPHER),1)
 	CFLAGS += -DGPLACES_WITH_GOPHER
 	MIMETYPES := $(MIMETYPES);x-scheme-handler/gopher
+	KEYWORDS := $(KEYWORDS);gopher
 endif
 WITH_GOPHERS ?= 1
 ifeq ($(WITH_GOPHERS),1)
 	CFLAGS += -DGPLACES_WITH_GOPHERS
 	MIMETYPES := $(MIMETYPES);x-scheme-handler/gophers
+	KEYWORDS := $(KEYWORDS);gophers
 endif
 WITH_SPARTAN ?= 1
 ifeq ($(WITH_SPARTAN),1)
 	CFLAGS += -DGPLACES_WITH_SPARTAN
 	MIMETYPES := $(MIMETYPES);x-scheme-handler/spartan
+	KEYWORDS := $(KEYWORDS);spartan
 endif
 WITH_FINGER ?= 1
 ifeq ($(WITH_FINGER),1)
 	CFLAGS += -DGPLACES_WITH_FINGER
 	MIMETYPES := $(MIMETYPES);x-scheme-handler/finger
+	KEYWORDS := $(KEYWORDS);finger
 endif
 WITH_GUPPY ?= 1
 ifeq ($(WITH_GUPPY),1)
 	CFLAGS += -DGPLACES_WITH_GUPPY
 	MIMETYPES := $(MIMETYPES);x-scheme-handler/guppy
+	KEYWORDS := $(KEYWORDS);guppy
 endif
 WITH_LIBIDN2 ?= $(shell pkg-config --exists libidn2 && echo 1 || echo 0)
 ifeq ($(WITH_LIBIDN2),1)
@@ -71,7 +78,7 @@ $(BIN): $(OBJ)
 gplaces.o: gplaces.c titan.c gopher.c gophers.c spartan.c finger.c guppy.c tcp.c socket.c
 
 gplaces.desktop: gplaces.desktop.in
-	@sed "s~^MimeType=.*~&$(MIMETYPES)~" $< > $@
+	@sed -e "s~^MimeType=.*~&$(MIMETYPES)~" -e "s~^Keywords=.*~&$(KEYWORDS)~" $< > $@
 
 gplacesrc: gplacesrc.in
 	sed s~DOCDIR~$(PREFIX)/share/doc/gplaces~g $^ > $@

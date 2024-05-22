@@ -7,3 +7,4 @@ Terminal=true
 Type=Application
 MimeType=x-scheme-handler/gemini
 Categories=Network;WebBrowser;ConsoleOnly;
+Keywords=gemini;client;browser
