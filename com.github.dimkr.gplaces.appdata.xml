@@ -25,6 +25,34 @@
     </p>
   </description>
 
+  <keywords>
+    <keyword>gemini</keyword>
+    <keyword>titan</keyword>
+    <keyword>spartan</keyword>
+    <keyword>gopher</keyword>
+    <keyword>finger</keyword>
+    <keyword>guppy</keyword>
+    <keyword>gemtext</keyword>
+    <keyword>client</keyword>
+    <keyword>browser</keyword>
+  </keywords>
+
+  <categories>
+    <category>Network</category>
+    <category>WebBrowser</category>
+    <category>ConsoleOnly</category>
+  </categories>
+
+  <provides>
+    <mediatype>x-scheme-handler/gemini</mediatype>
+    <mediatype>x-scheme-handler/titan</mediatype>
+    <mediatype>x-scheme-handler/spartan</mediatype>
+    <mediatype>x-scheme-handler/gopher</mediatype>
+    <mediatype>x-scheme-handler/gophers</mediatype>
+    <mediatype>x-scheme-handler/finger</mediatype>
+    <mediatype>x-scheme-handler/guppy</mediatype>
+  </provides>
+
   <launchable type="desktop-id">com.github.dimkr.gplaces.desktop</launchable>
 
   <url type="homepage">https://github.com/dimkr/gplaces</url>
@@ -32,13 +60,20 @@
   <screenshots>
     <screenshot type="default">
       <image>https://raw.githubusercontent.com/dimkr/gplaces/gemini/prompt.png</image>
-      <caption>Prompt</caption>
     </screenshot>
   </screenshots>
 
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2024-05-22" version="0.19.4">
+      <description>
+        <ul>
+          <li>Improved Flatpak package metadata</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2024-05-08" version="0.19.3">
       <description>
         <ul>
