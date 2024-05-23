@@ -44,6 +44,7 @@
   </categories>
 
   <provides>
+    <binary>gplaces</binary>
     <mediatype>x-scheme-handler/gemini</mediatype>
     <mediatype>x-scheme-handler/titan</mediatype>
     <mediatype>x-scheme-handler/spartan</mediatype>
@@ -581,10 +582,6 @@
       </description>
     </release>
   </releases>
-
-  <provides>
-    <binary>gplaces</binary>
-  </provides>
 
   <content_rating type="oars-1.1"/>
 </component>
