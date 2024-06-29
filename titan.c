@@ -47,7 +47,7 @@ static void *titan_upload(const Selector *sel, URL *url, char **mime, Parser *pa
 #ifdef GPLACES_USE_LIBMAGIC
 	magic_t mag = NULL;
 #else
-	char *tmp;
+	char *tmp = NULL;
 #define magic_close(x) do {} while (0)
 #endif
 	CURLU *cu;
