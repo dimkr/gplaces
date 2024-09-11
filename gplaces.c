@@ -1823,10 +1823,12 @@ int main(int argc, char **argv) {
 	SSL_library_init();
 	SSL_load_error_strings();
 
-	interactive = isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
-	color = interactive && (getenv("NO_COLOR") == NULL);
+	color = (getenv("NO_COLOR") == NULL);
 
 	load_rc_files(parse_arguments(argc, argv));
+
+	interactive = isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
+	color = color && interactive;
 
 	shell(argc, argv);
 
