@@ -67,6 +67,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2024-09-11" version="0.19.5">
+      <description>
+        <ul>
+          <li>History is no longer populated with gplacesrc after first run</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2024-05-22" version="0.19.4">
       <description>
         <ul>
