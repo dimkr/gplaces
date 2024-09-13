@@ -67,6 +67,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2024-09-13" version="0.19.6">
+      <description>
+        <ul>
+          <li>New logo</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2024-09-11" version="0.19.5">
       <description>
         <ul>
