@@ -941,8 +941,8 @@ static void mkcert(const char *crtpath, const char *keypath) {
 
 static int ssl_error(const URL *url, void *c, int err) {
 	if ((err = SSL_get_error((SSL *)c, err)) == SSL_ERROR_ZERO_RETURN) return 0;
-	if (err == SSL_ERROR_SSL) { error(0, "protocol error while downloading `%s`", url->url); return 0; }; /* some servers seem to ignore this part of the specification (v0.16.1): "As per RFCs 5246 and 8446, Gemini servers MUST send a TLS `close_notify`" */
-	if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", url->url);
+	if (err == SSL_ERROR_SSL) error(0, "protocol error while downloading `%s`", url->url);
+	else if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) error(0, "failed to download `%s`: cancelled", url->url);
 	else error(0, "failed to download `%s`: error %d", url->url, err);
 	return 1;
 }
