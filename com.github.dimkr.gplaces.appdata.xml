@@ -67,6 +67,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2024-12-20" version="0.19.8">
+      <description>
+        <ul>
+          <li>The workaround for non-compliant servers that don't send close_notify is removed</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2024-09-19" version="0.19.7">
       <description>
         <ul>
