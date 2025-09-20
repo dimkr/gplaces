@@ -93,7 +93,7 @@ static void *titan_upload(const Selector *sel, URL *url, char **mime, Parser *pa
 	do {
 		status = ssl_download(url, &ssl, mime, titan_request, &params, ask);
 		if (status >= 20 && status <= 29) break;
-	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69) || (status >= 30 && status <= 39 && ++redirs < 5 && url->proto->download == titan_upload));
+	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69));
 
 	if (params.stbuf.st_size > 0) munmap(params.body, params.stbuf.st_size);
 	close(fd);
@@ -107,7 +107,7 @@ static void *titan_upload(const Selector *sel, URL *url, char **mime, Parser *pa
 	curl_free(fragment);
 	curl_free(params.url);
 
-	if (redirs < 5 && url->proto->download != titan_upload) return url->proto->download(sel, url, mime, parser, redirs, ask);
+	if (status >= 30 && status <= 39 && ++redirs < 5) return url->proto->download(sel, url, mime, parser, redirs, ask);
 
 	if (ssl != NULL && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
 	else if (ssl != NULL && (!interactive || strncmp(*mime, "text/plain", 10) == 0)) *parser = parse_plaintext_line;
