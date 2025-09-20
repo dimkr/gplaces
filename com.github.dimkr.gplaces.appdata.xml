@@ -67,6 +67,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2025-09-20" version="0.19.9">
+      <description>
+        <ul>
+          <li>Titan upload parameters are cleared on redirect</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2024-12-20" version="0.19.8">
       <description>
         <ul>
