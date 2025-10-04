@@ -67,6 +67,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2025-10-04" version="0.20.0">
+      <description>
+        <ul>
+          <li>Support for HTTP{,S} over Gemini proxies</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2025-09-20" version="0.19.9">
       <description>
         <ul>
