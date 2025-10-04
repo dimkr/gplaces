@@ -49,4 +49,7 @@ set pager							"less -r"
 set timeout							15
 
 # history size; this is the maximum number of cached pages
-set histsize							10
+set histsize						10
+
+# optional Gemini proxy for http{,s}:// URLs
+set http_proxy						""

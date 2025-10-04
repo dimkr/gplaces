@@ -99,6 +99,9 @@ struct URL {
 	char *scheme, *host, *port, *path, *url;
 	CURLU *cu;
 	const Protocol *proto;
+#ifdef GPLACES_WITH_HTTP_PROXY
+	const URL *proxy;
+#endif
 };
 
 struct Page {
@@ -124,6 +127,9 @@ typedef struct Command {
 
 /*============================================================================*/
 const Protocol gemini;
+#ifdef GPLACES_WITH_HTTP_PROXY
+const Protocol http, https;
+#endif
 #ifdef GPLACES_WITH_TITAN
 const Protocol titan;
 #endif
@@ -313,6 +319,9 @@ static int parse_url(URL *url, const char *rawurl, const char *from, const char 
 #if defined(GPLACES_USE_LIBIDN2) || defined(GPLACES_USE_LIBIDN)
 	char *host;
 #endif
+#ifdef GPLACES_WITH_HTTP_PROXY
+	const char *http_proxy;
+#endif
 	int file;
 
 	if ((url->cu == NULL && (url->cu = curl_url()) == NULL) || (from != NULL && curl_url_set(url->cu, CURLUPART_URL, from, CURLU_NON_SUPPORT_SCHEME) != CURLUE_OK)) return 0;
@@ -366,6 +375,12 @@ valid:
 	} else if (strcmp(url->scheme, "guppy") == 0) {
 		url->proto = &guppy;
 #endif
+#ifdef GPLACES_WITH_HTTP_PROXY
+	} else if (strcmp(url->scheme, "https") == 0 && (http_proxy = set_var(&variables, "HTTP_PROXY", NULL)) != NULL && *http_proxy != '\0') {
+		url->proto = &https;
+	} else if (strcmp(url->scheme, "http") == 0 && (http_proxy = set_var(&variables, "HTTP_PROXY", NULL)) != NULL && *http_proxy != '\0') {
+		url->proto = &http;
+#endif
 	}
 
 	if (input != NULL && input[0] != '\0' && !url->proto->set_input(url, input)) return 0;
@@ -410,6 +425,9 @@ static int redirect(URL *url, const char *to, size_t len, int ask) {
 	if (!parse_url(&tmp, rawurl, url->url, NULL)) { free(rawurl); return 40; }
 	free(rawurl);
 	free_url(url);
+#ifdef GPLACES_WITH_HTTP_PROXY
+	tmp.proxy = url->proxy;
+#endif
 	memcpy(url, &tmp, sizeof(URL));
 	fprintf(stderr, "redirected to `%s`\n", url->url);
 	if (ask) bestlineHistoryAdd(url->url);
@@ -866,6 +884,10 @@ static SSL *ssl_connect(const URL *url, SSL_CTX *ctx, int ask) {
 	X509 *cert = NULL;
 	int fd = -1, ok = 0, err;
 
+#ifdef GPLACES_WITH_HTTP_PROXY
+	url = url->proxy ? url->proxy : url;
+#endif
+
 	if ((fd = tcp_connect(url)) == -1) goto out;
 
 	if ((ssl = SSL_new(ctx)) == NULL || (bio = BIO_new_socket(fd, BIO_CLOSE)) == NULL || SSL_set_tlsext_host_name(ssl, url->host) == 0) {
@@ -980,6 +1002,7 @@ static int ssl_download(URL *url, SSL **body, char **mime, int request(const URL
 	static char crtpath[1024], keypath[1024], suffix[1024], buffer[1024], data[2 + 1 + 1024 + 2 + 1]; /* 99 meta\r\n\0 */
 	struct stat stbuf;
 	const char *home;
+	const URL *crturl = url;
 	SSL_CTX *ctx = NULL;
 	char *crlf, *meta = &data[3], *line;
 	int redir, off, len, i, total, received, ret = 40, err = 0;
@@ -988,9 +1011,14 @@ static int ssl_download(URL *url, SSL **body, char **mime, int request(const URL
 	if ((redir = perm_redirect(url, NULL, ask)) == 31) return 31;
 	else if (redir == 40) goto fail;
 
+#ifdef GPLACES_WITH_HTTP_PROXY
+	/* this is the URL we generate a client certificate and validate the server certificate for */
+	crturl = url->proxy ? url->proxy : url;
+#endif
+
 	if ((home = getenv("XDG_DATA_HOME")) != NULL) {
-		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s_%s", home, url->host, url->port)) >= (int)sizeof(crtpath)) goto fail;;
-	} else if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s_%s", home, url->host, url->port)) >= (int)sizeof(crtpath)) goto fail;
+		if ((off = snprintf(crtpath, sizeof(crtpath), "%s/gplaces_%s_%s", home, crturl->host, crturl->port)) >= (int)sizeof(crtpath)) goto fail;;
+	} else if ((home = getenv("HOME")) == NULL || (off = snprintf(crtpath, sizeof(crtpath), "%s/.gplaces_%s_%s", home, crturl->host, crturl->port)) >= (int)sizeof(crtpath)) goto fail;
 
 	if ((ctx = SSL_CTX_new(TLS_client_method())) == NULL) goto fail;
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
@@ -1006,12 +1034,12 @@ static int ssl_download(URL *url, SSL **body, char **mime, int request(const URL
 	 *
 	 * If we found a certificate for one of these, stop even if loading fails.
 	 */
-	for (len = 0; len < (int)sizeof(suffix) - 1 && url->path[len] != '\0'; ++len) suffix[len] = url->path[len] == '/' ? '_' : url->path[len];
+	for (len = 0; len < (int)sizeof(suffix) - 1 && crturl->path[len] != '\0'; ++len) suffix[len] = crturl->path[len] == '/' ? '_' : crturl->path[len];
 	if (suffix[len - 1] == '_') --len; /* ignore trailing / */
 	suffix[len] = '\0';
 	memcpy(keypath, crtpath, off);
-	for (i = (len > 0 && url->path[len - 1] == '/') ? len - 1 : len; i >= 0; --i) {
-		if (i < len && url->path[i] != '/') continue;
+	for (i = (len > 0 && crturl->path[len - 1] == '/') ? len - 1 : len; i >= 0; --i) {
+		if (i < len && crturl->path[i] != '/') continue;
 		snprintf(&crtpath[off], sizeof(crtpath) - off, "%.*s.crt", i, suffix);
 		snprintf(&keypath[off], sizeof(keypath) - off, "%.*s.key", i, suffix);
 		if (stat(crtpath, &stbuf) == 0 && stat(keypath, &stbuf) == 0) {
@@ -1074,18 +1102,18 @@ loaded:
 			break;
 
 		case '6':
-			if (*meta) error(0, "`%s`: %s", url->host, meta);
-			else error(0, "client certificate is required for `%s`", url->host);
+			if (*meta) error(0, "`%s`: %s", crturl->host, meta);
+			else error(0, "client certificate is required for `%s`", crturl->host);
 			if (ask && stat(crtpath, &stbuf) != 0 && errno == ENOENT && stat(keypath, &stbuf) != 0 && errno == ENOENT) {
-				if (color) snprintf(buffer, sizeof(buffer), "\33[35mGenerate client certificate for `%s`? (y/n)>\33[0m ", url->host);
-				else snprintf(buffer, sizeof(buffer), "Generate client certificate for `%s`? (y/n)> ", url->host);
+				if (color) snprintf(buffer, sizeof(buffer), "\33[35mGenerate client certificate for `%s`? (y/n)>\33[0m ", crturl->host);
+				else snprintf(buffer, sizeof(buffer), "Generate client certificate for `%s`? (y/n)> ", crturl->host);
 				if ((line = bestline(buffer)) != NULL) {
 					if (*line == 'y' || *line == 'Y') mkcert(crtpath, keypath);
 					free(line);
 				}
 			}
 			if (SSL_CTX_use_certificate_file(ctx, crtpath, SSL_FILETYPE_PEM) == 1 && SSL_CTX_use_PrivateKey_file(ctx, keypath, SSL_FILETYPE_PEM) == 1) break;
-			error(0, "failed to load client certificate for `%s`: %s", url->host, ERR_reason_error_string(ERR_get_error()));
+			error(0, "failed to load client certificate for `%s`: %s", crturl->host, ERR_reason_error_string(ERR_get_error()));
 			ret = 50;
 			goto fail;
 
@@ -1139,6 +1167,9 @@ const Protocol gemini = {"gemini", "1965", ssl_read, ssl_peek, ssl_error, ssl_cl
 
 
 /*============================================================================*/
+#ifdef GPLACES_WITH_HTTP_PROXY
+	#include "http.c"
+#endif
 #ifdef GPLACES_WITH_TITAN
 	#include "titan.c"
 #endif

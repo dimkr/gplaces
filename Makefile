@@ -12,6 +12,10 @@ LDFLAGS ?=
 LDFLAGS += $(shell pkg-config --libs libcurl libssl libcrypto)
 MIMETYPES =
 KEYWORDS =
+WITH_HTTP_PROXY ?= 1
+ifeq ($(WITH_HTTP_PROXY),1)
+	CFLAGS += -DGPLACES_WITH_HTTP_PROXY
+endif
 WITH_TITAN ?= 1
 ifeq ($(WITH_TITAN),1)
 	CFLAGS += -DGPLACES_WITH_TITAN
@@ -75,7 +79,7 @@ all: $(BIN) gplacesrc gplaces.desktop
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) -o $(BIN) $(OBJ) $(LDFLAGS)
 
-gplaces.o: gplaces.c titan.c gopher.c gophers.c spartan.c finger.c guppy.c tcp.c socket.c
+gplaces.o: gplaces.c http.c titan.c gopher.c gophers.c spartan.c finger.c guppy.c tcp.c socket.c
 
 gplaces.desktop: gplaces.desktop.in
 	@sed -e "s~^MimeType=.*~&$(MIMETYPES)~" -e "s~^Keywords=.*~&$(KEYWORDS)~" $< > $@

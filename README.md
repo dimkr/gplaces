@@ -34,6 +34,7 @@ gplaces is originally a Gemini port of the delve Gopher client by Sebastian Stei
 * optional Spartan support
 * optional Finger support
 * optional Guppy support
+* optional support for http{,s}:// proxies
 * small, hackable codebase
 * no exotic external dependencies, no NIH: bestline, openssl or libressl, libcurl, libidn2 or libidn (optional) and libmagic (optional)
 * ~100K executable when built with -O3 and -Wl,-s on x86_64
@@ -49,7 +50,7 @@ gplaces is originally a Gemini port of the delve Gopher client by Sebastian Stei
 
 * clone this repo: `git clone --recursive https://github.com/dimkr/gplaces`
 * type `cd gplaces`
-* type `make PREFIX=/usr CONFDIR=/etc`, or `make WITH_TITAN=0 WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0 WITH_GUPPY=0 WITH_LIBIDN2=0 WITH_LIBIDN=0 WITH_LIBMAGIC=0` to disable all optional dependencies and features
+* type `make PREFIX=/usr CONFDIR=/etc`, or `make WITH_HTTP_PROXY=0 WITH_TITAN=0 WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0 WITH_GUPPY=0 WITH_LIBIDN2=0 WITH_LIBIDN=0 WITH_LIBMAGIC=0` to disable all optional dependencies and features
 * type `make install` to install it on the system (defaults to /usr/local)
 
 ## How to use?
