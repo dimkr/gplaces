@@ -844,7 +844,7 @@ static int tofu(X509 *cert, const URL *url, int ask) {
 	unsigned int mdlen, i;
 	int fd = -1, found = 0, trust = 0;
 
-	if (X509_digest(cert, EVP_sha512(), md, &mdlen) == 0) return 0;
+	if (X509_pubkey_digest(cert, EVP_sha512(), md, &mdlen) == 0) return 0;
 
 	for (i = 0; i < mdlen; ++i) {
 		hex[i * 2] = "0123456789ABCDEF"[md[i] >> 4];
@@ -860,8 +860,8 @@ static int tofu(X509 *cert, const URL *url, int ask) {
 		for (end = p; !found && (start = memmem(end, size - (end - p), url->host, hlen)) != NULL; end = start + hlen + 1) {
 			if (!(found = ((start == p || *(start - 1) == '\n') && size - (start - p) >= hlen + 1 + plen + 1 + mdlen * 2 + 1 && start[hlen] == ':' && memcmp(&start[hlen + 1], url->port, plen) == 0 && start[hlen + 1 + plen] == ' ' && start[hlen + 1 + plen + 1 + mdlen * 2] == '\n'))) continue;
 			if ((trust = memcmp(&start[hlen + 1 + plen + 1], hex, mdlen * 2) == 0) || !ask) break;
-			if (color) snprintf(buffer, sizeof(buffer), "\33[35mTrust new certificate for `%s:%s`? (y/n)>\33[0m ", url->host, url->port);
-			else snprintf(buffer, sizeof(buffer), "Trust new certificate for `%s:%s`? (y/n)> ", url->host, url->port);
+			if (color) snprintf(buffer, sizeof(buffer), "\33[35mTrust new key for `%s:%s`? (y/n)>\33[0m ", url->host, url->port);
+			else snprintf(buffer, sizeof(buffer), "Trust new key for `%s:%s`? (y/n)> ", url->host, url->port);
 			if ((line = bestline(buffer)) != NULL) {
 				if (*line == 'y' || *line == 'Y') {
 					memcpy(&start[hlen + 1 + plen + 1], hex, mdlen * 2);
