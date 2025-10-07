@@ -67,6 +67,14 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2025-10-06" version="0.20.1">
+      <description>
+        <ul>
+          <li>TOFU validation now hashes the public key, allowing silent certificate renewal using the same key</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2025-10-04" version="0.20.0">
       <description>
         <ul>
