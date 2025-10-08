@@ -67,6 +67,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2025-10-08" version="0.20.2">
+      <description>
+        <ul>
+          <li>Fix for crash when redirecting to an invalid URL</li>
+          <li>Fix for memory leaks when parsing invalid URLs</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2025-10-06" version="0.20.1">
       <description>
         <ul>
