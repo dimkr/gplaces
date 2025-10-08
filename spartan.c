@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2022 - 2024  Dima Krasner
+    Copyright (C) 2022 - 2025  Dima Krasner
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -96,9 +96,9 @@ static void *spartan_download(const Selector *sel, URL *url, char **mime, Parser
 	do {
 		status = do_spartan_download(url, &fd, mime, input, inputlen, ask);
 		if (status == 2) break;
-	} while (status == 3 && ++redirs < 5 && url->proto->download == spartan_download);
+	} while (status == 3 && ++redirs < 5 && url->proto != NULL && url->proto->download == spartan_download);
 
-	if (redirs < 5 && url->proto->download != spartan_download) return url->proto->download(sel, url, mime, parser, redirs, ask);
+	if (redirs < 5 && url->proto != NULL && url->proto->download != spartan_download) return url->proto->download(sel, url, mime, parser, redirs, ask);
 
 	if (fd != -1 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_spartan_line;
 	else if (fd != -1 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;

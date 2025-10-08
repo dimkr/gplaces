@@ -107,7 +107,7 @@ static void *titan_upload(const Selector *sel, URL *url, char **mime, Parser *pa
 	curl_free(fragment);
 	curl_free(params.url);
 
-	if (status >= 30 && status <= 39 && ++redirs < 5) return url->proto->download(sel, url, mime, parser, redirs, ask);
+	if (status >= 30 && status <= 39 && ++redirs < 5 && url->proto != NULL) return url->proto->download(sel, url, mime, parser, redirs, ask);
 
 	if (ssl != NULL && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
 	else if (ssl != NULL && (!interactive || strncmp(*mime, "text/plain", 10) == 0)) *parser = parse_plaintext_line;

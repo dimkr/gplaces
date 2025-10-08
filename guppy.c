@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2022 - 2024  Dima Krasner
+    Copyright (C) 2022 - 2025  Dima Krasner
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -186,9 +186,9 @@ static void *guppy_download(const Selector *sel, URL *url, char **mime, Parser *
 		status = do_guppy_download(url, s, mime, ask);
 		/* stop on success, on error or when the redirect limit is exhausted */
 		if (status > 5) break;
-	} while (status == 1 || ((status == 3 && ++redirs < 5 && url->proto->download == guppy_download)));
+	} while (status == 1 || ((status == 3 && ++redirs < 5 && url->proto != NULL && url->proto->download == guppy_download)));
 
-	if (redirs < 5 && url->proto->download != guppy_download) { guppy_close(s); return url->proto->download(sel, url, mime, parser, redirs, ask); }
+	if (redirs < 5 && url->proto != NULL && url->proto->download != guppy_download) { guppy_close(s); return url->proto->download(sel, url, mime, parser, redirs, ask); }
 
 	if (status > 6 && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
 	else if (status > 6 && strncmp(*mime, "text/plain", 10) == 0) *parser = parse_plaintext_line;

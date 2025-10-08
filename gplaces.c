@@ -1151,9 +1151,9 @@ static void *gemini_download(const Selector *sel, URL *url, char **mime, Parser 
 	do {
 		status = ssl_download(url, &ssl, mime, gemini_request, NULL, ask);
 		if (status >= 20 && status <= 29) break;
-	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69) || (status >= 30 && status <= 39 && ++redirs < 5 && url->proto->download == gemini_download));
+	} while ((status >= 10 && status <= 19) || (status >= 60 && status <= 69) || (status >= 30 && status <= 39 && ++redirs < 5 && url->proto != NULL && url->proto->download == gemini_download));
 
-	if (redirs < 5 && url->proto->download != gemini_download) return url->proto->download(sel, url, mime, parser, redirs, ask);
+	if (redirs < 5 && url->proto != NULL && url->proto->download != gemini_download) return url->proto->download(sel, url, mime, parser, redirs, ask);
 
 	if (ssl != NULL && strncmp(*mime, "text/gemini", 11) == 0) *parser = parse_gemtext_line;
 	else if (ssl != NULL && (!interactive || strncmp(*mime, "text/plain", 10) == 0)) *parser = parse_plaintext_line;
