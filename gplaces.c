@@ -422,7 +422,7 @@ static int redirect(URL *url, const char *to, size_t len, int ask) {
 	URL tmp = {0};
 	char *rawurl;
 	if ((rawurl = len > 0 ? strndup(to, len) : strdup(to)) == NULL) error(1, "cannot allocate new string");
-	if (!parse_url(&tmp, rawurl, url->url, NULL)) { free(rawurl); return 40; }
+	if (!parse_url(&tmp, rawurl, url->url, NULL)) { free(rawurl); free_url(&tmp); return 40; }
 	free(rawurl);
 	free_url(url);
 #ifdef GPLACES_WITH_HTTP_PROXY
@@ -1377,7 +1377,7 @@ static SelectorList download_feed(void) {
 
 	SIMPLEQ_FOREACH(sel, &subscriptions, next) {
 		memset(&url, 0, sizeof(url));
-		if (!parse_url(&url, sel->rawurl, NULL, NULL)) continue;
+		if (!parse_url(&url, sel->rawurl, NULL, NULL)) { free_url(&url); continue; }
 
 		list = download_text(sel, &url, 0, 0, 0);
 		if (SIMPLEQ_EMPTY(&list)) { free_url(&url); continue; }
