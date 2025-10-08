@@ -1434,7 +1434,11 @@ static void page_gemtext(const SelectorList list) {
 		close(fds[0]);
 		execl("/bin/sh", "sh", "-c", pager, (char *)NULL);
 		exit(EXIT_FAILURE);
-	} else if (pid < 0) return;
+	} else if (pid < 0) {
+		close(fds[1]);
+		close(fds[0]);
+		return;
+	}
 
 	close(fds[0]);
 
