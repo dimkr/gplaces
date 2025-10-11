@@ -19,9 +19,6 @@
 
 ================================================================================
 */
-#include <arpa/inet.h>
-
-
 static int socks5_tcp_connect(const URL *proxy, const URL *url) {
 	static char buf[255];
 	static const struct {
