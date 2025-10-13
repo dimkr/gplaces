@@ -152,6 +152,7 @@ static int socks5_tcp_connect(const URL *proxy, const URL *url) {
 		default:
 			error(0, "invalid address type returned by `%s`: %02x", proxy->url, reply.atyp);
 			close(s);
+			return -1;
 	}
 
 	return s;
