@@ -1740,7 +1740,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 		if (strncmp(val, "gemini://", 9) == 0) snprintf(hint, sizeof(hint), " %s", &val[9]);
 		else if (strncmp(val, "file://", 7) == 0) snprintf(hint, sizeof(hint), " %s", &val[7]);
 		else snprintf(hint, sizeof(hint), " %s", val);
-	} else if (buf[0] == '/' && stat(buf, &stbuf) == 0 && S_ISDIR(stbuf.st_mode)) return "/";
+	} else if (buf[0] == '/' && buf[strlen(buf) - 1] != '/' && stat(buf, &stbuf) == 0 && S_ISDIR(stbuf.st_mode)) return "/";
 	else return NULL;
 	return hint;
 }
