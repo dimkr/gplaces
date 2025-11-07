@@ -1723,7 +1723,7 @@ static char *shell_hints(const char *buf, const char **ansi1, const char **ansi2
 	long index;
 	int links = 0;
 	if (!color) *ansi1 = *ansi2 = "";
-	if (inshell && strcspn(buf, " ") == 0) {
+	if (inshell && buf[strspn(buf, " ")] == '\0') {
 		SIMPLEQ_FOREACH(sel, &list, next) if (sel->type == 'l') ++links;
 		if (links > 1) {
 			snprintf(hint, sizeof(hint), "1-%d, URL, variable or command", links);
