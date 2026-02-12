@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2022 - 2025  Dima Krasner
+    Copyright (C) 2022 - 2026  Dima Krasner
     Copyright (C) 2019  Sebastian Steinhauer
 
     This program is free software: you can redistribute it and/or modify
@@ -1601,7 +1601,7 @@ static void cmd_version(char *line) {
 	(void) line;
 
 	puts(
-		"gplaces - "GPLACES_VERSION"  Copyright (C) 2022 - 2025  Dima Krasner\n" \
+		"gplaces - "GPLACES_VERSION"  Copyright (C) 2022 - 2026  Dima Krasner\n" \
 		"Based on delve 0.15.4  Copyright (C) 2019  Sebastian Steinhauer\n" \
 		"This program is free software and comes with ABSOLUTELY NO WARRANTY;\n" \
 		"see "PREFIX"/share/doc/gplaces/LICENSE for details."
@@ -1671,7 +1671,7 @@ static void shell_name_completion(const char *text, bestlineCompletions *lc) {
 	char *end;
 	int fd;
 	size_t len, namelen;
-	char *sep;
+	const char *sep;
 	DIR *dir;
 	struct dirent *ent;
 
