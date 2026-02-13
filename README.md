@@ -35,6 +35,7 @@ gplaces is originally a Gemini port of the delve Gopher client by Sebastian Stei
 * optional Finger support
 * optional Guppy support
 * optional support for http{,s}:// proxies
+* optional support for SOCKS5 proxies
 * small, hackable codebase
 * no exotic external dependencies, no NIH: bestline, openssl or libressl, libcurl, libidn2 or libidn (optional) and libmagic (optional)
 * ~100K executable when built with -O3 and -Wl,-s on x86_64

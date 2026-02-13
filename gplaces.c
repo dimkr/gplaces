@@ -562,10 +562,32 @@ static int socket_connect(const URL *url, int socktype) {
 }
 
 
-static int tcp_connect(const URL *url) {
-        return socket_connect(url, SOCK_STREAM);
-}
+#ifdef GPLACES_WITH_SOCKS5
+static int socks5_tcp_connect(const URL *proxy, const URL *url);
 
+
+static int tcp_connect(const URL *url) {
+	const char *socks5_proxy;
+	URL proxy_url = {0};
+	int s;
+
+	if ((socks5_proxy = set_var(&variables, "SOCKS5_PROXY", NULL)) == NULL || *socks5_proxy == '\0') return socket_connect(url, SOCK_STREAM);
+
+	if (!parse_url(&proxy_url, socks5_proxy, NULL, NULL)) {
+		free_url(&proxy_url);
+		error(0, "invalid SOCKS5 proxy for `%s`", url->url);
+		return -1;
+	}
+
+	s = socks5_tcp_connect(&proxy_url, url);
+	free_url(&proxy_url);
+	return s;
+}
+#else
+static int tcp_connect(const URL *url) {
+	return socket_connect(url, SOCK_STREAM);
+}
+#endif
 
 /*============================================================================*/
 static void parse_plaintext_line(char *line, int *pre, Selector **sel, SelectorList *list) {
@@ -1173,11 +1195,14 @@ const Protocol gemini = {"gemini", "1965", ssl_read, ssl_peek, ssl_error, ssl_cl
 #ifdef GPLACES_WITH_TITAN
 	#include "titan.c"
 #endif
-#if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN) || defined(GPLACES_WITH_FINGER) || defined(GPLACES_WITH_GUPPY)
+#if defined(GPLACES_WITH_SOCKS5) || defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN) || defined(GPLACES_WITH_FINGER) || defined(GPLACES_WITH_GUPPY)
 	#include "socket.c"
 #endif
-#if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN) || defined(GPLACES_WITH_FINGER)
+#if defined(GPLACES_WITH_SOCKS5) || defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_SPARTAN) || defined(GPLACES_WITH_FINGER)
 	#include "tcp.c"
+#endif
+#if defined(GPLACES_WITH_SOCKS5)
+	#include "socks5.c"
 #endif
 #if defined(GPLACES_WITH_GOPHER) || defined(GPLACES_WITH_GOPHERS)
 	#include "gopher.c"

@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2022, 2023  Dima Krasner
+    Copyright (C) 2022 - 2025  Dima Krasner
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -38,4 +38,11 @@ static ssize_t sendall(int sockfd, const void *buf, size_t len, int flags) {
 	ssize_t sent = 0, total;
 	for (total = 0; total < (ssize_t)len && (sent = send(sockfd, (char *)buf + total, len - total, flags)) > 0; total += sent);
 	return sent <= 0 ? sent : total;
+}
+
+
+static ssize_t recvall(int sockfd, void *buf, size_t len, int flags) {
+	ssize_t received = 0, total;
+	for (total = 0; total < (ssize_t)len && (received = recv(sockfd, (char *)buf + total, len - total, flags)) > 0; total += received);
+	return received <= 0 ? received : total;
 }
