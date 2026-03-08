@@ -67,6 +67,15 @@
   <developer_name>Dima Krasner</developer_name>
 
   <releases>
+    <release date="2026-03-08" version="0.20.3">
+      <description>
+        <ul>
+          <li>Hints are hidden when input begins with spaces</li>
+          <li>Hints are hidden when directory path ends with /</li>
+        </ul>
+      </description>
+    </release>
+
     <release date="2025-10-08" version="0.20.2">
       <description>
         <ul>
