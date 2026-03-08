@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2024, 2025  Dima Krasner
+    Copyright (C) 2024 - 2026  Dima Krasner
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ static int titan_request(const URL *url, SSL *ssl, void *p) {
 
 	(void)url;
 
-	len = snprintf(buffer, sizeof(buffer), params->token == NULL || *params->token == '\0' ? "%s;mime=%s;size=%zu\r\n" : "%s;mime=%s;size=%zu;token=%s\r\n", params->url, params->mime, params->stbuf.st_size, params->token);
+	len = snprintf(buffer, sizeof(buffer), params->token == NULL || *params->token == '\0' ? "%s;mime=%s;size=%zu\r\n" : "%s;mime=%s;size=%zu;token=%s\r\n", params->url, params->mime, (size_t)params->stbuf.st_size, params->token);
 	if ((err = SSL_get_error(ssl, SSL_write(ssl, buffer, len >= (int)sizeof(buffer) ? (int)sizeof(buffer) - 1 : len))) != SSL_ERROR_NONE) return err;
 
 	return params->stbuf.st_size > 0 ? SSL_get_error(ssl, SSL_write(ssl, params->body, params->stbuf.st_size)) : SSL_ERROR_NONE;

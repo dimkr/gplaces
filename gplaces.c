@@ -654,7 +654,7 @@ static char *next_token(char **str) {
 }
 
 
-static int get_terminal_width() {
+static int get_terminal_width(void) {
 	struct winsize wz;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &wz);
 	return wz.ws_col > 20 ? wz.ws_col : 20;
@@ -1212,7 +1212,11 @@ static const char *get_filename(const URL *url, size_t *len) {
 		*len = strlen(url->host);
 		return url->host;
 	}
+#ifdef __APPLE__
+	p = strrchr(&url->path[1], '/');
+#else
 	p = memrchr(&url->path[1], '/', *len);
+#endif
 	if (p == NULL) return &url->path[1];
 	*len -= p + 1 - &url->path[1];
 	return p + 1;
@@ -1579,7 +1583,7 @@ static void cmd_help(char *line) {
 
 
 static void cmd_sub(char *line) {
-	static URL url = {.url = feed_sel.rawurl};
+	static URL url = {.url = "gplaces://sub/"};
 	char *newurl = next_token(&line);
 	if (newurl) {
 		Selector *sel = new_selector('l');
@@ -1832,7 +1836,7 @@ static const char *parse_arguments(int argc, char **argv) {
 }
 
 
-static void quit_client() {
+static void quit_client(void) {
 	free_variables(&variables);
 	free_selectors(&subscriptions);
 	free_history(&history);
