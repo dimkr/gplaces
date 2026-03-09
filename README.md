@@ -42,6 +42,7 @@ gplaces is originally a Gemini port of the delve Gopher client by Sebastian Stei
 ## How to install?
 
 * Using Flatpak: `flatpak install com.github.dimkr.gplaces`
+* Using Homebrew: `brew tap dimkr/gplaces && brew install gplaces`
 * compile yourself
 
 => https://flathub.org/apps/details/com.github.dimkr.gplaces gplaces on Flathub
@@ -162,6 +163,13 @@ if installed through Flatpak, copy the read-only configuration file to your home
     ~$ cp /app/etc/gplacesrc $XDG_CONFIG_HOME/
     ~$ exit
     ~$ xdg-open ~/.var/app/com.github.dimkr.gplaces/config
+```
+
+if installed through Homebrew, edit the file or copy to your home directory first:
+
+```
+    ~$ cp `brew --prefix`/etc/gplacesrc ~/.gplacesrc
+    ~$ open ~/.gplacesrc
 ```
 
 otherwise, you can edit /etc/gplacesrc directly or edit a copy under your home directory:
