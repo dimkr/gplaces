@@ -689,13 +689,13 @@ static void reap(const char *command, pid_t pid, int silent) {
 }
 
 
-static pid_t start_handler(const char *handler, const char *filename, char *command, size_t length, const Selector *sel, const URL *url, int stdin) {
+static pid_t start_handler(const char *handler, const char *filename, char *command, size_t length, const Selector *sel, const URL *url, int stdinfd) {
 	static char buffer[sizeof("/proc/self/fd/2147483647")];
 	size_t i;
 	pid_t pid;
 
-	if (stdin != -1) {
-		sprintf(buffer, "/proc/self/fd/%d", stdin);
+	if (stdinfd != -1) {
+		sprintf(buffer, "/proc/self/fd/%d", stdinfd);
 		filename = buffer;
 	}
 
@@ -720,9 +720,9 @@ static pid_t start_handler(const char *handler, const char *filename, char *comm
 
 	if ((pid = fork()) == 0) {
 #ifdef GPLACES_USE_FLATPAK_SPAWN
-		if (stdin == -1) execl("/usr/bin/flatpak-spawn", "flatpak-spawn", "--host", "--", "sh", "-c", command, (char *)NULL);
+		if (stdinfd == -1) execl("/usr/bin/flatpak-spawn", "flatpak-spawn", "--host", "--", "sh", "-c", command, (char *)NULL);
 		else {
-			sprintf(buffer, "--forward-fd=%d", stdin);
+			sprintf(buffer, "--forward-fd=%d", stdinfd);
 			execl("/usr/bin/flatpak-spawn", "flatpak-spawn", "--host", buffer, "--", "sh", "-c", command, (char *)NULL);
 		}
 #else

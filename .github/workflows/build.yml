@@ -124,7 +124,7 @@ jobs:
           fetch-depth: 0
       - name: Build
         run: |
-          CFLAGS="-O3 -Wall -Wextra -pedantic -Wno-unused-result -Wstack-usage=1024 -Werror"
+          CFLAGS="-O3 -Wall -Wextra -pedantic -Wno-unused-result -Wframe-larger-than=1024 -Werror" make
           make clean
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_LIBIDN2=0
           make clean
@@ -133,3 +133,30 @@ jobs:
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_TITAN=0 WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0 WITH_GUPPY=0
           make clean
           CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" make WITH_GOPHER=0 WITH_GOPHERS=1
+  openbsd:
+    strategy:
+      matrix:
+        version: ["7.8"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          path: gplaces # mitigation for build failure after CVE-2022-24765 was mitigated
+          submodules: recursive
+          fetch-depth: 0
+      - uses: cross-platform-actions/action@v1.0.0
+        with:
+          operating_system: openbsd
+          version: ${{ matrix.version }}
+          run: |
+            sudo pkg_add gmake libidn2 libmagic
+            cd gplaces
+            CFLAGS="-O3 -Wall -Wextra -pedantic -Wno-unused-result -Wframe-larger-than=1024 -Werror" gmake
+            gmake clean
+            CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" gmake WITH_LIBIDN2=0
+            gmake clean
+            CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" gmake WITH_LIBMAGIC=0
+            gmake clean
+            CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" gmake WITH_TITAN=0 WITH_GOPHER=0 WITH_GOPHERS=0 WITH_SPARTAN=0 WITH_FINGER=0 WITH_GUPPY=0
+            gmake clean
+            CFLAGS="-O0 -Wall -Wextra -pedantic -Wno-unused-result -Werror" gmake WITH_GOPHER=0 WITH_GOPHERS=1
