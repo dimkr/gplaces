@@ -46,9 +46,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - image: "alpine:3.15"
+          - image: "alpine:3.16"
             libssl: openssl
-          - image: "alpine:3.15"
+          - image: "alpine:3.16"
             libssl: libressl
           - image: "alpine:latest"
             libssl: openssl
