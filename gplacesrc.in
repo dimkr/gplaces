@@ -43,7 +43,7 @@ set cn								""
 set days							1825
 
 # pager for long text; change to cat to disable paging
-set pager							"less -r"
+set pager							"less -R"
 
 # download timeout
 set timeout							15

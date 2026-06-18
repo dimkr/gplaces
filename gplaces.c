@@ -1428,7 +1428,7 @@ static void page_gemtext(const SelectorList list) {
 	pid_t pid;
 	const char *pager;
 
-	if ((pager = set_var(&variables, "PAGER", NULL)) == NULL && (pager = getenv("PAGER")) == NULL) pager = "less -r";
+	if ((pager = set_var(&variables, "PAGER", NULL)) == NULL && (pager = getenv("PAGER")) == NULL) pager = "less -R";
 	if (!strcmp(pager, "cat")) return;
 
 	if (pipe(fds) < 0) return;
