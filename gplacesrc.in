@@ -15,20 +15,18 @@ set authors							file://DOCDIR/AUTHORS
 set search							tlgs.one/search
 set gsearch							gopher://gopher.floodgap.com/7/v2/vs
 set home							geminiprotocol.net
-set capcom							gemini.circumlunar.space/capcom
-set spacewalk						rawtext.club/~sloum/spacewalk.gmi
+set capcom							gemini.circumlunar.space/capcom/
 set gmisub							calcuode.com/gmisub-aggregate.gmi
 set bbs								bbs.geminispace.org
 set station							station.martinrue.com
-set antenna							warmedal.se/~antenna/
+set antenna							antenna.michaelnordmeyer.com
 set explore							tilde.team/~sumpygump/explore/
-set gemipedia						gemi.dev/cgi-bin/wp.cgi
+set gemipedia						gemini://gemi.dev/cgi-bin/wp.cgi/
 set whatis							gemi.dev/cgi-bin/wp.cgi/view
 
 # subscribe to some pages
-sub									rawtext.club/~sloum/spacewalk.gmi
 sub									midnight.pub
-sub									warmedal.se/~antenna/
+sub									antenna.michaelnordmeyer.com
 
 # define the client certificate curve or "" to fall back to prime256v1
 set curve							"prime256v1"
