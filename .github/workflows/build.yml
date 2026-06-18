@@ -21,7 +21,7 @@ jobs:
           apt-get update -qq
           apt-get install --no-install-recommends -y git ca-certificates gcc libc6-dev make pkg-config libssl-dev libcurl4-openssl-dev libidn2-dev libidn11-dev libmagic-dev
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
         with:
           path: gplaces # mitigation for build failure after CVE-2022-24765 was mitigated
           submodules: recursive
@@ -61,7 +61,7 @@ jobs:
         run: |
           apk add git gcc musl-dev make pkgconf ${{ matrix.libssl }}-dev curl-dev libidn-dev file-dev
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
         with:
           path: gplaces # mitigation for build failure after CVE-2022-24765 was mitigated
           submodules: recursive
@@ -89,7 +89,7 @@ jobs:
           pacman -Syu --noconfirm
           pacman -S --noconfirm git gcc make pkgconf libidn
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
         with:
           path: gplaces # mitigation for build failure after CVE-2022-24765 was mitigated
           submodules: recursive
@@ -118,7 +118,7 @@ jobs:
       - name: Install dependencies
         run: brew install pkgconf curl openssl@3 libidn2 libmagic
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
         with:
           submodules: recursive
           fetch-depth: 0
@@ -139,12 +139,12 @@ jobs:
         version: ["7.8"]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
         with:
           path: gplaces # mitigation for build failure after CVE-2022-24765 was mitigated
           submodules: recursive
           fetch-depth: 0
-      - uses: cross-platform-actions/action@v1.0.0
+      - uses: cross-platform-actions/action@v1.2.0
         with:
           operating_system: openbsd
           version: ${{ matrix.version }}
