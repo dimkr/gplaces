@@ -2,7 +2,7 @@
 ================================================================================
 
 	gplaces - a simple terminal Gemini client
-    Copyright (C) 2022 - 2025  Dima Krasner
+    Copyright (C) 2022 - 2026  Dima Krasner
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ fail:
 static void *spartan_download(const Selector *sel, URL *url, char **mime, Parser *parser, unsigned int redirs, int ask) {
 	char *input = NULL, *query = NULL;
 	size_t inputlen = 0;
-	static int fd = -1;
+	int fd = -1;
 	int status;
 
 	switch (curl_url_get(url->cu, CURLUPART_QUERY, &query, 0)) {
