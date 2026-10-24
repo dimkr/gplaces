@@ -925,7 +925,7 @@ static void mkcert(const char *crtpath, const char *keypath) {
 	EC_KEY *eckey = NULL;
 #endif
 	X509 *cert = NULL;
-	X509_NAME *name;
+	X509_NAME *name = NULL;
 	const char *curve, *digest, *cn;
 	const EVP_MD *md;
 	FILE *crtf = NULL, *keyf = NULL;
@@ -941,8 +941,11 @@ static void mkcert(const char *crtpath, const char *keypath) {
 
 #if OPENSSL_VERSION_NUMBER < 0x30000000L
 	ok = ((((cn = set_var(&variables, "CN", NULL)) != NULL && *cn != '\0') || ((cn = getenv("USER")) != NULL && *cn != '\0')) && (md = EVP_get_digestbyname(digest)) != NULL && (cert = X509_new()) != NULL && X509_set_version(cert, 2) == 1 && X509_gmtime_adj(X509_get_notBefore(cert), 0) != NULL && X509_gmtime_adj(X509_get_notAfter(cert), 60 * 60 * 24 * days) != NULL && (name = X509_get_subject_name(cert)) != NULL && X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (const unsigned char *)cn, -1, -1, 0) == 1 && (key = EVP_PKEY_new()) != NULL && (nid = OBJ_sn2nid(curve)) != NID_undef && (eckey = EC_KEY_new_by_curve_name(nid)) != NULL && EC_KEY_generate_key(eckey) == 1 && (assigned = EVP_PKEY_assign_EC_KEY(key, eckey)) == 1 && X509_set_pubkey(cert, key) == 1 && X509_sign(cert, key, md) != 0 && (crtf = fopen(crtpath, "w")) != NULL && (keyf = fopen(keypath, "w")) != NULL && PEM_write_X509(crtf, cert) != 0 && PEM_write_PrivateKey(keyf, key, NULL, NULL, 0, NULL, NULL) != 0);
-#else
+#elif OPENSSL_VERSION_NUMBER < 0x40000000L
 	ok = ((((cn = set_var(&variables, "CN", NULL)) != NULL && *cn != '\0') || ((cn = getenv("USER")) != NULL && *cn != '\0')) && (md = EVP_get_digestbyname(digest)) != NULL && (cert = X509_new()) != NULL && X509_set_version(cert, X509_VERSION_3) == 1 && X509_gmtime_adj(X509_get_notBefore(cert), 0) != NULL && X509_gmtime_adj(X509_get_notAfter(cert), 60 * 60 * 24 * days) != NULL && (name = X509_get_subject_name(cert)) != NULL && X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (const unsigned char *)cn, -1, -1, 0) == 1 && (key = EVP_EC_gen(curve)) != NULL && X509_set_pubkey(cert, key) == 1 && X509_sign(cert, key, md) != 0 && (crtf = fopen(crtpath, "w")) != NULL && (keyf = fopen(keypath, "w")) != NULL && PEM_write_X509(crtf, cert) != 0 && PEM_write_PrivateKey(keyf, key, NULL, NULL, 0, NULL, NULL) != 0);
+#else
+	ok = ((((cn = set_var(&variables, "CN", NULL)) != NULL && *cn != '\0') || ((cn = getenv("USER")) != NULL && *cn != '\0')) && (md = EVP_get_digestbyname(digest)) != NULL && (cert = X509_new()) != NULL && X509_set_version(cert, X509_VERSION_3) == 1 && X509_gmtime_adj(X509_get_notBefore(cert), 0) != NULL && X509_gmtime_adj(X509_get_notAfter(cert), 60 * 60 * 24 * days) != NULL && (name = X509_NAME_new()) != NULL && X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (const unsigned char *)cn, -1, -1, 0) == 1 && X509_set_subject_name(cert, name) == 1 && (key = EVP_EC_gen(curve)) != NULL && X509_set_pubkey(cert, key) == 1 && X509_sign(cert, key, md) != 0 && (crtf = fopen(crtpath, "w")) != NULL && (keyf = fopen(keypath, "w")) != NULL && PEM_write_X509(crtf, cert) != 0 && PEM_write_PrivateKey(keyf, key, NULL, NULL, 0, NULL, NULL) != 0);
+	if (name != NULL) X509_NAME_free(name);
 #endif
 
 	if (keyf) {
